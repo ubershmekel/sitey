@@ -126,7 +126,19 @@ docker compose exec sitey-api node dist/services/bootstrap.js reset
 By default Sitey serves plain HTTP on port 80 (no domain required to get
 started). To enable HTTPS:
 
-1. Point a DNS `A` record at your VM's IP.
+1. Point a DNS `A` record **and** a wildcard `A` record at your VM's IP:
+
+   ```
+   your.domain.com      A  <your VM IP>
+   *.your.domain.com    A  <your VM IP>
+   ```
+
+   The wildcard record is optional but **highly recommended** — it lets Sitey
+   auto-assign a random subdomain to every new project (e.g.
+   `happy-fox-3k2.your.domain.com`), exactly like Netlify or Vercel, with no
+   extra DNS steps per project. Without it you must manually add a route or DNS
+   record for each new project want.
+
 2. Edit `deploy/caddy/Caddyfile` — replace the `:80` block with:
 
 ```caddyfile
@@ -148,7 +160,10 @@ Caddy will automatically obtain a Let's Encrypt certificate.
 
 1. Open Sitey in your browser and log in.
 2. Click **+ Add domain** → enter your app's hostname (e.g. `myapp.com`) and
-   your Let's Encrypt email.
+   your Let's Encrypt email. If you've set up a wildcard DNS record
+   (`*.myapp.com → your IP`), new projects will automatically get a random
+   subdomain (e.g. `happy-fox-3k2.myapp.com`) — see
+   [Enabling HTTPS](#enabling-https).
 3. On the domain page, click **+ Add project**:
    - Enter repo owner/name (e.g. `acme/my-node-app`) and branch.
    - Choose **Build mode**: `auto` generates a Dockerfile for Node.js apps;
@@ -227,7 +242,8 @@ port.
 
 ## Development
 
-See [docs/development.md](docs/development.md) for local setup, DB scripts, and how to keep migrations in sync with `schema.prisma`.
+See [docs/development.md](docs/development.md) for local setup, DB scripts, and
+how to keep migrations in sync with `schema.prisma`.
 
 ---
 

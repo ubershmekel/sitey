@@ -37,6 +37,14 @@
 
         <div v-if="addError" class="alert error">{{ addError }}</div>
 
+        <div class="tip">
+          <strong>Tip: wildcard subdomain setup</strong><br>
+          Point a wildcard DNS A record <code>*.yourdomain.com → your server IP</code> (in addition to
+          <code>yourdomain.com → IP</code>). Then every new project automatically gets a
+          random subdomain like <code>happy-fox-3k2.yourdomain.com</code> — just like Netlify
+          or Vercel — with no extra DNS steps per project.
+        </div>
+
         <label>
           Hostname <span class="hint">(e.g. myapp.com)</span>
           <input v-model="newHostname" type="text" required placeholder="myapp.com" />
@@ -185,4 +193,22 @@ input:focus { border-color: #7c6cfc; }
   transition: border-color 0.15s, color 0.15s;
 }
 .btn-ghost:hover { border-color: #666; color: #e2e2e2; }
+
+.tip {
+  background: #12192a;
+  border: 1px solid #1e3a5f;
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-size: 0.82rem;
+  color: #7aaddc;
+  line-height: 1.55;
+}
+.tip strong { color: #a8caee; }
+.tip code {
+  background: #1a2a40;
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+  font-size: 0.85em;
+  color: #9dcfff;
+}
 </style>
