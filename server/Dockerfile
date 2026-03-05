@@ -1,4 +1,4 @@
-FROM node:20-alpine AS base
+FROM node:25-alpine AS base
 WORKDIR /app
 
 # Install build tools for native modules (argon2)
@@ -18,7 +18,7 @@ RUN npm run build
 RUN npx prisma generate
 
 # Production image
-FROM node:20-alpine AS runner
+FROM node:25-alpine AS runner
 WORKDIR /app
 
 # Runtime deps only

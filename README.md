@@ -1,20 +1,22 @@
 # Sitey
 
-**Self-hosted, domain-first PaaS.** Deploy Node.js apps from GitHub to your own VM with automatic HTTPS via Caddy + Let's Encrypt.
+**Self-hosted, domain-first PaaS.** Deploy Node.js apps from GitHub to your own
+VM with automatic HTTPS via Caddy + Let's Encrypt.
 
-> **Status:** MVP scaffold — core plumbing is done; polish and edge-case hardening ongoing.
+> **Status:** MVP scaffold — core plumbing is done; polish and edge-case
+> hardening ongoing.
 
 ---
 
 ## Stack
 
-| Layer | Technology |
-|-------|------------|
-| API | TypeScript + Fastify + tRPC v11 |
-| DB | SQLite + Prisma |
-| Frontend | Vue 3 + Pinia (Vite) |
+| Layer         | Technology                                 |
+| ------------- | ------------------------------------------ |
+| API           | TypeScript + Fastify + tRPC v11            |
+| DB            | SQLite + Prisma                            |
+| Frontend      | Vue 3 + Pinia (Vite)                       |
 | Reverse proxy | Caddy (caddy-docker-proxy) + Let's Encrypt |
-| Deployments | Docker-in-Docker via socket mount |
+| Deployments   | Docker-in-Docker via socket mount          |
 
 ---
 
@@ -44,7 +46,8 @@ docker compose up -d --build
 docker compose logs sitey-api | grep "http://"
 ```
 
-Open the printed address in your browser and complete the setup wizard to create your admin account.
+Open the printed address in your browser and complete the setup wizard to create
+your admin account.
 
 ---
 
@@ -62,7 +65,8 @@ deploy/data/
             └── <deploymentId>.log
 ```
 
-To use a different host path, set `DATA_ROOT` in a `.env` file next to `docker-compose.yml`:
+To use a different host path, set `DATA_ROOT` in a `.env` file next to
+`docker-compose.yml`:
 
 ```
 DATA_ROOT=/opt/sitey/data
@@ -72,7 +76,8 @@ DATA_ROOT=/opt/sitey/data
 
 ## Resetting the admin password
 
-If you're locked out, run this on the host — it prints a new random password and marks the account for a forced change:
+If you're locked out, run this on the host — it prints a new random password and
+marks the account for a forced change:
 
 ```bash
 docker compose exec sitey-api node dist/services/bootstrap.js reset
@@ -82,7 +87,8 @@ docker compose exec sitey-api node dist/services/bootstrap.js reset
 
 ## Enabling HTTPS
 
-By default Sitey serves plain HTTP on port 80 (no domain required to get started). To enable HTTPS:
+By default Sitey serves plain HTTP on port 80 (no domain required to get
+started). To enable HTTPS:
 
 1. Point a DNS `A` record at your VM's IP.
 2. Edit `deploy/caddy/Caddyfile` — replace the `:80` block with:
@@ -105,16 +111,19 @@ Caddy will automatically obtain a Let's Encrypt certificate.
 ## Adding a domain + project
 
 1. Open Sitey in your browser and log in.
-2. Click **+ Add domain** → enter your app's hostname (e.g. `myapp.com`) and your Let's Encrypt email.
+2. Click **+ Add domain** → enter your app's hostname (e.g. `myapp.com`) and
+   your Let's Encrypt email.
 3. On the domain page, click **+ Add project**:
    - Enter repo owner/name (e.g. `acme/my-node-app`) and branch.
-   - Choose **Build mode**: `auto` generates a Dockerfile for Node.js apps; `dockerfile` uses your repo's `Dockerfile`.
+   - Choose **Build mode**: `auto` generates a Dockerfile for Node.js apps;
+     `dockerfile` uses your repo's `Dockerfile`.
    - Set **Container port** (default 3000).
    - Choose **GitHub integration mode** (see below).
 4. Click **Create project**.
 5. Click **▶ Deploy** to trigger your first deployment.
 
-Caddy will automatically obtain a Let's Encrypt certificate and route traffic when the container starts.
+Caddy will automatically obtain a Let's Encrypt certificate and route traffic
+when the container starts.
 
 ---
 
@@ -159,46 +168,24 @@ GitHub push
                    └─ DB: update status → success / failed
 ```
 
-Logs are written to `/data/projects/:id/logs/:deploymentId.log` and viewable in the UI.
+Logs are written to `/data/projects/:id/logs/:deploymentId.log` and viewable in
+the UI.
 
 ---
 
-## Default Node.js Dockerfile (auto mode)
-
-When no `Dockerfile` is found, Sitey generates:
-
-```dockerfile
-FROM node:20-alpine AS deps
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --omit=dev
-
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build --if-present
-
-FROM node:20-alpine
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=builder /app .
-ENV NODE_ENV=production
-ENV PORT=<containerPort>
-EXPOSE <containerPort>
-CMD ["node", "server.js"]
-```
-
-**Constraints:** Your app must listen on `process.env.PORT` and the entry point must be `server.js` (or have a `start` script in package.json). For anything else, provide your own `Dockerfile`.
+**Constraints:** Your app must listen on `process.env.PORT` and the entry point
+must be `server.js` (or have a `start` script in package.json). For anything
+else, provide your own `Dockerfile`.
 
 ---
 
 ## Environment variables for deployed apps
 
-Set env vars on the project detail page (Settings tab, coming soon) or via the API. They are injected as container env vars at deploy time.
+Set env vars on the project detail page (Settings tab, coming soon) or via the
+API. They are injected as container env vars at deploy time.
 
-`PORT` is always injected automatically and set to the configured container port.
+`PORT` is always injected automatically and set to the configured container
+port.
 
 ---
 
@@ -223,9 +210,14 @@ npm run dev       # starts on :5173 (proxies /trpc → :3001)
 
 ## Architecture notes
 
-- **Single-host only.** The deployment queue is in-memory; multi-instance is not supported without Redis.
-- **Docker socket.** The `sitey-api` container has `rwx` access to the Docker daemon. Treat it as root-equivalent.
-- **Secrets.** JWT secret is auto-generated on first boot and stored in the database. Passwords are never stored in plaintext. GitHub App private key is stored as-is in SQLite for now — encrypt at rest if your threat model requires it.
+- **Single-host only.** The deployment queue is in-memory; multi-instance is not
+  supported without Redis.
+- **Docker socket.** The `sitey-api` container has `rwx` access to the Docker
+  daemon. Treat it as root-equivalent.
+- **Secrets.** JWT secret is auto-generated on first boot and stored in the
+  database. Passwords are never stored in plaintext. GitHub App private key is
+  stored as-is in SQLite for now — encrypt at rest if your threat model requires
+  it.
 
 ---
 
