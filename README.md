@@ -1,6 +1,6 @@
 # Sitey
 
-**Self-hosted, domain-first PaaS.** Deploy Node.js apps from GitHub to your own VM with automatic HTTPS via Traefik + Let's Encrypt.
+**Self-hosted, domain-first PaaS.** Deploy Node.js apps from GitHub to your own VM with automatic HTTPS via Caddy + Let's Encrypt.
 
 > **Status:** MVP scaffold — core plumbing is done; polish and edge-case hardening ongoing.
 
@@ -13,7 +13,7 @@
 | API | TypeScript + Fastify + tRPC v11 |
 | DB | SQLite + Prisma |
 | Frontend | Vue 3 + Pinia (Vite) |
-| Reverse proxy | Traefik v3 + Let's Encrypt |
+| Reverse proxy | Caddy (caddy-docker-proxy) + Let's Encrypt |
 | Deployments | Docker-in-Docker via socket mount |
 
 ---
@@ -112,7 +112,7 @@ The new password is printed in the terminal (never stored in plaintext).
 4. Click **Create project**.
 5. Click **▶ Deploy** to trigger your first deployment.
 
-Traefik will automatically obtain a Let's Encrypt certificate and route traffic when the container starts.
+Caddy will automatically obtain a Let's Encrypt certificate and route traffic when the container starts.
 
 ---
 
@@ -153,7 +153,7 @@ GitHub push
               └─▶ DeploymentQueue
                    ├─ git clone / pull → /data/projects/:id/repo
                    ├─ docker build -t sitey/:id:<sha>
-                   ├─ docker run (with Traefik labels, on sitey-public network)
+                   ├─ docker run (with Caddy labels, on sitey-public network)
                    └─ DB: update status → success / failed
 ```
 
@@ -225,7 +225,7 @@ npm run dev            # starts on :5173 (proxies /trpc → :3001)
 - **Single-host only.** The deployment queue is in-memory; multi-instance is not supported without Redis.
 - **Docker socket.** The `sitey-api` container has `rwx` access to the Docker daemon. Treat it as root-equivalent.
 - **Secrets.** JWT secret and passwords are never stored in plaintext. GitHub App private key is stored as-is in SQLite for now — encrypt at rest if your threat model requires it.
-- **ACME email.** Set once in `traefik.yml` via `ACME_EMAIL`. Individual domain emails are stored in the DB but currently informational only (Traefik uses the global email).
+- **ACME email.** Set once via `ACME_EMAIL` in `.env` — Caddy uses it globally for all domains it serves (management domain + user app domains). Individual domain emails stored in the DB are currently informational only.
 
 ---
 

@@ -1,0 +1,18 @@
+# Global options
+{
+    email {$ACME_EMAIL}
+}
+
+# Management domain — static routing for Sitey itself.
+# User app containers are routed via Docker labels (see docker.ts buildCaddyLabels).
+{$SITEY_DOMAIN} {
+    @api path /trpc* /webhook* /health*
+
+    handle @api {
+        reverse_proxy sitey-api:3001
+    }
+
+    handle {
+        reverse_proxy sitey-web:80
+    }
+}
