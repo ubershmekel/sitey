@@ -32,12 +32,17 @@
 </template>
 
 <script setup lang="ts">
-import { RouterLink } from 'vue-router'
-import { useRouter } from 'vue-router'
+import { watch } from 'vue'
+import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
 const router = useRouter()
+
+// Enforce password change once user data is hydrated (handles page-reload case)
+watch(() => auth.needsPasswordChange, (needs) => {
+  if (needs) router.push('/change-password')
+})
 </script>
 
 <style scoped>

@@ -39,8 +39,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       const res = await trpc.auth.login.mutate({ email, password })
       setToken(res.token)
-      user.value = { id: '', email: res.email, mustChangePassword: res.mustChangePassword }
-      await fetchUser()
+      user.value = { id: res.id, email: res.email, mustChangePassword: res.mustChangePassword }
       return { mustChangePassword: res.mustChangePassword }
     } catch (e: unknown) {
       const msg = (e as { message?: string })?.message ?? 'Login failed'

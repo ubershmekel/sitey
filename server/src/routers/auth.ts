@@ -31,6 +31,7 @@ export const authRouter = router({
         token,
         mustChangePassword: user.mustChangePassword,
         email: user.email,
+        id: user.id,
       }
     }),
 

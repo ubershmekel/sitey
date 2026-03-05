@@ -39,7 +39,9 @@ router.beforeEach(async (to) => {
   const auth = useAuthStore()
 
   if (!auth.user && auth.token) {
-    await auth.fetchUser()
+    // Fire-and-forget: hydrate user data in the background.
+    // Auth decisions use isAuthenticated (token-based) so we don't block navigation.
+    auth.fetchUser()
   }
 
   if (!auth.isAuthenticated && !to.meta.public) return '/login'
