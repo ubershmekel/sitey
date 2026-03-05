@@ -7,6 +7,9 @@
 
       <div class="nav-section">
         <RouterLink to="/" class="nav-item" active-class="active">
+          <span class="icon">▦</span> Projects
+        </RouterLink>
+        <RouterLink to="/domains" class="nav-item" active-class="active">
           <span class="icon">◈</span> Domains
         </RouterLink>
         <RouterLink to="/settings" class="nav-item" active-class="active">

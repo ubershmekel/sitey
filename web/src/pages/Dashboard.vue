@@ -25,7 +25,7 @@
         <div class="domain-name">{{ d.hostname }}</div>
         <div class="domain-meta">
           <span :class="`status status-${d.status}`">{{ d.status }}</span>
-          <span class="projects-count">{{ d._count.projects }} project{{ d._count.projects !== 1 ? 's' : '' }}</span>
+          <span class="projects-count">{{ d._count.routes }} project{{ d._count.routes !== 1 ? 's' : '' }}</span>
         </div>
       </RouterLink>
     </div>

@@ -5,13 +5,14 @@
  * Key operations:
  *  - createNetworkIfMissing     — ensure sitey-public network exists
  *  - buildImage                 — docker build for a project
- *  - runOrReplaceContainer      — start container with Caddy labels, kill old one
+ *  - runOrReplaceContainer      — start container with optional Caddy labels, kill old one
  *  - stopContainer              — stop + remove a running container
  *  - pruneProjectImages         — remove old images for a project
  */
 
 import Docker from "dockerode";
 import type { Project } from "@prisma/client";
+import { db } from "../lib/db.js";
 
 export const docker = new Docker({ socketPath: "/var/run/docker.sock" });
 
@@ -64,41 +65,93 @@ export async function buildImage(opts: {
 }
 
 // ── Caddy labels ──────────────────────────────────────────────────────────────
-// caddy-docker-proxy reads these two labels and generates a Caddy site block.
-// HTTPS + HTTP→HTTPS redirect are automatic via the global ACME config in Caddyfile.
+// caddy-docker-proxy reads these labels and generates Caddy site blocks.
+// Multiple routes produce numbered label sets: caddy.0, caddy.1, …
+//
+// Route combinations:
+//   domain + subdomain                → app.example.com
+//   domain + subdomain + pathPrefix   → app.example.com/blog/*
+//   no domain + pathPrefix            → :80/blog/* (server IP, any host)
+//   no domain + no prefix             → catch-all (reserved for sitey itself)
+
+type Route = {
+  domain?: { hostname: string } | null;
+  pathPrefix: string;
+};
 
 export function buildCaddyLabels(
-  project: Project & { domain: { hostname: string } },
+  project: Project,
+  routes: Route[],
 ): Record<string, string> {
-  const host = project.subdomain
-    ? `${project.subdomain}.${project.domain.hostname}`
-    : project.domain.hostname;
-
-  return {
-    caddy: host,
-    "caddy.reverse_proxy": `{{upstreams ${project.containerPort}}}`,
+  const labels: Record<string, string> = {
     "sitey.managed": "true",
     "sitey.project": project.id,
   };
+
+  // Routes with no domain AND no pathPrefix are the root catch-all —
+  // those belong to sitey itself and don't get container labels.
+  const routable = routes.filter((r) => r.domain || r.pathPrefix);
+
+  routable.forEach((route, i) => {
+    const prefix = routable.length === 1 ? "caddy" : `caddy.${i}`;
+
+    const host = route.domain ? route.domain.hostname : ":80";
+
+    if (route.pathPrefix) {
+      labels[prefix] = host;
+      labels[`${prefix}.handle_path`] = `${route.pathPrefix}/*`;
+      labels[`${prefix}.handle_path.reverse_proxy`] =
+        `{{upstreams ${project.containerPort}}}`;
+    } else {
+      labels[prefix] = host;
+      labels[`${prefix}.reverse_proxy`] =
+        `{{upstreams ${project.containerPort}}}`;
+    }
+  });
+
+  return labels;
+}
+
+// ── Host port allocation ──────────────────────────────────────────────────────
+// Used for projects with no domain — assigns a stable host port so the app is
+// reachable at http://<server-ip>:<hostPort>.
+
+export async function allocateHostPort(): Promise<number> {
+  const highest = await db.project.findFirst({
+    where: { hostPort: { not: null } },
+    orderBy: { hostPort: "desc" },
+    select: { hostPort: true },
+  });
+  return (highest?.hostPort ?? 19999) + 1;
 }
 
 // ── Run / replace container ───────────────────────────────────────────────────
 
 export async function runOrReplaceContainer(opts: {
-  project: Project & { domain: { hostname: string } };
+  project: Project;
+  routes: Route[];
   imageTag: string;
   containerName: string;
   envVars: Record<string, string>;
+  hostPort: number | null;
   onLog: (line: string) => void;
 }): Promise<string> {
-  const { project, imageTag, containerName, envVars, onLog } = opts;
+  const { project, routes, imageTag, containerName, envVars, hostPort, onLog } = opts;
 
   await stopAndRemoveContainer(containerName, onLog);
 
-  const labels = buildCaddyLabels(project);
+  const labels = buildCaddyLabels(project, routes);
   const env = Object.entries(envVars).map(([k, v]) => `${k}=${v}`);
 
   onLog(`[docker] Creating container ${containerName}`);
+
+  const portBindings = hostPort
+    ? {
+        [`${project.containerPort}/tcp`]: [
+          { HostIp: "0.0.0.0", HostPort: String(hostPort) },
+        ],
+      }
+    : {};
 
   const container = await docker.createContainer({
     Image: imageTag,
@@ -109,6 +162,7 @@ export async function runOrReplaceContainer(opts: {
     HostConfig: {
       NetworkMode: SITEY_NETWORK,
       RestartPolicy: { Name: "unless-stopped" },
+      PortBindings: portBindings,
     },
   });
 
@@ -164,7 +218,7 @@ export async function pruneProjectImages(
   }
 }
 
-// ── Default Dockerfile generator ─────────────────────────────────────────────
+// ── Dockerfile generators ─────────────────────────────────────────────────────
 
 export function generateDefaultDockerfile(containerPort = 3000): string {
   return `FROM node:25-alpine AS deps
@@ -187,5 +241,25 @@ ENV NODE_ENV=production
 ENV PORT=${containerPort}
 EXPOSE ${containerPort}
 CMD ["node", "server.js"]
+`;
+}
+
+export function generateStaticDockerfile(
+  buildCommand: string,
+  outputDir: string,
+  containerPort = 3000,
+): string {
+  const cmd = buildCommand.trim() || "npm run build";
+  return `FROM node:25-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+RUN ${cmd}
+
+FROM caddy:alpine
+COPY --from=builder /app/${outputDir} /srv
+RUN printf ':${containerPort} {\\n    root * /srv\\n    encode gzip\\n    try_files {path} /index.html\\n    file_server\\n}\\n' > /etc/caddy/Caddyfile
+EXPOSE ${containerPort}
 `;
 }

@@ -8,7 +8,7 @@ export const domainsRouter = router({
     return db.domain.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
-        _count: { select: { projects: true } },
+        _count: { select: { routes: true } },
       },
     })
   }),
@@ -19,12 +19,13 @@ export const domainsRouter = router({
       const domain = await db.domain.findUnique({
         where: { id: input.id },
         include: {
-          projects: {
+          routes: {
             orderBy: { createdAt: 'desc' },
             include: {
-              deployments: {
-                orderBy: { createdAt: 'desc' },
-                take: 1,
+              project: {
+                include: {
+                  deployments: { orderBy: { createdAt: 'desc' }, take: 1 },
+                },
               },
             },
           },
