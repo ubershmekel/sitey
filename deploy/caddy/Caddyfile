@@ -1,11 +1,14 @@
-# Global options
-{
-    email {$ACME_EMAIL}
-}
+# Serve everything on HTTP by default.
+# After configuring a domain via the Sitey UI, update this file to add HTTPS:
+#
+#   your.domain.com {
+#       tls your@email.com
+#       @api path /trpc* /webhook* /health*
+#       handle @api { reverse_proxy sitey-api:3001 }
+#       handle     { reverse_proxy sitey-web:80    }
+#   }
 
-# Management domain — static routing for Sitey itself.
-# User app containers are routed via Docker labels (see docker.ts buildCaddyLabels).
-{$SITEY_DOMAIN} {
+:80 {
     @api path /trpc* /webhook* /health*
 
     handle @api {

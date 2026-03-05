@@ -22,7 +22,6 @@
 
 - A Linux VM (Ubuntu 22.04+ recommended) with a public IP
 - Docker Engine 24+ and Docker Compose v2
-- Your domain's DNS `A` record pointing to the VM IP
 - Ports 80 and 443 open in the firewall
 
 ---
@@ -35,24 +34,17 @@ curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER && newgrp docker
 
 # 2. Clone Sitey
-git clone https://github.com/yourorg/sitey.git /opt/sitey
-cd /opt/sitey/deploy
+git clone https://github.com/ubershmekel/sitey
+cd sitey/deploy
 
-# 3. Configure
-cp .env.example .env
-nano .env          # set SITEY_DOMAIN, ACME_EMAIL, JWT_SECRET
-
-# 4. Create data directory
-mkdir -p data
-
-# 5. Start
+# 3. Start
 docker compose up -d --build
 
-# 6. View the generated admin password (only printed on first boot)
-docker compose logs sitey-api | grep -A 8 "FIRST RUN"
+# 4. Find your server's address
+docker compose logs sitey-api | grep "http://"
 ```
 
-Open `https://<SITEY_DOMAIN>` in your browser. Sign in with the printed credentials. **You will be forced to change your password on first login.**
+Open the printed address in your browser and complete the setup wizard to create your admin account.
 
 ---
 
@@ -70,7 +62,7 @@ deploy/data/
             └── <deploymentId>.log
 ```
 
-Map this to a safer host path by setting `DATA_ROOT` in `.env`:
+To use a different host path, set `DATA_ROOT` in a `.env` file next to `docker-compose.yml`:
 
 ```
 DATA_ROOT=/opt/sitey/data
@@ -78,31 +70,41 @@ DATA_ROOT=/opt/sitey/data
 
 ---
 
-## Viewing the initial admin password
+## Resetting the admin password
 
-```bash
-docker compose logs sitey-api | grep -A 10 "FIRST RUN"
-```
-
-The password is printed **once** at first boot. If you missed it, reset it (see below).
-
----
-
-## Resetting the admin password (secure)
-
-Run this on the host — it prints a new random password and marks the account for forced change:
+If you're locked out, run this on the host — it prints a new random password and marks the account for a forced change:
 
 ```bash
 docker compose exec sitey-api node dist/services/bootstrap.js reset
 ```
 
-The new password is printed in the terminal (never stored in plaintext).
+---
+
+## Enabling HTTPS
+
+By default Sitey serves plain HTTP on port 80 (no domain required to get started). To enable HTTPS:
+
+1. Point a DNS `A` record at your VM's IP.
+2. Edit `deploy/caddy/Caddyfile` — replace the `:80` block with:
+
+```caddyfile
+your.domain.com {
+    tls your@email.com
+    @api path /trpc* /webhook* /health*
+    handle @api { reverse_proxy sitey-api:3001 }
+    handle     { reverse_proxy sitey-web:80    }
+}
+```
+
+3. Restart Caddy: `docker compose restart caddy`
+
+Caddy will automatically obtain a Let's Encrypt certificate.
 
 ---
 
 ## Adding a domain + project
 
-1. Open `https://<SITEY_DOMAIN>` and log in.
+1. Open Sitey in your browser and log in.
 2. Click **+ Add domain** → enter your app's hostname (e.g. `myapp.com`) and your Let's Encrypt email.
 3. On the domain page, click **+ Add project**:
    - Enter repo owner/name (e.g. `acme/my-node-app`) and branch.
@@ -131,7 +133,7 @@ Caddy will automatically obtain a Let's Encrypt certificate and route traffic wh
 ### Option B — GitHub App
 
 1. Create a GitHub App at `https://github.com/settings/apps/new`:
-   - Webhook URL: `https://<SITEY_DOMAIN>/webhook/github/<projectId>`
+   - Webhook URL: `http://<your-server>/webhook/github/<projectId>`
    - Webhook secret: any strong random string
    - Permissions: Repository → Contents (read), Metadata (read)
    - Subscribe to: `Push` events
@@ -207,15 +209,14 @@ Set env vars on the project detail page (Settings tab, coming soon) or via the A
 cd server && npm install
 cd ../web  && npm install
 
-# Start Postgres (SQLite, no extra setup needed)
+# Start the API
 cd server
-cp .env.example .env   # set DATABASE_URL=file:./dev.db
-npm run db:push        # create tables
-npm run dev            # starts on :3001
+npm run db:push   # create tables (uses file:./dev.db by default)
+npm run dev       # starts on :3001
 
 # In another terminal
 cd web
-npm run dev            # starts on :5173 (proxies /trpc → :3001)
+npm run dev       # starts on :5173 (proxies /trpc → :3001)
 ```
 
 ---
@@ -224,8 +225,7 @@ npm run dev            # starts on :5173 (proxies /trpc → :3001)
 
 - **Single-host only.** The deployment queue is in-memory; multi-instance is not supported without Redis.
 - **Docker socket.** The `sitey-api` container has `rwx` access to the Docker daemon. Treat it as root-equivalent.
-- **Secrets.** JWT secret and passwords are never stored in plaintext. GitHub App private key is stored as-is in SQLite for now — encrypt at rest if your threat model requires it.
-- **ACME email.** Set once via `ACME_EMAIL` in `.env` — Caddy uses it globally for all domains it serves (management domain + user app domains). Individual domain emails stored in the DB are currently informational only.
+- **Secrets.** JWT secret is auto-generated on first boot and stored in the database. Passwords are never stored in plaintext. GitHub App private key is stored as-is in SQLite for now — encrypt at rest if your threat model requires it.
 
 ---
 

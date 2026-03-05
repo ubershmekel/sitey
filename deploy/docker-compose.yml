@@ -25,8 +25,6 @@ services:
       - "443:443"
     environment:
       CADDY_INGRESS_NETWORKS: sitey-public
-      ACME_EMAIL: ${ACME_EMAIL}
-      SITEY_DOMAIN: ${SITEY_DOMAIN}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - caddy_data:/data
@@ -47,11 +45,7 @@ services:
       PORT: 3001
       DATABASE_URL: file:/data/sitey.db
       DATA_ROOT: /data
-      JWT_SECRET: ${JWT_SECRET}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@sitey.local}
       LOG_LEVEL: ${LOG_LEVEL:-info}
-      SITEY_URL: https://${SITEY_DOMAIN}
-      CORS_ORIGIN: https://${SITEY_DOMAIN}
     volumes:
       - ${DATA_ROOT:-./data}:/data
       - /var/run/docker.sock:/var/run/docker.sock

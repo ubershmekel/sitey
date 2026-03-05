@@ -2,10 +2,12 @@ import crypto from 'node:crypto'
 import argon2 from 'argon2'
 import jwt from 'jsonwebtoken'
 
-const JWT_SECRET = process.env.JWT_SECRET ?? (() => {
-  console.warn('[crypto] JWT_SECRET not set — using insecure random. Set JWT_SECRET in .env!')
-  return crypto.randomBytes(32).toString('hex')
-})()
+// Initialised by bootstrap() before the HTTP server starts
+let jwtSecret = ''
+
+export function initJwtSecret(secret: string) {
+  jwtSecret = secret
+}
 
 // ── Password helpers ──────────────────────────────────────────────────────────
 
@@ -33,11 +35,13 @@ export type JwtPayload = {
 }
 
 export function signToken(payload: JwtPayload, expiresIn = '7d'): string {
-  return jwt.sign(payload, JWT_SECRET, { expiresIn } as jwt.SignOptions)
+  if (!jwtSecret) throw new Error('JWT secret not initialised')
+  return jwt.sign(payload, jwtSecret, { expiresIn } as jwt.SignOptions)
 }
 
 export function verifyToken(token: string): JwtPayload {
-  return jwt.verify(token, JWT_SECRET) as JwtPayload
+  if (!jwtSecret) throw new Error('JWT secret not initialised')
+  return jwt.verify(token, jwtSecret) as JwtPayload
 }
 
 // ── Webhook secret helpers ────────────────────────────────────────────────────
