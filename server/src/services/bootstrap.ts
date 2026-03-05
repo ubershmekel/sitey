@@ -57,17 +57,14 @@ export async function bootstrap() {
   });
   if (!setupDone) {
     const ips = getLocalIPs();
-    console.log("╔══════════════════════════════════════════════════════╗");
-    console.log("║          SITEY — FIRST RUN SETUP                     ║");
-    console.log("║                                                       ║");
-    console.log("║  Open one of these addresses in your browser:        ║");
-    ips.forEach((ip) => {
-      const line = `  http://${ip}`;
-      console.log(`║  ${line.padEnd(51)}║`);
-    });
-    console.log("║                                                       ║");
-    console.log("║  Complete the setup wizard to create your account.   ║");
-    console.log("╚══════════════════════════════════════════════════════╝");
+    console.log(banner([
+      "SITEY — FIRST RUN SETUP",
+      "",
+      "Open one of these addresses in your browser:",
+      ...ips.map((ip) => `  http://${ip}`),
+      "",
+      "Complete the setup wizard to create your account.",
+    ]));
   }
 }
 
@@ -81,6 +78,14 @@ function getLocalIPs(): string[] {
     }
   }
   return results.length ? results : ["localhost"];
+}
+
+function banner(lines: string[]): string {
+  const inner = Math.max(...lines.map((l) => l.length)) + 4;
+  const top = "╔" + "═".repeat(inner) + "╗";
+  const bot = "╚" + "═".repeat(inner) + "╝";
+  const rows = lines.map((l) => "║  " + l.padEnd(inner - 2) + "║");
+  return [top, ...rows, bot].join("\n");
 }
 
 // ── Password reset (CLI) ───────────────────────────────────────────────────────
@@ -102,15 +107,14 @@ export async function resetAdminPassword() {
     data: { passwordHash: hash, mustChangePassword: true },
   });
 
-  console.log("╔══════════════════════════════════════════════════════╗");
-  console.log("║          SITEY — ADMIN PASSWORD RESET                ║");
-  console.log("║                                                       ║");
-  console.log(`║  Email   : ${user.email.padEnd(41)}║`);
-  console.log(`║  Password: ${newPassword.padEnd(41)}║`);
-  console.log("║                                                       ║");
-  console.log("║  You will be required to change this password on     ║");
-  console.log("║  next login.                                         ║");
-  console.log("╚══════════════════════════════════════════════════════╝");
+  console.log(banner([
+    "SITEY — ADMIN PASSWORD RESET",
+    "",
+    `Email   : ${user.email}`,
+    `Password: ${newPassword}`,
+    "",
+    "You will be required to change this password on next login.",
+  ]));
 
   await db.$disconnect();
 }
@@ -141,17 +145,17 @@ export async function generateOverridePassword() {
     update: { value: "true" },
   });
 
-  console.log("╔══════════════════════════════════════════════════════╗");
-  console.log("║          SITEY — OVERRIDE PASSWORD GENERATED         ║");
-  console.log("║                                                      ║");
-  console.log(`║  Password: ${password.padEnd(42)}║`);
-  console.log("║                                                      ║");
-  console.log("║  Use this password with ANY email on the login page  ║");
-  console.log("║  to take over that account. You will be prompted to  ║");
-  console.log("║  set a new password after logging in.                ║");
-  console.log("║                                                      ║");
-  console.log("║  Save this — it will not be shown again.             ║");
-  console.log("╚══════════════════════════════════════════════════════╝");
+  console.log(banner([
+    "SITEY — OVERRIDE PASSWORD GENERATED",
+    "",
+    `Password: ${password}`,
+    "",
+    "Use this password with ANY email on the login page",
+    "to take over that account. You will be prompted to",
+    "set a new password after logging in.",
+    "",
+    "Save this — it will not be shown again.",
+  ]));
 
   await db.$disconnect();
 }
