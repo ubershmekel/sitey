@@ -23,6 +23,30 @@ export async function bootstrap() {
   }
   initJwtSecret(secretRow.value)
 
+  // ── Sitey built-in project + root route ────────────────────────────────────
+  // The sitey UI is itself a protected project with the catch-all root route
+  // (no domain, no path prefix). This ensures it always appears in the UI and
+  // that its root route cannot be accidentally deleted.
+  let siteyProject = await db.project.findFirst({ where: { protected: true } })
+  if (!siteyProject) {
+    siteyProject = await db.project.create({
+      data: {
+        name: 'sitey',
+        protected: true,
+        status: 'running',
+        deployMode: 'server',
+      },
+    })
+    await db.projectRoute.create({
+      data: {
+        projectId: siteyProject.id,
+        protected: true,
+        // domainId=null, subdomain="", pathPrefix="" → the root catch-all
+      },
+    })
+    console.log('[bootstrap] Created built-in sitey project and root route.')
+  }
+
   // ── First-run hint ─────────────────────────────────────────────────────────
   const setupDone = await db.systemConfig.findUnique({ where: { key: 'setup_complete' } })
   if (!setupDone) {

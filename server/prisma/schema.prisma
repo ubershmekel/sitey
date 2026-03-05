@@ -17,52 +17,78 @@ model User {
 }
 
 model Domain {
-  id               String    @id @default(cuid())
-  hostname         String    @unique
+  id               String         @id @default(cuid())
+  hostname         String         @unique
   letsEncryptEmail String
-  status           String    @default("pending") // pending | active | error
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-  projects         Project[]
+  status           String         @default("pending") // pending | active | error
+  createdAt        DateTime       @default(now())
+  updatedAt        DateTime       @updatedAt
+  routes           ProjectRoute[]
 }
 
 model Project {
-  id            String       @id @default(cuid())
+  id            String         @id @default(cuid())
   name          String
-  domainId      String
-  domain        Domain       @relation(fields: [domainId], references: [id], onDelete: Cascade)
 
   // GitHub source
-  repoOwner     String
-  repoName      String
-  branch        String       @default("main")
+  repoOwner     String         @default("")
+  repoName      String         @default("")
+  branch        String         @default("main")
 
-  // Routing: subdomain prefix (empty = use domain root; e.g. "app" → app.example.com)
-  subdomain     String       @default("")
+  // Deploy mode
+  deployMode    String         @default("server") // server | static
+  buildCommand  String         @default("")       // static: e.g. "npm run build"
+  outputDir     String         @default("dist")   // static: output directory
 
   // Build / run
-  buildMode     String       @default("auto") // auto | dockerfile
-  containerPort Int          @default(3000)
-  envVars       String       @default("{}") // JSON map
+  buildMode     String         @default("auto") // auto | dockerfile
+  containerPort Int            @default(3000)
+  hostPort      Int?           // auto-allocated fallback port when the project has no routes
+  envVars       String         @default("{}") // JSON map
 
   // GitHub integration
-  githubMode    String       @default("webhook") // webhook | app
+  githubMode    String         @default("webhook") // webhook | app
   webhookSecret String?
-
-  // GitHub App per-project (references global app config from SystemConfig)
   githubInstallationId String?
 
   // Runtime state
-  status        String       @default("idle") // idle | building | running | failed | stopped
+  status        String         @default("idle") // idle | building | running | failed | stopped
   containerId   String?
   containerName String?
 
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt
+  // System-managed projects (e.g. the sitey UI itself) cannot be deleted
+  protected     Boolean        @default(false)
 
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  routes        ProjectRoute[]
   deployments   Deployment[]
+}
 
-  @@unique([domainId, subdomain])
+// A route is a (domain, pathPrefix) pair that points traffic to a project.
+// Either field can be absent:
+//   domain=null, pathPrefix=""      → catches everything (root) — reserved for sitey
+//   domain=set,  pathPrefix=""      → example.com/ or app.example.com/
+//   domain=null, pathPrefix="/blog" → <server-ip>/blog/
+//   domain=set,  pathPrefix="/blog" → example.com/blog/
+// Subdomains are just domains: add app.example.com as its own Domain record.
+model ProjectRoute {
+  id          String   @id @default(cuid())
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  domainId    String?
+  domain      Domain?  @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  pathPrefix  String   @default("") // e.g. "/blog" — empty means the root of this host
+
+  // Protected routes cannot be deleted (used for the sitey root route)
+  protected   Boolean  @default(false)
+
+  createdAt   DateTime @default(now())
+
+  @@unique([domainId, pathPrefix])
 }
 
 model Deployment {

@@ -5,13 +5,12 @@ import { db } from '../lib/db.js'
 import { generateWebhookSecret } from '../services/crypto.js'
 
 export const projectsRouter = router({
-  listByDomain: settledProcedure
-    .input(z.object({ domainId: z.string() }))
-    .query(({ input }) =>
+  list: settledProcedure
+    .query(() =>
       db.project.findMany({
-        where: { domainId: input.domainId },
         orderBy: { createdAt: 'desc' },
         include: {
+          routes: { include: { domain: true } },
           deployments: { orderBy: { createdAt: 'desc' }, take: 1 },
         },
       }),
@@ -23,7 +22,7 @@ export const projectsRouter = router({
       const project = await db.project.findUnique({
         where: { id: input.id },
         include: {
-          domain: true,
+          routes: { include: { domain: true } },
           deployments: { orderBy: { createdAt: 'desc' }, take: 5 },
         },
       })
@@ -33,23 +32,20 @@ export const projectsRouter = router({
 
   create: settledProcedure
     .input(z.object({
-      domainId: z.string(),
       name: z.string().min(1).max(40).regex(/^[a-z0-9-]+$/, 'Lowercase alphanumeric and hyphens only'),
       repoOwner: z.string().min(1),
       repoName: z.string().min(1),
       branch: z.string().default('main'),
-      subdomain: z.string().default(''),
+      deployMode: z.enum(['server', 'static']).default('server'),
+      buildCommand: z.string().default(''),
+      outputDir: z.string().default('dist'),
       buildMode: z.enum(['auto', 'dockerfile']).default('auto'),
       containerPort: z.number().int().min(1).max(65535).default(3000),
       envVars: z.record(z.string()).default({}),
       githubMode: z.enum(['webhook', 'app']).default('webhook'),
     }))
     .mutation(async ({ input }) => {
-      const domain = await db.domain.findUnique({ where: { id: input.domainId } })
-      if (!domain) throw new TRPCError({ code: 'NOT_FOUND', message: 'Domain not found' })
-
       const webhookSecret = generateWebhookSecret()
-
       return db.project.create({
         data: {
           ...input,
@@ -63,7 +59,9 @@ export const projectsRouter = router({
     .input(z.object({
       id: z.string(),
       branch: z.string().optional(),
-      subdomain: z.string().optional(),
+      deployMode: z.enum(['server', 'static']).optional(),
+      buildCommand: z.string().optional(),
+      outputDir: z.string().optional(),
       buildMode: z.enum(['auto', 'dockerfile']).optional(),
       containerPort: z.number().int().min(1).max(65535).optional(),
       envVars: z.record(z.string()).optional(),
@@ -83,9 +81,40 @@ export const projectsRouter = router({
   delete: settledProcedure
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input }) => {
+      const project = await db.project.findUnique({ where: { id: input.id } })
+      if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' })
+      if (project.protected) throw new TRPCError({ code: 'FORBIDDEN', message: 'This project cannot be deleted' })
       await db.project.delete({ where: { id: input.id } })
       return { ok: true }
     }),
+
+  // ── Routes ─────────────────────────────────────────────────────────────────
+
+  addRoute: settledProcedure
+    .input(z.object({
+      projectId: z.string(),
+      domainId: z.string().optional(),
+      pathPrefix: z.string().default(''),
+    }))
+    .mutation(async ({ input }) => {
+      if (input.domainId) {
+        const domain = await db.domain.findUnique({ where: { id: input.domainId } })
+        if (!domain) throw new TRPCError({ code: 'NOT_FOUND', message: 'Domain not found' })
+      }
+      return db.projectRoute.create({ data: input })
+    }),
+
+  removeRoute: settledProcedure
+    .input(z.object({ routeId: z.string() }))
+    .mutation(async ({ input }) => {
+      const route = await db.projectRoute.findUnique({ where: { id: input.routeId } })
+      if (!route) throw new TRPCError({ code: 'NOT_FOUND', message: 'Route not found' })
+      if (route.protected) throw new TRPCError({ code: 'FORBIDDEN', message: 'This route cannot be removed' })
+      await db.projectRoute.delete({ where: { id: input.routeId } })
+      return { ok: true }
+    }),
+
+  // ── Webhook ────────────────────────────────────────────────────────────────
 
   rotateWebhookSecret: settledProcedure
     .input(z.object({ id: z.string() }))
@@ -100,7 +129,7 @@ export const projectsRouter = router({
     .query(async ({ input }) => {
       const project = await db.project.findUniqueOrThrow({
         where: { id: input.id },
-        select: { webhookSecret: true, githubMode: true, domain: { select: { hostname: true } } },
+        select: { webhookSecret: true, githubMode: true },
       })
       const siteUrl = process.env.SITEY_URL ?? `http://localhost:3001`
       return {

@@ -14,11 +14,14 @@ import {
   runOrReplaceContainer,
   createNetworkIfMissing,
   generateDefaultDockerfile,
+  generateStaticDockerfile,
   pruneProjectImages,
+  allocateHostPort,
 } from './docker.js'
 import { nanoid } from 'nanoid'
 
-type ProjectWithDomain = Project & { domain: { hostname: string; letsEncryptEmail: string } }
+type RouteWithDomain = { domain: { hostname: string } | null; pathPrefix: string }
+type ProjectWithRoutes = Project & { routes: RouteWithDomain[] }
 
 function containerName(project: Project): string {
   return `sitey-${project.id}`
@@ -41,16 +44,16 @@ export function enqueueDeployment(project: Project, deployment: Deployment): voi
     run: async () => {
       const fullProject = await db.project.findUniqueOrThrow({
         where: { id: project.id },
-        include: { domain: true },
+        include: { routes: { include: { domain: true } } },
       })
-      await runDeployment(fullProject as ProjectWithDomain, deployment)
+      await runDeployment(fullProject as ProjectWithRoutes, deployment)
     },
   })
 }
 
 // ── Core deployment flow ──────────────────────────────────────────────────────
 
-async function runDeployment(project: ProjectWithDomain, deployment: Deployment): Promise<void> {
+async function runDeployment(project: ProjectWithRoutes, deployment: Deployment): Promise<void> {
   const logDir = projectLogsDir(project.id)
   fs.mkdirSync(logDir, { recursive: true })
   const logPath = deploymentLogPath(project.id, deployment.id)
@@ -107,15 +110,32 @@ async function runDeployment(project: ProjectWithDomain, deployment: Deployment)
     const dockerfilePath = path.join(repoPath, 'Dockerfile')
 
     if (project.buildMode === 'auto' && !fs.existsSync(dockerfilePath)) {
-      onLog('[deploy] No Dockerfile found — generating default Node.js Dockerfile')
-      fs.writeFileSync(dockerfilePath, generateDefaultDockerfile(project.containerPort))
+      if (project.deployMode === 'static') {
+        onLog('[deploy] No Dockerfile found — generating static site Dockerfile')
+        fs.writeFileSync(
+          dockerfilePath,
+          generateStaticDockerfile(project.buildCommand, project.outputDir, project.containerPort),
+        )
+      } else {
+        onLog('[deploy] No Dockerfile found — generating default Node.js Dockerfile')
+        fs.writeFileSync(dockerfilePath, generateDefaultDockerfile(project.containerPort))
+      }
     }
 
     // 4. Build image
     const tag = imageTag(project, sha)
     await buildImage({ projectId: project.id, repoPath, tag, onLog })
 
-    // 5. Run container
+    // 5. Resolve host port fallback (used when the project has no routable routes)
+    const hasRoutableRoutes = project.routes.some((r: RouteWithDomain) => r.domain || r.pathPrefix)
+    let hostPort = project.hostPort
+    if (!hasRoutableRoutes && hostPort === null) {
+      hostPort = await allocateHostPort()
+      await db.project.update({ where: { id: project.id }, data: { hostPort } })
+      onLog(`[deploy] No routes configured — assigned fallback host port ${hostPort}`)
+    }
+
+    // 6. Run container
     const envVars: Record<string, string> = {}
     try {
       Object.assign(envVars, JSON.parse(project.envVars || '{}'))
@@ -125,17 +145,22 @@ async function runDeployment(project: ProjectWithDomain, deployment: Deployment)
     const cName = containerName(project)
     const containerId = await runOrReplaceContainer({
       project,
+      routes: project.routes,
       imageTag: tag,
       containerName: cName,
       envVars,
+      hostPort,
       onLog,
     })
 
-    // 6. Prune old images for this project
+    // 7. Prune old images for this project
     await pruneProjectImages(project.id, tag)
 
-    // 7. Mark success
+    // 8. Mark success
     onLog(`[deploy] Deployment successful! Container: ${cName} (${containerId.slice(0, 12)})`)
+    if (hostPort && !hasRoutableRoutes) {
+      onLog(`[deploy] Accessible at: http://<server-ip>:${hostPort}`)
+    }
     logStream.end()
 
     await db.deployment.update({
