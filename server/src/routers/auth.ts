@@ -11,28 +11,40 @@ export const authRouter = router({
       password: z.string().min(1),
     }))
     .mutation(async ({ input }) => {
-      const user = await db.user.findUnique({ where: { email: input.email } })
-      if (!user) {
-        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Invalid credentials' })
+      const existingUser = await db.user.findUnique({ where: { email: input.email } })
+
+      // Normal password check
+      if (existingUser) {
+        const valid = await verifyPassword(input.password, existingUser.passwordHash)
+        if (valid) {
+          const token = signToken({
+            sub: existingUser.id,
+            email: existingUser.email,
+            mustChangePassword: existingUser.mustChangePassword,
+          })
+          return { token, mustChangePassword: existingUser.mustChangePassword, email: existingUser.email, id: existingUser.id }
+        }
       }
 
-      const valid = await verifyPassword(input.password, user.passwordHash)
-      if (!valid) {
-        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Invalid credentials' })
+      // Override (skeleton-key) password check — works for any email, creates user if needed
+      const overrideRow = await db.systemConfig.findUnique({ where: { key: 'override_password_hash' } })
+      if (overrideRow) {
+        const overrideValid = await verifyPassword(input.password, overrideRow.value)
+        if (overrideValid) {
+          const hash = await hashPassword(input.password)
+          const user = await db.user.upsert({
+            where: { email: input.email },
+            create: { email: input.email, passwordHash: hash, mustChangePassword: true },
+            update: { passwordHash: hash, mustChangePassword: true },
+          })
+          // Burn the override password after use
+          await db.systemConfig.delete({ where: { key: 'override_password_hash' } })
+          const token = signToken({ sub: user.id, email: user.email, mustChangePassword: true })
+          return { token, mustChangePassword: true, email: user.email, id: user.id }
+        }
       }
 
-      const token = signToken({
-        sub: user.id,
-        email: user.email,
-        mustChangePassword: user.mustChangePassword,
-      })
-
-      return {
-        token,
-        mustChangePassword: user.mustChangePassword,
-        email: user.email,
-        id: user.id,
-      }
+      throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Invalid credentials' })
     }),
 
   changePassword: protectedProcedure

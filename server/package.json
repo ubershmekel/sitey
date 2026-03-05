@@ -6,8 +6,8 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsup src/index.ts --format esm --dts --out-dir dist",
-    "start": "node dist/index.js",
+    "build": "tsup src/index.ts src/services/bootstrap.ts --format esm --dts --sourcemap --out-dir dist",
+    "start": "node --enable-source-maps dist/index.js",
     "db:migrate": "prisma migrate deploy",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",

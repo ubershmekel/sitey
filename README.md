@@ -42,12 +42,14 @@ cd sitey/deploy
 # 3. Start
 docker compose up -d --build
 
-# 4. Find your server's address
-docker compose logs sitey-api | grep "http://"
+# 4. Generate your login credentials
+docker compose exec sitey-api node --enable-source-maps dist/services/bootstrap.js init
 ```
 
-Open the printed address in your browser and complete the setup wizard to create
-your admin account.
+This prints a one-time override password. Open the address shown in the logs, go
+to the login page, enter **your email** and that password — Sitey creates your
+account and prompts you to set a real password. The override password is burned
+after first use.
 
 ---
 
@@ -110,13 +112,21 @@ DATA_ROOT=/opt/sitey/data
 
 ---
 
-## Resetting the admin password
+## CLI account commands
 
-If you're locked out, run this on the host — it prints a new random password and
-marks the account for a forced change:
+Both commands run against the live container and print credentials to stdout.
+
+| Command | When to use                                                                   |
+| ------- | ----------------------------------------------------------------------------- |
+| `init`  | Generate a one-time override password usable on any account at the login page |
+| `reset` | Locked out — generates a new random password for the first user               |
 
 ```bash
-docker compose exec sitey-api node dist/services/bootstrap.js reset
+# Initial setup (before setup wizard is completed)
+docker compose exec sitey-api node --enable-source-maps dist/services/bootstrap.js init
+
+# Skeleton key password reset (after setup is complete)
+docker compose exec sitey-api node --enable-source-maps dist/services/bootstrap.js reset
 ```
 
 ---

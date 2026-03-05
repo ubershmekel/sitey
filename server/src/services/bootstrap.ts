@@ -6,115 +6,171 @@
  *  4. Print the server's local IP addresses so the user knows where to connect.
  */
 
-import os from 'node:os'
-import crypto from 'node:crypto'
-import { db } from '../lib/db.js'
-import { initJwtSecret } from './crypto.js'
+import os from "node:os";
+import crypto from "node:crypto";
+import { db } from "../lib/db.js";
+import { initJwtSecret } from "./crypto.js";
 
 export async function bootstrap() {
-  await db.$connect()
+  await db.$connect();
 
   // ── JWT secret ─────────────────────────────────────────────────────────────
-  let secretRow = await db.systemConfig.findUnique({ where: { key: 'jwt_secret' } })
+  let secretRow = await db.systemConfig.findUnique({
+    where: { key: "jwt_secret" },
+  });
   if (!secretRow) {
-    const generated = crypto.randomBytes(32).toString('hex')
-    secretRow = await db.systemConfig.create({ data: { key: 'jwt_secret', value: generated } })
-    console.log('[bootstrap] Generated new JWT secret.')
+    const generated = crypto.randomBytes(32).toString("hex");
+    secretRow = await db.systemConfig.create({
+      data: { key: "jwt_secret", value: generated },
+    });
+    console.log("[bootstrap] Generated new JWT secret.");
   }
-  initJwtSecret(secretRow.value)
+  initJwtSecret(secretRow.value);
 
   // ── Sitey built-in project + root route ────────────────────────────────────
   // The sitey UI is itself a protected project with the catch-all root route
   // (no domain, no path prefix). This ensures it always appears in the UI and
   // that its root route cannot be accidentally deleted.
-  let siteyProject = await db.project.findFirst({ where: { protected: true } })
+  let siteyProject = await db.project.findFirst({ where: { protected: true } });
   if (!siteyProject) {
     siteyProject = await db.project.create({
       data: {
-        name: 'sitey',
+        name: "sitey",
         protected: true,
-        status: 'running',
-        deployMode: 'server',
+        status: "running",
+        deployMode: "server",
       },
-    })
+    });
     await db.projectRoute.create({
       data: {
         projectId: siteyProject.id,
         protected: true,
         // domainId=null, subdomain="", pathPrefix="" → the root catch-all
       },
-    })
-    console.log('[bootstrap] Created built-in sitey project and root route.')
+    });
+    console.log("[bootstrap] Created built-in sitey project and root route.");
   }
 
   // ── First-run hint ─────────────────────────────────────────────────────────
-  const setupDone = await db.systemConfig.findUnique({ where: { key: 'setup_complete' } })
+  const setupDone = await db.systemConfig.findUnique({
+    where: { key: "setup_complete" },
+  });
   if (!setupDone) {
-    const ips = getLocalIPs()
-    console.log('╔══════════════════════════════════════════════════════╗')
-    console.log('║          SITEY — FIRST RUN SETUP                     ║')
-    console.log('║                                                       ║')
-    console.log('║  Open one of these addresses in your browser:        ║')
-    ips.forEach(ip => {
-      const line = `  http://${ip}`
-      console.log(`║  ${line.padEnd(51)}║`)
-    })
-    console.log('║                                                       ║')
-    console.log('║  Complete the setup wizard to create your account.   ║')
-    console.log('╚══════════════════════════════════════════════════════╝')
+    const ips = getLocalIPs();
+    console.log("╔══════════════════════════════════════════════════════╗");
+    console.log("║          SITEY — FIRST RUN SETUP                     ║");
+    console.log("║                                                       ║");
+    console.log("║  Open one of these addresses in your browser:        ║");
+    ips.forEach((ip) => {
+      const line = `  http://${ip}`;
+      console.log(`║  ${line.padEnd(51)}║`);
+    });
+    console.log("║                                                       ║");
+    console.log("║  Complete the setup wizard to create your account.   ║");
+    console.log("╚══════════════════════════════════════════════════════╝");
   }
 }
 
 function getLocalIPs(): string[] {
-  const results: string[] = []
+  const results: string[] = [];
   for (const iface of Object.values(os.networkInterfaces())) {
     for (const addr of iface ?? []) {
-      if (addr.family === 'IPv4' && !addr.internal) {
-        results.push(addr.address)
+      if (addr.family === "IPv4" && !addr.internal) {
+        results.push(addr.address);
       }
     }
   }
-  return results.length ? results : ['localhost']
+  return results.length ? results : ["localhost"];
 }
 
 // ── Password reset (CLI) ───────────────────────────────────────────────────────
 
 export async function resetAdminPassword() {
-  const { generatePassword, hashPassword } = await import('./crypto.js')
+  const { generatePassword, hashPassword } = await import("./crypto.js");
 
-  const user = await db.user.findFirst({ orderBy: { createdAt: 'asc' } })
+  const user = await db.user.findFirst({ orderBy: { createdAt: "asc" } });
   if (!user) {
-    console.error('[reset] No users found.')
-    process.exit(1)
+    console.error("[reset] No users found.");
+    process.exit(1);
   }
 
-  const newPassword = generatePassword(24)
-  const hash = await hashPassword(newPassword)
+  const newPassword = generatePassword(24);
+  const hash = await hashPassword(newPassword);
 
   await db.user.update({
     where: { id: user.id },
     data: { passwordHash: hash, mustChangePassword: true },
-  })
+  });
 
-  console.log('╔══════════════════════════════════════════════════════╗')
-  console.log('║          SITEY — ADMIN PASSWORD RESET                ║')
-  console.log('║                                                       ║')
-  console.log(`║  Email   : ${user.email.padEnd(41)}║`)
-  console.log(`║  Password: ${newPassword.padEnd(41)}║`)
-  console.log('║                                                       ║')
-  console.log('║  You will be required to change this password on     ║')
-  console.log('║  next login.                                         ║')
-  console.log('╚══════════════════════════════════════════════════════╝')
+  console.log("╔══════════════════════════════════════════════════════╗");
+  console.log("║          SITEY — ADMIN PASSWORD RESET                ║");
+  console.log("║                                                       ║");
+  console.log(`║  Email   : ${user.email.padEnd(41)}║`);
+  console.log(`║  Password: ${newPassword.padEnd(41)}║`);
+  console.log("║                                                       ║");
+  console.log("║  You will be required to change this password on     ║");
+  console.log("║  next login.                                         ║");
+  console.log("╚══════════════════════════════════════════════════════╝");
 
-  await db.$disconnect()
+  await db.$disconnect();
 }
 
-// Allow running directly: `tsx src/services/bootstrap.ts reset`
-import { fileURLToPath } from 'node:url'
-const isMain = process.argv[1] === fileURLToPath(import.meta.url) ||
-               process.argv[1]?.endsWith('bootstrap.js')
+// ── CLI init (generate skeleton-key password) ─────────────────────────────────
+//
+// Stores a hashed override password in SystemConfig. On login, if the entered
+// password matches this hash, Sitey will upsert the given email as a user and
+// log them in — regardless of what their actual password is. Useful for first
+// setup and for recovering access to any account.
 
-if (isMain && process.argv[2] === 'reset') {
-  await db.$connect()
-  await resetAdminPassword()
+export async function generateOverridePassword() {
+  const { generatePassword, hashPassword } = await import("./crypto.js");
+
+  const password = generatePassword(24);
+  const hash = await hashPassword(password);
+
+  await db.systemConfig.upsert({
+    where: { key: "override_password_hash" },
+    create: { key: "override_password_hash", value: hash },
+    update: { value: hash },
+  });
+
+  // Mark setup complete so the web wizard doesn't appear on first visit
+  await db.systemConfig.upsert({
+    where: { key: "setup_complete" },
+    create: { key: "setup_complete", value: "true" },
+    update: { value: "true" },
+  });
+
+  console.log("╔══════════════════════════════════════════════════════╗");
+  console.log("║          SITEY — OVERRIDE PASSWORD GENERATED         ║");
+  console.log("║                                                      ║");
+  console.log(`║  Password: ${password.padEnd(42)}║`);
+  console.log("║                                                      ║");
+  console.log("║  Use this password with ANY email on the login page  ║");
+  console.log("║  to take over that account. You will be prompted to  ║");
+  console.log("║  set a new password after logging in.                ║");
+  console.log("║                                                      ║");
+  console.log("║  Save this — it will not be shown again.             ║");
+  console.log("╚══════════════════════════════════════════════════════╝");
+
+  await db.$disconnect();
+}
+
+// Allow running directly: `node --enable-source-maps dist/services/bootstrap.js <init|reset>`
+import { fileURLToPath } from "node:url";
+const isMain =
+  process.argv[1] === fileURLToPath(import.meta.url) ||
+  process.argv[1]?.endsWith("bootstrap.js");
+
+if (isMain) {
+  await db.$connect();
+  const cmd = process.argv[2];
+  if (cmd === "reset") {
+    await resetAdminPassword();
+  } else if (cmd === "init") {
+    await generateOverridePassword();
+  } else {
+    console.error("Usage: bootstrap.js <init|reset>");
+    process.exit(1);
+  }
 }

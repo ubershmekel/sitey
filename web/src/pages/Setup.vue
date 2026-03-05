@@ -17,11 +17,6 @@
         <input v-model="password" type="password" autocomplete="new-password" required placeholder="at least 12 characters" />
       </label>
 
-      <label>
-        Confirm password
-        <input v-model="confirm" type="password" autocomplete="new-password" required />
-      </label>
-
       <button type="submit" :disabled="loading" class="btn-primary">
         {{ loading ? 'Creating account…' : 'Create account' }}
       </button>
@@ -40,16 +35,11 @@ const auth = useAuthStore()
 
 const email = ref('')
 const password = ref('')
-const confirm = ref('')
 const loading = ref(false)
 const error = ref('')
 
 async function handleSetup() {
   error.value = ''
-  if (password.value !== confirm.value) {
-    error.value = 'Passwords do not match.'
-    return
-  }
   loading.value = true
   try {
     const result = await trpc.setup.complete.mutate({ email: email.value, password: password.value })
