@@ -1,0 +1,45 @@
+# Traefik static configuration
+# https://doc.traefik.io/traefik/
+
+global:
+  checkNewVersion: false
+  sendAnonymousUsage: false
+
+log:
+  level: INFO
+
+api:
+  # Dashboard is disabled by default for security.
+  # To enable: set TRAEFIK_API_INSECURE=true and expose port 8080.
+  dashboard: false
+
+entryPoints:
+  web:
+    address: ":80"
+    http:
+      redirections:
+        entryPoint:
+          to: websecure
+          scheme: https
+
+  websecure:
+    address: ":443"
+
+# Let's Encrypt ACME (HTTP-01 challenge)
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      # Email configured via ACME_EMAIL env var in docker-compose
+      email: "${ACME_EMAIL}"
+      storage: /letsencrypt/acme.json
+      httpChallenge:
+        entryPoint: web
+
+providers:
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false
+    network: sitey-public
+  file:
+    filename: /etc/traefik/dynamic.yml
+    watch: true

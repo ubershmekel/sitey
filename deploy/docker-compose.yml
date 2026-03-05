@@ -1,0 +1,95 @@
+version: "3.9"
+
+# ─── Networks ─────────────────────────────────────────────────────────────────
+networks:
+  sitey-public:
+    name: sitey-public
+    driver: bridge
+  sitey-internal:
+    name: sitey-internal
+    driver: bridge
+
+# ─── Volumes ──────────────────────────────────────────────────────────────────
+volumes:
+  letsencrypt:
+
+# ─── Services ─────────────────────────────────────────────────────────────────
+services:
+
+  # ── Traefik ──────────────────────────────────────────────────────────────────
+  traefik:
+    image: traefik:v3.1
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic.yml:/etc/traefik/dynamic.yml:ro
+      - letsencrypt:/letsencrypt
+    environment:
+      ACME_EMAIL: ${ACME_EMAIL}
+    networks:
+      - sitey-public
+    labels:
+      - "traefik.enable=false"  # don't route to Traefik itself
+
+  # ── Sitey API ─────────────────────────────────────────────────────────────────
+  sitey-api:
+    build:
+      context: ../server
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - traefik
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: file:/data/sitey.db
+      DATA_ROOT: /data
+      JWT_SECRET: ${JWT_SECRET}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@sitey.local}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SITEY_URL: https://${SITEY_DOMAIN}
+      CORS_ORIGIN: https://${SITEY_DOMAIN}
+    volumes:
+      # Persistent DB + project data
+      - ${DATA_ROOT:-./data}:/data
+      # Docker socket — allows managing containers on the host
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - sitey-public
+      - sitey-internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=sitey-public"
+      # HTTPS router
+      - "traefik.http.routers.sitey-api.rule=Host(`${SITEY_DOMAIN}`) && (PathPrefix(`/trpc`) || PathPrefix(`/webhook`) || PathPrefix(`/health`))"
+      - "traefik.http.routers.sitey-api.entrypoints=websecure"
+      - "traefik.http.routers.sitey-api.tls=true"
+      - "traefik.http.routers.sitey-api.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.sitey-api.priority=10"
+      - "traefik.http.services.sitey-api.loadbalancer.server.port=3001"
+      # HTTP → HTTPS redirect handled by Traefik entrypoint
+
+  # ── Sitey Web ─────────────────────────────────────────────────────────────────
+  sitey-web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      - sitey-api
+    networks:
+      - sitey-public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=sitey-public"
+      # Catch-all for the management domain (lower priority than API)
+      - "traefik.http.routers.sitey-web.rule=Host(`${SITEY_DOMAIN}`)"
+      - "traefik.http.routers.sitey-web.entrypoints=websecure"
+      - "traefik.http.routers.sitey-web.tls=true"
+      - "traefik.http.routers.sitey-web.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.sitey-web.priority=1"
+      - "traefik.http.services.sitey-web.loadbalancer.server.port=80"

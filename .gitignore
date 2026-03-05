@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+data/
+*.db
+*.db-shm
+*.db-wal
+deploy/.env
+server/src/generated/
+web/dist/
+.DS_Store
+*.log

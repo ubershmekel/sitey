@@ -1,0 +1,89 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                 String   @id @default(cuid())
+  email              String   @unique
+  passwordHash       String
+  mustChangePassword Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+}
+
+model Domain {
+  id               String    @id @default(cuid())
+  hostname         String    @unique
+  letsEncryptEmail String
+  status           String    @default("pending") // pending | active | error
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  projects         Project[]
+}
+
+model Project {
+  id            String       @id @default(cuid())
+  name          String
+  domainId      String
+  domain        Domain       @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  // GitHub source
+  repoOwner     String
+  repoName      String
+  branch        String       @default("main")
+
+  // Routing: subdomain prefix (empty = use domain root; e.g. "app" → app.example.com)
+  subdomain     String       @default("")
+
+  // Build / run
+  buildMode     String       @default("auto") // auto | dockerfile
+  containerPort Int          @default(3000)
+  envVars       String       @default("{}") // JSON map
+
+  // GitHub integration
+  githubMode    String       @default("webhook") // webhook | app
+  webhookSecret String?
+
+  // GitHub App per-project (references global app config from SystemConfig)
+  githubInstallationId String?
+
+  // Runtime state
+  status        String       @default("idle") // idle | building | running | failed | stopped
+  containerId   String?
+  containerName String?
+
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  deployments   Deployment[]
+
+  @@unique([domainId, subdomain])
+}
+
+model Deployment {
+  id            String    @id @default(cuid())
+  projectId     String
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  status        String    @default("queued") // queued | building | running | success | failed
+  commitSha     String?
+  commitMessage String?
+  logPath       String?
+  triggeredBy   String    @default("manual") // manual | webhook
+
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  createdAt     DateTime  @default(now())
+}
+
+// Key-value store for system-wide settings
+model SystemConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
