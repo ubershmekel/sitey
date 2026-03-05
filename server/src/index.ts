@@ -1,6 +1,6 @@
 import Fastify from 'fastify'
 import cors from '@fastify/cors'
-import rawBody from '@fastify/rawbody'
+import { Readable } from 'node:stream'
 import { fastifyTRPCPlugin, FastifyTRPCPluginOptions } from '@trpc/server/adapters/fastify'
 import { appRouter, type AppRouter } from './routers/index.js'
 import { createContext } from './context.js'
@@ -36,13 +36,16 @@ async function main() {
     trustProxy: true,
   })
 
-  // Raw body for webhook signature verification
-  await app.register(rawBody, {
-    field: 'rawBody',
-    global: false,
-    encoding: 'utf8',
-    runFirst: true,
-    routes: ['/webhook/github/:projectId'],
+  // Capture raw body for webhook routes (replaces @fastify/rawbody)
+  app.addHook('preParsing', async (request, _reply, payload) => {
+    if (!request.url.startsWith('/webhook/')) return payload
+    const chunks: Buffer[] = []
+    for await (const chunk of payload) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk as string))
+    }
+    const raw = Buffer.concat(chunks)
+    ;(request as unknown as { rawBody: string }).rawBody = raw.toString('utf8')
+    return Readable.from([raw])
   })
 
   await app.register(cors, {
@@ -70,9 +73,6 @@ async function main() {
   // ── GitHub Webhook ─────────────────────────────────────────────────────────
   app.post<{ Params: { projectId: string } }>(
     '/webhook/github/:projectId',
-    {
-      config: { rawBody: true },
-    },
     async (req, reply) => {
       const { projectId } = req.params
       const signature = (req.headers['x-hub-signature-256'] ?? '') as string

@@ -2,13 +2,13 @@ FROM node:20-alpine AS base
 WORKDIR /app
 
 # Install build tools for native modules (argon2)
-RUN apk add --no-cache python3 make g++ git
+RUN apk add --no-cache python3 make g++ git openssl
 
 # Dependencies
 FROM base AS deps
 COPY package*.json ./
 COPY prisma ./prisma/
-RUN npm ci
+RUN npm install
 
 # Build
 FROM deps AS builder
@@ -22,7 +22,7 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 
 # Runtime deps only
-RUN apk add --no-cache git
+RUN apk add --no-cache git openssl
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
