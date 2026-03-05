@@ -10,23 +10,38 @@ networks:
 # ─── Volumes ──────────────────────────────────────────────────────────────────
 volumes:
   caddy_data:   # TLS certs + Caddy state
+  web_dist:     # Built Vue SPA files, populated by sitey-web init container
 
 # ─── Services ─────────────────────────────────────────────────────────────────
 services:
 
-  # ── Caddy (reverse proxy + automatic HTTPS) ───────────────────────────────────
+  # ── Sitey Web (init container — builds once, then exits) ──────────────────
+  sitey-web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+    volumes:
+      - web_dist:/srv
+    restart: "no"
+
+  # ── Caddy (reverse proxy + static file server + automatic HTTPS) ───────────
   caddy:
     image: lucaslorentz/caddy-docker-proxy:ci-alpine
     restart: unless-stopped
+    depends_on:
+      sitey-web:
+        condition: service_completed_successfully
     ports:
       - "80:80"
       - "443:443"
     environment:
       CADDY_INGRESS_NETWORKS: sitey-public
+      CADDY_DOCKER_CADDYFILE_PATH: /etc/caddy/Caddyfile
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock:ro
       - caddy_data:/data
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - web_dist:/srv:ro
     networks:
       - sitey-public
 
@@ -50,15 +65,3 @@ services:
     networks:
       - sitey-public
       - sitey-internal
-
-  # ── Sitey Web ─────────────────────────────────────────────────────────────────
-  sitey-web:
-    build:
-      context: ../web
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    depends_on:
-      - sitey-api
-    networks:
-      - sitey-public
-    # No labels needed — routing is defined in Caddyfile above.

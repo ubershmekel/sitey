@@ -11,9 +11,7 @@ ENV VITE_API_URL=$VITE_API_URL
 
 RUN npx vite build
 
-FROM nginx:alpine
-COPY --from=builder /app/dist /usr/share/nginx/html
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+# One-shot init container: copies built files into the shared volume on startup
+FROM alpine:3
+COPY --from=builder /app/dist /dist
+CMD ["cp", "-r", "/dist/.", "/srv/"]

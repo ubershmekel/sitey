@@ -1,13 +1,3 @@
-# Serve everything on HTTP by default.
-# After configuring a domain via the Sitey UI, update this file to add HTTPS:
-#
-#   your.domain.com {
-#       tls your@email.com
-#       @api path /trpc* /webhook* /health*
-#       handle @api { reverse_proxy sitey-api:3001 }
-#       handle     { reverse_proxy sitey-web:80    }
-#   }
-
 :80 {
     @api path /trpc* /webhook* /health*
 
@@ -16,6 +6,9 @@
     }
 
     handle {
-        reverse_proxy sitey-web:80
+        root * /srv
+        encode gzip
+        try_files {path} /index.html
+        file_server
     }
 }
