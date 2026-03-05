@@ -51,6 +51,42 @@ your admin account.
 
 ---
 
+## Updating
+
+```bash
+cd sitey/deploy
+git pull
+docker compose up -d --build
+```
+
+Migrations run automatically on startup. If the API fails to start after an
+update (check `docker compose logs sitey-api`), the schema may have changed in a
+way that requires a fresh DB — see **Nuking data** below.
+
+---
+
+## DANGER Wipe the data (fresh start)
+
+Wipes all users, projects, domains, deployments, and the generated admin
+password. Deployed app containers are left running.
+
+```bash
+cd sitey/deploy
+docker compose down
+rm -f data/sitey.db
+docker compose up -d --build
+docker compose logs sitey-api | grep password   # new password printed on first boot
+```
+
+Optional cleanup for a completeness - remove deployed app containers:
+
+```bash
+docker ps -a --filter label=caddy               # list managed app containers
+docker rm -f <container-id>                     # remove as needed
+```
+
+---
+
 ## Where data lives
 
 All persistent state is under the `data/` directory inside `deploy/`:
@@ -191,33 +227,7 @@ port.
 
 ## Development
 
-```bash
-# Install dependencies
-cd server && npm install
-cd ../web  && npm install
-
-# Start the API
-cd server
-npm run db:push   # create tables (uses file:./dev.db by default)
-npm run dev       # starts on :3001
-
-# In another terminal
-cd web
-npm run dev       # starts on :5173 (proxies /trpc → :3001)
-```
-
----
-
-## Architecture notes
-
-- **Single-host only.** The deployment queue is in-memory; multi-instance is not
-  supported without Redis.
-- **Docker socket.** The `sitey-api` container has `rwx` access to the Docker
-  daemon. Treat it as root-equivalent.
-- **Secrets.** JWT secret is auto-generated on first boot and stored in the
-  database. Passwords are never stored in plaintext. GitHub App private key is
-  stored as-is in SQLite for now — encrypt at rest if your threat model requires
-  it.
+See [docs/development.md](docs/development.md) for local setup, DB scripts, and how to keep migrations in sync with `schema.prisma`.
 
 ---
 

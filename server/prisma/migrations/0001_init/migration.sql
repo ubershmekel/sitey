@@ -22,13 +22,15 @@ CREATE TABLE "Domain" (
 CREATE TABLE "Project" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
-    "domainId" TEXT NOT NULL,
-    "repoOwner" TEXT NOT NULL,
-    "repoName" TEXT NOT NULL,
+    "repoOwner" TEXT NOT NULL DEFAULT '',
+    "repoName" TEXT NOT NULL DEFAULT '',
     "branch" TEXT NOT NULL DEFAULT 'main',
-    "subdomain" TEXT NOT NULL DEFAULT '',
+    "deployMode" TEXT NOT NULL DEFAULT 'server',
+    "buildCommand" TEXT NOT NULL DEFAULT '',
+    "outputDir" TEXT NOT NULL DEFAULT 'dist',
     "buildMode" TEXT NOT NULL DEFAULT 'auto',
     "containerPort" INTEGER NOT NULL DEFAULT 3000,
+    "hostPort" INTEGER,
     "envVars" TEXT NOT NULL DEFAULT '{}',
     "githubMode" TEXT NOT NULL DEFAULT 'webhook',
     "webhookSecret" TEXT,
@@ -36,9 +38,21 @@ CREATE TABLE "Project" (
     "status" TEXT NOT NULL DEFAULT 'idle',
     "containerId" TEXT,
     "containerName" TEXT,
+    "protected" BOOLEAN NOT NULL DEFAULT false,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
-    CONSTRAINT "Project_domainId_fkey" FOREIGN KEY ("domainId") REFERENCES "Domain" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "updatedAt" DATETIME NOT NULL
+);
+
+-- CreateTable
+CREATE TABLE "ProjectRoute" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "projectId" TEXT NOT NULL,
+    "domainId" TEXT,
+    "pathPrefix" TEXT NOT NULL DEFAULT '',
+    "protected" BOOLEAN NOT NULL DEFAULT false,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT "ProjectRoute_projectId_fkey" FOREIGN KEY ("projectId") REFERENCES "Project" ("id") ON DELETE CASCADE ON UPDATE CASCADE,
+    CONSTRAINT "ProjectRoute_domainId_fkey" FOREIGN KEY ("domainId") REFERENCES "Domain" ("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
 -- CreateTable
@@ -70,4 +84,4 @@ CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
 CREATE UNIQUE INDEX "Domain_hostname_key" ON "Domain"("hostname");
 
 -- CreateIndex
-CREATE UNIQUE INDEX "Project_domainId_subdomain_key" ON "Project"("domainId", "subdomain");
+CREATE UNIQUE INDEX "ProjectRoute_domainId_pathPrefix_key" ON "ProjectRoute"("domainId", "pathPrefix");
