@@ -19,6 +19,7 @@ const CADDY_ADMIN_URL = process.env.CADDY_ADMIN_URL ?? 'http://caddy:2019'
 const CADDY_ADMIN_ORIGIN = process.env.CADDY_ADMIN_ORIGIN ?? getOriginFromUrl(CADDY_ADMIN_URL)
 const CADDY_TLS_HOST = process.env.CADDY_TLS_HOST ?? getHostFromUrl(CADDY_ADMIN_URL)
 const CADDY_TLS_PORT = Number(process.env.CADDY_TLS_PORT ?? '443')
+const WILDCARD_STATUS_PROBE_LABEL = 'sitey-dns-check'
 
 export type LetsEncryptStatus = 'pending' | 'active' | 'error'
 
@@ -67,6 +68,12 @@ function certMatchesHostname(cert: tls.PeerCertificate, hostname: string): boole
   return candidates.some(name => name === target || wildcardMatches(name, target))
 }
 
+export function getWildcardStatusProbeHostname(wildcardHostname: string): string | null {
+  const normalized = sanitizeDnsName(wildcardHostname)
+  if (!normalized.startsWith('*.')) return null
+  return `${WILDCARD_STATUS_PROBE_LABEL}.${normalized.slice(2)}`
+}
+
 export async function getLetsEncryptStatusFromCaddy(hostname: string): Promise<LetsEncryptStatus> {
   return new Promise(resolve => {
     const socket = tls.connect({
@@ -103,12 +110,17 @@ export async function getLetsEncryptStatusesFromCaddy(hostnames: string[]): Prom
   const uniqueHostnames = [...new Set(hostnames.map(h => h.trim().toLowerCase()).filter(Boolean))]
   const wildcardHostnames = uniqueHostnames.filter(hostname => hostname.startsWith('*.'))
   const concreteHostnames = uniqueHostnames.filter(hostname => !hostname.startsWith('*.'))
-  const results = await Promise.all(
-    concreteHostnames.map(async hostname => [hostname, await getLetsEncryptStatusFromCaddy(hostname)] as const),
-  )
-  for (const hostname of wildcardHostnames) {
-    results.push([hostname, 'pending'] as const)
-  }
+
+  const concreteChecks = concreteHostnames
+    .map(async hostname => [hostname, await getLetsEncryptStatusFromCaddy(hostname)] as const)
+  const wildcardChecks = wildcardHostnames
+    .map(async hostname => {
+      const probeHostname = getWildcardStatusProbeHostname(hostname)
+      if (!probeHostname) return [hostname, 'pending'] as const
+      return [hostname, await getLetsEncryptStatusFromCaddy(probeHostname)] as const
+    })
+
+  const results = await Promise.all([...concreteChecks, ...wildcardChecks])
   return Object.fromEntries(results)
 }
 
@@ -163,6 +175,14 @@ function appendSiteBlock(lines: string[], hostname: string, email: string, route
   lines.push('')
 }
 
+function appendProbeSiteBlock(lines: string[], hostname: string, email: string): void {
+  lines.push(`${hostname} {`)
+  lines.push(`    tls ${email}`)
+  lines.push('    respond 204')
+  lines.push('}')
+  lines.push('')
+}
+
 export async function buildCaddyfile(): Promise<string> {
   const domains = await db.domain.findMany({
     orderBy: { createdAt: 'asc' },
@@ -213,6 +233,11 @@ export async function buildCaddyfile(): Promise<string> {
       const existing = routesByHostname.get(routeHostname)
       if (existing) existing.push(route)
       else routesByHostname.set(routeHostname, [route])
+    }
+
+    const probeHostname = getWildcardStatusProbeHostname(domain.hostname)
+    if (probeHostname && !routesByHostname.has(probeHostname)) {
+      appendProbeSiteBlock(lines, probeHostname, domain.letsEncryptEmail)
     }
 
     for (const [hostname, hostRoutes] of routesByHostname.entries()) {

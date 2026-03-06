@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, settledProcedure } from '../trpc.js'
 import { db } from '../lib/db.js'
-import { reloadCaddy, getLetsEncryptStatusesFromCaddy } from '../services/caddy.js'
+import { reloadCaddy, getLetsEncryptStatusesFromCaddy, getWildcardStatusProbeHostname } from '../services/caddy.js'
 
 const HOSTNAME_REGEX =
   /^(?:\*\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/
@@ -94,9 +94,7 @@ export const domainsRouter = router({
     .query(async ({ input }) => {
       const hostname = input.hostname.trim().toLowerCase()
       const isWildcard = hostname.startsWith('*.')
-      const checkedHostname = isWildcard
-        ? `sitey-dns-check.${hostname.slice(2)}`
-        : hostname
+      const checkedHostname = isWildcard ? (getWildcardStatusProbeHostname(hostname) ?? hostname) : hostname
       try {
         const addresses = await resolve4(checkedHostname)
         return { resolves: true, addresses, checkedHostname, wildcard: isWildcard }
