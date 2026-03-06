@@ -5,9 +5,12 @@
  * Key operations:
  *  - createNetworkIfMissing     — ensure sitey-public network exists
  *  - buildImage                 — docker build for a project
- *  - runOrReplaceContainer      — start container with optional Caddy labels, kill old one
+ *  - runOrReplaceContainer      — start container, kill old one
  *  - stopContainer              — stop + remove a running container
  *  - pruneProjectImages         — remove old images for a project
+ *
+ * Routing / TLS is managed separately via the Caddy Admin API (caddy.ts).
+ * Containers no longer carry caddy-docker-proxy labels.
  */
 
 import Docker from "dockerode";
@@ -64,54 +67,6 @@ export async function buildImage(opts: {
   });
 }
 
-// ── Caddy labels ──────────────────────────────────────────────────────────────
-// caddy-docker-proxy reads these labels and generates Caddy site blocks.
-// Multiple routes produce numbered label sets: caddy.0, caddy.1, …
-//
-// Route combinations:
-//   domain + subdomain                → app.example.com
-//   domain + subdomain + pathPrefix   → app.example.com/blog/*
-//   no domain + pathPrefix            → :80/blog/* (server IP, any host)
-//   no domain + no prefix             → catch-all (reserved for sitey itself)
-
-type Route = {
-  domain?: { hostname: string } | null;
-  pathPrefix: string;
-};
-
-export function buildCaddyLabels(
-  project: Project,
-  routes: Route[],
-): Record<string, string> {
-  const labels: Record<string, string> = {
-    "sitey.managed": "true",
-    "sitey.project": project.id,
-  };
-
-  // Routes with no domain AND no pathPrefix are the root catch-all —
-  // those belong to sitey itself and don't get container labels.
-  const routable = routes.filter((r) => r.domain || r.pathPrefix);
-
-  routable.forEach((route, i) => {
-    const prefix = routable.length === 1 ? "caddy" : `caddy.${i}`;
-
-    const host = route.domain ? route.domain.hostname : ":80";
-
-    if (route.pathPrefix) {
-      labels[prefix] = host;
-      labels[`${prefix}.handle_path`] = `${route.pathPrefix}/*`;
-      labels[`${prefix}.handle_path.reverse_proxy`] =
-        `{{upstreams ${project.containerPort}}}`;
-    } else {
-      labels[prefix] = host;
-      labels[`${prefix}.reverse_proxy`] =
-        `{{upstreams ${project.containerPort}}}`;
-    }
-  });
-
-  return labels;
-}
-
 // ── Host port allocation ──────────────────────────────────────────────────────
 // Used for projects with no domain — assigns a stable host port so the app is
 // reachable at http://<server-ip>:<hostPort>.
@@ -129,18 +84,20 @@ export async function allocateHostPort(): Promise<number> {
 
 export async function runOrReplaceContainer(opts: {
   project: Project;
-  routes: Route[];
   imageTag: string;
   containerName: string;
   envVars: Record<string, string>;
   hostPort: number | null;
   onLog: (line: string) => void;
 }): Promise<string> {
-  const { project, routes, imageTag, containerName, envVars, hostPort, onLog } = opts;
+  const { project, imageTag, containerName, envVars, hostPort, onLog } = opts;
 
   await stopAndRemoveContainer(containerName, onLog);
 
-  const labels = buildCaddyLabels(project, routes);
+  const labels: Record<string, string> = {
+    'sitey.managed': 'true',
+    'sitey.project': project.id,
+  };
   const env = Object.entries(envVars).map(([k, v]) => `${k}=${v}`);
 
   onLog(`[docker] Creating container ${containerName}`);

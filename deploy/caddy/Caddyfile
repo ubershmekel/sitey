@@ -1,14 +1,17 @@
-:80 {
-    @api path /trpc* /webhook* /health*
+# Bootstrap config — loaded when Caddy starts.
+# sitey-api pushes an updated config via POST caddy:2019/load on startup
+# and whenever domains/deployments change (to add user domain blocks).
+# This file only handles the management UI — it never needs to change.
+{
+    admin 0.0.0.0:2019
+}
 
+:80 {
+    @api path /trpc/* /webhook/* /health/*
     handle @api {
         reverse_proxy sitey-api:3001
     }
-
     handle {
-        root * /srv
-        encode gzip
-        try_files {path} /index.html
-        file_server
+        reverse_proxy sitey-web:80
     }
 }

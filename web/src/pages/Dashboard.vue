@@ -47,8 +47,16 @@
 
         <label>
           Hostname <span class="hint">(e.g. myapp.com)</span>
-          <input v-model="newHostname" type="text" required placeholder="myapp.com" />
+          <input v-model="newHostname" type="text" required placeholder="myapp.com" @blur="checkDns" />
         </label>
+        <div v-if="dnsResult !== null" class="dns-check">
+          <span v-if="dnsResult.resolves" class="dns-ok">
+            ✓ Resolves → {{ dnsResult.addresses.join(', ') }}
+          </span>
+          <span v-else class="dns-fail">
+            ✗ DNS not resolving — make sure an A record points to this server
+          </span>
+        </div>
         <label>
           Let's Encrypt email
           <input v-model="newEmail" type="email" required placeholder="you@example.com" />
@@ -81,6 +89,14 @@ const newHostname = ref('')
 const newEmail = ref('')
 const adding = ref(false)
 const addError = ref('')
+type DnsResult = { resolves: boolean; addresses: string[] } | null
+const dnsResult = ref<DnsResult>(null)
+
+async function checkDns() {
+  const h = newHostname.value.trim().toLowerCase()
+  if (!h) { dnsResult.value = null; return }
+  dnsResult.value = await trpc.domains.checkDns.query({ hostname: h })
+}
 
 async function fetchDomains() {
   loading.value = true
@@ -105,6 +121,7 @@ async function addDomain() {
     showAdd.value = false
     newHostname.value = ''
     newEmail.value = ''
+    dnsResult.value = null
     await fetchDomains()
   } catch (e: unknown) {
     addError.value = (e as { message?: string })?.message ?? 'Failed to add domain'
@@ -193,6 +210,10 @@ input:focus { border-color: #7c6cfc; }
   transition: border-color 0.15s, color 0.15s;
 }
 .btn-ghost:hover { border-color: #666; color: #e2e2e2; }
+
+.dns-check { font-size: 0.82rem; padding: 0.1rem 0; }
+.dns-ok { color: #40c060; }
+.dns-fail { color: #ff8060; }
 
 .tip {
   background: #12192a;

@@ -1,7 +1,9 @@
+import { resolve4 } from 'node:dns/promises'
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, settledProcedure } from '../trpc.js'
 import { db } from '../lib/db.js'
+import { reloadCaddy } from '../services/caddy.js'
 
 export const domainsRouter = router({
   list: settledProcedure.query(async () => {
@@ -48,7 +50,10 @@ export const domainsRouter = router({
       if (existing) {
         throw new TRPCError({ code: 'CONFLICT', message: 'Domain already exists' })
       }
-      return db.domain.create({ data: input })
+      const domain = await db.domain.create({ data: input })
+      // Push updated Caddy config — provisions TLS cert for this domain immediately
+      reloadCaddy().catch(err => console.error('[domains] Caddy reload failed:', err))
+      return domain
     }),
 
   update: settledProcedure
@@ -66,6 +71,19 @@ export const domainsRouter = router({
     .input(z.object({ id: z.string() }))
     .mutation(async ({ input }) => {
       await db.domain.delete({ where: { id: input.id } })
+      // Push updated Caddy config — removes the domain block (cert will expire naturally)
+      reloadCaddy().catch(err => console.error('[domains] Caddy reload failed:', err))
       return { ok: true }
+    }),
+
+  checkDns: settledProcedure
+    .input(z.object({ hostname: z.string().min(1) }))
+    .query(async ({ input }) => {
+      try {
+        const addresses = await resolve4(input.hostname)
+        return { resolves: true, addresses }
+      } catch {
+        return { resolves: false, addresses: [] as string[] }
+      }
     }),
 })

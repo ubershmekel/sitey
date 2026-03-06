@@ -11,7 +11,6 @@ ENV VITE_API_URL=$VITE_API_URL
 
 RUN npx vite build
 
-# One-shot init container: copies built files into the shared volume on startup
-FROM alpine:3
-COPY --from=builder /app/dist /dist
-CMD ["cp", "-r", "/dist/.", "/srv/"]
+FROM caddy:alpine
+COPY --from=builder /app/dist /usr/share/caddy
+COPY Caddyfile /etc/caddy/Caddyfile

@@ -10,6 +10,7 @@
         </div>
         <div class="header-actions">
           <span :class="`status status-${domain.status}`">{{ domain.status }}</span>
+          <button class="btn-ghost btn-sm" @click="openEdit">Edit</button>
           <button class="btn-primary" @click="showAddProject = true">+ Add project</button>
         </div>
       </div>
@@ -39,6 +40,39 @@
         </RouterLink>
       </div>
     </template>
+
+    <!-- Edit domain modal -->
+    <div v-if="showEdit" class="modal-backdrop" @click.self="showEdit = false">
+      <form class="modal" @submit.prevent="saveEdit">
+        <h2>Edit domain</h2>
+        <div v-if="editError" class="alert error">{{ editError }}</div>
+
+        <div class="dns-check">
+          <div class="dns-row">
+            <span class="dns-label">{{ domain.hostname }}</span>
+            <span v-if="dnsResult === null" class="dns-status dns-checking">checking…</span>
+            <span v-else-if="dnsResult.resolves" class="dns-status dns-ok">
+              resolves → {{ dnsResult.addresses.join(', ') }}
+            </span>
+            <span v-else class="dns-status dns-fail">DNS not resolving</span>
+            <button type="button" class="btn-recheck" @click="checkDns">↻</button>
+          </div>
+          <p class="dns-hint">DNS must point to this server before deploying.</p>
+        </div>
+
+        <label>
+          Let's Encrypt email
+          <input v-model="editEmail" type="email" required />
+        </label>
+
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" @click="showEdit = false">Cancel</button>
+          <button type="submit" class="btn-primary" :disabled="editSaving">
+            {{ editSaving ? 'Saving…' : 'Save' }}
+          </button>
+        </div>
+      </form>
+    </div>
 
     <!-- Add project modal -->
     <div v-if="showAddProject" class="modal-backdrop" @click.self="showAddProject = false">
@@ -115,6 +149,42 @@ const showAddProject = ref(false)
 const adding = ref(false)
 const addError = ref('')
 const branches = ref<string[]>([])
+
+// ── Edit domain ───────────────────────────────────────────────────────────────
+const showEdit = ref(false)
+const editEmail = ref('')
+const editSaving = ref(false)
+const editError = ref('')
+type DnsResult = { resolves: boolean; addresses: string[] } | null
+const dnsResult = ref<DnsResult>(null)
+
+function openEdit() {
+  editEmail.value = domain.value?.letsEncryptEmail ?? ''
+  editError.value = ''
+  dnsResult.value = null
+  showEdit.value = true
+  checkDns()
+}
+
+async function checkDns() {
+  if (!domain.value) return
+  dnsResult.value = null
+  dnsResult.value = await trpc.domains.checkDns.query({ hostname: domain.value.hostname })
+}
+
+async function saveEdit() {
+  editError.value = ''
+  editSaving.value = true
+  try {
+    await trpc.domains.update.mutate({ id: domainId, letsEncryptEmail: editEmail.value })
+    showEdit.value = false
+    await fetchDomain()
+  } catch (e: unknown) {
+    editError.value = (e as { message?: string })?.message ?? 'Failed to save'
+  } finally {
+    editSaving.value = false
+  }
+}
 
 const domainProjects = computed(() =>
   (domain.value?.routes ?? [])
@@ -286,4 +356,22 @@ input:focus, select:focus { border-color: #7c6cfc; }
   transition: border-color 0.15s, color 0.15s;
 }
 .btn-ghost:hover { border-color: #666; color: #e2e2e2; }
+.btn-sm { padding: 0.25rem 0.6rem; font-size: 0.8rem; }
+
+.dns-check {
+  background: #0d0d0d; border: 1px solid #2a2a2a; border-radius: 8px;
+  padding: 0.75rem 1rem;
+}
+.dns-row { display: flex; align-items: center; gap: 0.6rem; }
+.dns-label { font-size: 0.85rem; color: #888; font-family: monospace; flex: 1; }
+.dns-status { font-size: 0.8rem; white-space: nowrap; }
+.dns-checking { color: #666; }
+.dns-ok { color: #40c060; }
+.dns-fail { color: #ff6060; }
+.btn-recheck {
+  background: none; border: 1px solid #333; color: #666; border-radius: 4px;
+  padding: 0.1rem 0.4rem; font-size: 0.8rem; cursor: pointer; line-height: 1.4;
+}
+.btn-recheck:hover { border-color: #555; color: #aaa; }
+.dns-hint { font-size: 0.78rem; color: #444; margin-top: 0.4rem; }
 </style>

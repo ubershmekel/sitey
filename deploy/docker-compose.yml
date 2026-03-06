@@ -12,42 +12,40 @@ networks:
 # ─── Volumes ──────────────────────────────────────────────────────────────────
 volumes:
   caddy_data:   # TLS certs + Caddy state
-  web_dist:     # Built Vue SPA files, populated by sitey-web init container
 
 # ─── Services ─────────────────────────────────────────────────────────────────
 services:
 
-  # ── Sitey Web (init container — builds once, then exits) ──────────────────
+  # ── Caddy (TLS termination + reverse proxy) ───────────────────────────────
+  # Config is pushed at runtime via the Admin API (POST caddy:2019/load).
+  # sitey-api calls reloadCaddy() on startup and whenever domains change.
+  # The mounted Caddyfile is only the minimal bootstrap config (admin API on).
+  caddy:
+    image: caddy:alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      # 2019 is NOT exposed on the host — only reachable within sitey-public
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    networks:
+      - sitey-public
+
+  # ── Sitey Web (Caddy: serves Vue SPA + proxies API to sitey-api) ──────────
   sitey-web:
     build:
       context: ../web
       dockerfile: Dockerfile
-    volumes:
-      - web_dist:/srv
-    restart: "no"
-
-  # ── Caddy (reverse proxy + static file server + automatic HTTPS) ───────────
-  caddy:
-    image: lucaslorentz/caddy-docker-proxy:ci-alpine
     restart: unless-stopped
     depends_on:
-      sitey-web:
-        condition: service_completed_successfully
-    ports:
-      - "80:80"
-      - "443:443"
-    environment:
-      CADDY_INGRESS_NETWORKS: sitey-public
-      CADDY_DOCKER_CADDYFILE_PATH: /etc/caddy/Caddyfile
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - caddy_data:/data
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
-      - web_dist:/srv:ro
+      - caddy
     networks:
       - sitey-public
+      - sitey-internal
 
-  # ── Sitey API ─────────────────────────────────────────────────────────────────
+  # ── Sitey API ─────────────────────────────────────────────────────────────
   sitey-api:
     build:
       context: ../server
@@ -61,6 +59,15 @@ services:
       DATABASE_URL: file:/data/sitey.db
       DATA_ROOT: /data
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Full public URL of this Sitey instance (used for GitHub callback/webhook URLs)
+      SITEY_URL: ${SITEY_URL:-}
+      # Domain serving the Sitey control panel (e.g. sitey.example.com)
+      # If unset, Caddy falls back to :80 with no TLS
+      SITEY_DOMAIN: ${SITEY_DOMAIN:-}
+      # Let's Encrypt notification email for the management domain
+      SITEY_EMAIL: ${SITEY_EMAIL:-}
+      # Where to reach the Caddy admin API (default works in Docker)
+      CADDY_ADMIN_URL: http://caddy:2019
     volumes:
       - ${DATA_ROOT:-./data}:/data
       - /var/run/docker.sock:/var/run/docker.sock

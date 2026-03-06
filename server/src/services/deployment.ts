@@ -19,6 +19,7 @@ import {
   pruneProjectImages,
   allocateHostPort,
 } from './docker.js'
+import { reloadCaddy } from './caddy.js'
 import { nanoid } from 'nanoid'
 
 type RouteWithDomain = { domain: { hostname: string } | null; pathPrefix: string }
@@ -152,7 +153,6 @@ async function runDeployment(project: ProjectWithRoutes, deployment: Deployment)
     const cName = containerName(project)
     const containerId = await runOrReplaceContainer({
       project,
-      routes: project.routes,
       imageTag: tag,
       containerName: cName,
       envVars,
@@ -163,7 +163,15 @@ async function runDeployment(project: ProjectWithRoutes, deployment: Deployment)
     // 7. Prune old images for this project
     await pruneProjectImages(project.id, tag)
 
-    // 8. Mark success
+    // 8. Push updated Caddy config (new container is now reachable)
+    try {
+      await reloadCaddy()
+      onLog('[deploy] Caddy config reloaded')
+    } catch (err) {
+      onLog(`[deploy] Warning: Caddy reload failed: ${(err as Error).message}`)
+    }
+
+    // 9. Mark success
     onLog(`[deploy] Deployment successful! Container: ${cName} (${containerId.slice(0, 12)})`)
     if (hostPort && !hasRoutableRoutes) {
       onLog(`[deploy] Accessible at: http://<server-ip>:${hostPort}`)
