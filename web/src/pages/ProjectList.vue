@@ -212,7 +212,13 @@ const repoByFullName = computed(() => {
 })
 
 function routeLabel(r: Route): string {
-  const host = r.domain?.hostname ?? '<server>'
+  const host = (() => {
+    if (!r.domain?.hostname) return '<server>'
+    if (!r.domain.hostname.startsWith('*.')) return r.domain.hostname
+    return r.subdomain
+      ? `${r.subdomain}.${r.domain.hostname.slice(2)}`
+      : r.domain.hostname
+  })()
   return r.pathPrefix ? `${host}${r.pathPrefix}` : host
 }
 

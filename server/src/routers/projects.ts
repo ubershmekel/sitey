@@ -1,8 +1,50 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
+import { customAlphabet } from 'nanoid'
 import { router, settledProcedure } from '../trpc.js'
 import { db } from '../lib/db.js'
 import { generateWebhookSecret } from '../services/crypto.js'
+
+const SUBDOMAIN_LABEL_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/
+const randomSubdomainSuffix = customAlphabet('abcdefghijklmnopqrstuvwxyz0123456789', 5)
+
+function isWildcardDomain(hostname: string): boolean {
+  return hostname.startsWith('*.')
+}
+
+function slugifySubdomainSeed(input: string): string {
+  const cleaned = input
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '')
+  return cleaned || 'project'
+}
+
+function buildSubdomainCandidate(seed: string): string {
+  const suffix = randomSubdomainSuffix()
+  const maxSeedLength = 63 - suffix.length - 1
+  const trimmedSeed = seed.slice(0, Math.max(1, maxSeedLength)).replace(/-+$/g, '')
+  const finalSeed = trimmedSeed || 'project'
+  return `${finalSeed}-${suffix}`
+}
+
+async function generateUniqueSubdomain(domainId: string, projectName: string): Promise<string> {
+  const seed = slugifySubdomainSeed(projectName)
+  for (let i = 0; i < 20; i += 1) {
+    const candidate = buildSubdomainCandidate(seed)
+    const existing = await db.projectRoute.findFirst({
+      where: { domainId, subdomain: candidate },
+      select: { id: true },
+    })
+    if (!existing) return candidate
+  }
+  throw new TRPCError({
+    code: 'INTERNAL_SERVER_ERROR',
+    message: 'Could not allocate a unique subdomain. Please retry.',
+  })
+}
 
 export const projectsRouter = router({
   list: settledProcedure
@@ -97,13 +139,60 @@ export const projectsRouter = router({
       projectId: z.string(),
       domainId: z.string().optional(),
       pathPrefix: z.string().default(''),
+      subdomain: z.string().default(''),
     }))
     .mutation(async ({ input }) => {
+      const project = await db.project.findUnique({
+        where: { id: input.projectId },
+        select: { id: true, name: true },
+      })
+      if (!project) throw new TRPCError({ code: 'NOT_FOUND', message: 'Project not found' })
+
+      let domain: { id: string; hostname: string } | null = null
       if (input.domainId) {
-        const domain = await db.domain.findUnique({ where: { id: input.domainId } })
+        domain = await db.domain.findUnique({
+          where: { id: input.domainId },
+          select: { id: true, hostname: true },
+        })
         if (!domain) throw new TRPCError({ code: 'NOT_FOUND', message: 'Domain not found' })
       }
-      return db.projectRoute.create({ data: input })
+
+      let subdomain = input.subdomain.trim().toLowerCase()
+      if (domain && isWildcardDomain(domain.hostname)) {
+        if (!subdomain) {
+          subdomain = await generateUniqueSubdomain(domain.id, project.name)
+        } else if (!SUBDOMAIN_LABEL_REGEX.test(subdomain)) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Subdomain must be a valid DNS label (lowercase letters, numbers, hyphens).',
+          })
+        }
+      } else {
+        if (subdomain) {
+          throw new TRPCError({
+            code: 'BAD_REQUEST',
+            message: 'Subdomain can only be set when using a wildcard domain.',
+          })
+        }
+        subdomain = ''
+      }
+
+      try {
+        return await db.projectRoute.create({
+          data: {
+            projectId: input.projectId,
+            domainId: input.domainId,
+            pathPrefix: input.pathPrefix,
+            subdomain,
+          },
+        })
+      } catch (err) {
+        const code = (err as { code?: string }).code
+        if (code === 'P2002') {
+          throw new TRPCError({ code: 'CONFLICT', message: 'Route already exists for this host/path.' })
+        }
+        throw err
+      }
     }),
 
   removeRoute: settledProcedure
@@ -137,9 +226,10 @@ export const projectsRouter = router({
         select: { id: true, hostname: true },
         orderBy: { createdAt: 'asc' },
       })
+      const webhookDomains = domains.filter((d: { id: string; hostname: string }) => !isWildcardDomain(d.hostname))
       const chosen = input.domainId
-        ? domains.find((d: { id: string; hostname: string }) => d.id === input.domainId)
-        : domains.length === 1 ? domains[0] : null
+        ? webhookDomains.find((d: { id: string; hostname: string }) => d.id === input.domainId)
+        : webhookDomains.length === 1 ? webhookDomains[0] : null
       const baseUrl = chosen
         ? `https://${chosen.hostname}`
         : `http://localhost:3001`
@@ -147,7 +237,7 @@ export const projectsRouter = router({
         webhookUrl: `${baseUrl}/webhook/github/${input.id}`,
         webhookSecret: project.webhookSecret,
         githubMode: project.githubMode,
-        domains,
+        domains: webhookDomains,
       }
     }),
 })

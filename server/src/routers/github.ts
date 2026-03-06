@@ -13,6 +13,10 @@ const KEYS = {
 
 const GITHUB_API_BASE = 'https://api.github.com'
 
+function isWildcardDomain(hostname: string): boolean {
+  return hostname.startsWith('*.')
+}
+
 async function getConfig(key: string) {
   const row = await db.systemConfig.findUnique({ where: { key } })
   return row?.value ?? null
@@ -67,9 +71,10 @@ export const githubRouter = router({
         select: { id: true, hostname: true },
         orderBy: { createdAt: 'asc' },
       })
+      const manifestDomains = domains.filter((d: { id: string; hostname: string }) => !isWildcardDomain(d.hostname))
       const chosen = input.domainId
-        ? domains.find((d: { id: string; hostname: string }) => d.id === input.domainId)
-        : domains.length === 1 ? domains[0] : null
+        ? manifestDomains.find((d: { id: string; hostname: string }) => d.id === input.domainId)
+        : manifestDomains.length === 1 ? manifestDomains[0] : null
       const siteUrl = chosen
         ? `https://${chosen.hostname}`
         : (process.env.SITEY_URL ?? 'http://localhost:3001').replace(/\/$/, '')
@@ -87,7 +92,7 @@ export const githubRouter = router({
       return {
         actionUrl: 'https://github.com/settings/apps/new',
         manifest: JSON.stringify(manifest),
-        domains,
+        domains: manifestDomains,
       }
     }),
 
@@ -284,9 +289,10 @@ export const githubRouter = router({
         select: { id: true, hostname: true },
         orderBy: { createdAt: 'asc' },
       })
+      const webhookDomains = domains.filter((d: { id: string; hostname: string }) => !isWildcardDomain(d.hostname))
       const chosen = input.domainId
-        ? domains.find((d: { id: string; hostname: string }) => d.id === input.domainId)
-        : domains.length === 1 ? domains[0] : null
+        ? webhookDomains.find((d: { id: string; hostname: string }) => d.id === input.domainId)
+        : webhookDomains.length === 1 ? webhookDomains[0] : null
       const baseUrl = chosen
         ? `https://${chosen.hostname}`
         : (process.env.SITEY_URL ?? 'http://localhost:3001').replace(/\/$/, '')
@@ -295,7 +301,7 @@ export const githubRouter = router({
         webhookSecret: project.webhookSecret,
         contentType: 'application/json',
         events: ['push'],
-        domains,
+        domains: webhookDomains,
       }
     }),
 })

@@ -193,10 +193,18 @@ const primaryDomainRoute = computed(() =>
   project.value?.routes.find((r) => !!r.domain) ?? null,
 )
 
+function routeHostname(r: ProjectRoute): string {
+  if (!r.domain?.hostname) return ''
+  if (!r.domain.hostname.startsWith('*.')) return r.domain.hostname
+  return r.subdomain
+    ? `${r.subdomain}.${r.domain.hostname.slice(2)}`
+    : r.domain.hostname
+}
+
 const projectUrl = computed(() => {
   const r = primaryDomainRoute.value
   if (!r?.domain) return ''
-  return `https://${r.domain.hostname}${r.pathPrefix || ''}`
+  return `https://${routeHostname(r)}${r.pathPrefix || ''}`
 })
 
 const fallbackUrl = computed(() => {
@@ -212,8 +220,9 @@ function normalizePathPrefix(input: string): string {
 
 function routeLabel(r: ProjectRoute): string {
   const pathPrefix = r.pathPrefix || ''
-  if (r.domain?.hostname) {
-    return `https://${r.domain.hostname}${pathPrefix}`
+  const hostname = routeHostname(r)
+  if (hostname) {
+    return `https://${hostname}${pathPrefix}`
   }
   return pathPrefix ? `<server>${pathPrefix}` : '<server>'
 }

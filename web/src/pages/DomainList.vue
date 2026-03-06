@@ -51,7 +51,7 @@
         </div>
 
         <label>
-          Hostname <span class="hint">(e.g. myapp.com)</span>
+          Hostname <span class="hint">(e.g. myapp.com or *.myapp.com)</span>
           <input v-model="newHostname" type="text" required placeholder="myapp.com" @blur="checkDns" />
         </label>
         <div v-if="dnsResult !== null" class="dns-check">
@@ -131,10 +131,6 @@ async function addDomain() {
   adding.value = true
   try {
     const hostname = newHostname.value.trim().toLowerCase()
-    if (hostname.startsWith('*.')) {
-      addError.value = 'Enter the base hostname without "*." (for example: s.basementphilosophy.com). Configure wildcard in DNS only.'
-      return
-    }
     await trpc.domains.create.mutate({
       hostname,
       letsEncryptEmail: newEmail.value.trim(),

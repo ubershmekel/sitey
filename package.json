@@ -1,10 +1,14 @@
 {
   "name": "sitey",
   "private": true,
-  "workspaces": ["server", "web"],
+  "workspaces": [
+    "server",
+    "web"
+  ],
   "scripts": {
     "dev": "concurrently \"npm run dev -w server\" \"npm run dev -w web\"",
     "build": "npm run build -w web && npm run build -w server",
+    "typecheck": "npm run db:generate -w server && npm run typecheck -w server && npm run typecheck -w web",
     "db:migrate": "npm run db:migrate -w server",
     "db:studio": "npm run db:studio -w server"
   },

@@ -5,6 +5,13 @@ import { router, settledProcedure } from '../trpc.js'
 import { db } from '../lib/db.js'
 import { reloadCaddy, getLetsEncryptStatusesFromCaddy } from '../services/caddy.js'
 
+const HOSTNAME_REGEX =
+  /^(?:\*\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/
+
+function normalizeHostnameInput(hostname: string): string {
+  return hostname.trim().toLowerCase().replace(/\.$/, '')
+}
+
 export const domainsRouter = router({
   list: settledProcedure.query(async () => {
     const domains = await db.domain.findMany({
@@ -45,9 +52,9 @@ export const domainsRouter = router({
 
   create: settledProcedure
     .input(z.object({
-      hostname: z.string().min(3).regex(
-        /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/,
-        'Must be a valid hostname (e.g. example.com)',
+      hostname: z.preprocess(
+        value => typeof value === 'string' ? normalizeHostnameInput(value) : value,
+        z.string().min(3).regex(HOSTNAME_REGEX, 'Must be a valid hostname (e.g. example.com or *.example.com)'),
       ),
       letsEncryptEmail: z.string().email(),
     }))

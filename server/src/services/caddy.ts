@@ -101,9 +101,14 @@ export async function getLetsEncryptStatusFromCaddy(hostname: string): Promise<L
 
 export async function getLetsEncryptStatusesFromCaddy(hostnames: string[]): Promise<Record<string, LetsEncryptStatus>> {
   const uniqueHostnames = [...new Set(hostnames.map(h => h.trim().toLowerCase()).filter(Boolean))]
+  const wildcardHostnames = uniqueHostnames.filter(hostname => hostname.startsWith('*.'))
+  const concreteHostnames = uniqueHostnames.filter(hostname => !hostname.startsWith('*.'))
   const results = await Promise.all(
-    uniqueHostnames.map(async hostname => [hostname, await getLetsEncryptStatusFromCaddy(hostname)] as const),
+    concreteHostnames.map(async hostname => [hostname, await getLetsEncryptStatusFromCaddy(hostname)] as const),
   )
+  for (const hostname of wildcardHostnames) {
+    results.push([hostname, 'pending'] as const)
+  }
   return Object.fromEntries(results)
 }
 
@@ -117,11 +122,53 @@ function appendAdminHandlers(lines: string[]): void {
   lines.push('    }')
 }
 
+type ActiveRoute = {
+  subdomain: string
+  pathPrefix: string
+  project: {
+    containerName: string | null
+    containerPort: number
+  } | null
+}
+
+function resolveRouteHostname(domainHostname: string, routeSubdomain: string): string | null {
+  if (!domainHostname.startsWith('*.')) return domainHostname
+  const base = domainHostname.slice(2)
+  const label = routeSubdomain.trim().toLowerCase()
+  if (!label) return null
+  return `${label}.${base}`
+}
+
+function appendRouteHandler(lines: string[], route: ActiveRoute): void {
+  const cname = route.project!.containerName!
+  const port = route.project!.containerPort
+  if (route.pathPrefix) {
+    lines.push(`    handle_path ${route.pathPrefix}/* {`)
+    lines.push(`        reverse_proxy ${cname}:${port}`)
+    lines.push('    }')
+  } else {
+    lines.push(`    reverse_proxy ${cname}:${port}`)
+  }
+}
+
+function appendSiteBlock(lines: string[], hostname: string, email: string, routes: ActiveRoute[]): void {
+  lines.push(`${hostname} {`)
+  lines.push(`    tls ${email}`)
+  if (routes.length > 0) {
+    for (const route of routes) appendRouteHandler(lines, route)
+  } else {
+    appendAdminHandlers(lines)
+  }
+  lines.push('}')
+  lines.push('')
+}
+
 export async function buildCaddyfile(): Promise<string> {
   const domains = await db.domain.findMany({
     orderBy: { createdAt: 'asc' },
     include: {
       routes: {
+        orderBy: { createdAt: 'asc' },
         include: { project: true },
       },
     },
@@ -147,36 +194,30 @@ export async function buildCaddyfile(): Promise<string> {
   lines.push('}')
   lines.push('')
 
-  // User domains — one block per domain record.
-  // A domain block is emitted even when no project is running, so Caddy
-  // provisions (and holds) the TLS cert as soon as the domain is added.
+  // User domains.
+  // For wildcard domains, we emit concrete host blocks per route subdomain
+  // (for example: app.example.com) instead of a raw "*.example.com" block.
   for (const domain of domains) {
-    lines.push(`${domain.hostname} {`)
-    lines.push(`    tls ${domain.letsEncryptEmail}`)
+    const activeRoutes = domain.routes
+      .filter(r => r.project?.status === 'running' && r.project?.containerName) as ActiveRoute[]
 
-    const activeRoutes = domain.routes.filter(
-      r => r.project?.status === 'running' && r.project?.containerName,
-    )
-
-    if (activeRoutes.length > 0) {
-      for (const route of activeRoutes) {
-        const cname = route.project!.containerName!
-        const port = route.project!.containerPort
-        if (route.pathPrefix) {
-          lines.push(`    handle_path ${route.pathPrefix}/* {`)
-          lines.push(`        reverse_proxy ${cname}:${port}`)
-          lines.push('    }')
-        } else {
-          lines.push(`    reverse_proxy ${cname}:${port}`)
-        }
-      }
-    } else {
-      // No active project — serve Sitey admin/app on this domain
-      appendAdminHandlers(lines)
+    if (!domain.hostname.startsWith('*.')) {
+      appendSiteBlock(lines, domain.hostname, domain.letsEncryptEmail, activeRoutes)
+      continue
     }
 
-    lines.push('}')
-    lines.push('')
+    const routesByHostname = new Map<string, ActiveRoute[]>()
+    for (const route of activeRoutes) {
+      const routeHostname = resolveRouteHostname(domain.hostname, route.subdomain)
+      if (!routeHostname) continue
+      const existing = routesByHostname.get(routeHostname)
+      if (existing) existing.push(route)
+      else routesByHostname.set(routeHostname, [route])
+    }
+
+    for (const [hostname, hostRoutes] of routesByHostname.entries()) {
+      appendSiteBlock(lines, hostname, domain.letsEncryptEmail, hostRoutes)
+    }
   }
 
   return lines.join('\n')
@@ -220,3 +261,4 @@ export async function reloadCaddy(): Promise<void> {
 
   throw new Error(lastError ?? 'Caddy reload failed (unknown error)')
 }
+
