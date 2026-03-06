@@ -5,12 +5,17 @@
     <template v-else-if="domain">
       <div class="page-header">
         <div>
-          <div class="breadcrumb"><RouterLink to="/">Domains</RouterLink> / {{ domain.hostname }}</div>
+          <div class="breadcrumb">
+            <RouterLink to="/">Domains</RouterLink> / {{ domain.hostname }}
+          </div>
           <h1>{{ domain.hostname }}</h1>
         </div>
         <div class="header-actions">
           <span :class="`status status-${domain.status}`">{{ domain.status }}</span>
           <button class="btn-ghost btn-sm" @click="openEdit">Edit</button>
+          <button class="btn-danger btn-sm" :disabled="deletingDomain" @click="deleteDomain">
+            {{ deletingDomain ? 'Deleting…' : 'Delete domain' }}
+          </button>
           <button class="btn-primary" @click="showAddProject = true">+ Add project</button>
         </div>
       </div>
@@ -21,12 +26,7 @@
       </div>
 
       <div v-else class="project-list">
-        <RouterLink
-          v-for="p in domainProjects"
-          :key="p.id"
-          :to="`/projects/${p.id}`"
-          class="project-card"
-        >
+        <RouterLink v-for="p in domainProjects" :key="p.id" :to="`/projects/${p.id}`" class="project-card">
           <div class="project-left">
             <div class="project-name">{{ p.name }}</div>
             <div class="project-repo">{{ p.repoOwner }}/{{ p.repoName }}:{{ p.branch }}</div>
@@ -86,15 +86,8 @@
         </label>
         <label>
           GitHub repository
-          <input
-            v-model="np.githubUrl"
-            type="text"
-            required
-            list="domain-repo-list"
-            placeholder="owner/repo or https://github.com/owner/repo"
-            @input="parseGithubUrl"
-            @blur="parseGithubUrl"
-          />
+          <input v-model="np.githubUrl" type="text" required list="domain-repo-list"
+            placeholder="owner/repo or https://github.com/owner/repo" @input="parseGithubUrl" @blur="parseGithubUrl" />
           <datalist id="domain-repo-list">
             <option v-for="repo in appRepos" :key="repo.id" :value="repo.fullName" />
           </datalist>
@@ -149,7 +142,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute, RouterLink } from 'vue-router'
+import { useRoute, useRouter, RouterLink } from 'vue-router'
 import Layout from '../components/Layout.vue'
 import { trpc } from '../trpc'
 
@@ -157,6 +150,7 @@ type Domain = Awaited<ReturnType<typeof trpc.domains.get.query>>
 type AppRepo = Awaited<ReturnType<typeof trpc.github.listAppRepos.query>>['repos'][number]
 
 const route = useRoute()
+const router = useRouter()
 const domainId = route.params.id as string
 
 const domain = ref<Domain | null>(null)
@@ -179,6 +173,7 @@ const showEdit = ref(false)
 const editEmail = ref('')
 const editSaving = ref(false)
 const editError = ref('')
+const deletingDomain = ref(false)
 type DnsResult = { resolves: boolean; addresses: string[] } | null
 const dnsResult = ref<DnsResult>(null)
 
@@ -207,6 +202,46 @@ async function saveEdit() {
     editError.value = (e as { message?: string })?.message ?? 'Failed to save'
   } finally {
     editSaving.value = false
+  }
+}
+
+function normalizeHostnameInput(hostname: string): string {
+  return hostname.trim().toLowerCase().replace(/\.$/, '')
+}
+
+function wildcardMatches(pattern: string, hostname: string): boolean {
+  if (!pattern.startsWith('*.')) return false
+  const suffix = pattern.slice(2)
+  if (!hostname.endsWith(`.${suffix}`)) return false
+  const hostLabels = hostname.split('.').length
+  const suffixLabels = suffix.split('.').length
+  return hostLabels === suffixLabels + 1
+}
+
+function deletingCurrentSiteDomain(hostname: string): boolean {
+  const target = normalizeHostnameInput(hostname)
+  const currentHost = normalizeHostnameInput(window.location.hostname)
+  return target === currentHost || wildcardMatches(target, currentHost)
+}
+
+async function deleteDomain() {
+  if (!domain.value || deletingDomain.value) return
+  const hostname = domain.value.hostname
+  const inUseWarning = deletingCurrentSiteDomain(hostname)
+    ? '\n\nWARNING: You are currently using this domain to access Sitey. Deleting it may break this URL immediately.'
+    : ''
+
+  if (!confirm(`Delete domain "${hostname}"? This will remove all its routes.${inUseWarning}`)) return
+
+  deletingDomain.value = true
+  error.value = ''
+  try {
+    await trpc.domains.delete.mutate({ id: domainId })
+    await router.push('/')
+  } catch (e: unknown) {
+    error.value = (e as { message?: string })?.message ?? 'Failed to delete domain'
+  } finally {
+    deletingDomain.value = false
   }
 }
 
@@ -345,94 +380,342 @@ onMounted(fetchDomain)
 
 <style scoped>
 .page-header {
-  display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 2rem;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 2rem;
 }
-.breadcrumb { font-size: 0.8rem; color: #555; margin-bottom: 0.25rem; }
-.breadcrumb a { color: #7c6cfc; text-decoration: none; }
-.breadcrumb a:hover { text-decoration: underline; }
-h1 { font-size: 1.4rem; font-weight: 600; }
-.header-actions { display: flex; align-items: center; gap: 1rem; }
 
-.project-list { display: flex; flex-direction: column; gap: 0.75rem; }
+.breadcrumb {
+  font-size: 0.8rem;
+  color: #555;
+  margin-bottom: 0.25rem;
+}
+
+.breadcrumb a {
+  color: #7c6cfc;
+  text-decoration: none;
+}
+
+.breadcrumb a:hover {
+  text-decoration: underline;
+}
+
+h1 {
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.project-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
 .project-card {
-  background: #161616; border: 1px solid #2a2a2a; border-radius: 10px;
-  padding: 1rem 1.5rem; text-decoration: none; color: inherit;
-  display: flex; align-items: center; justify-content: space-between;
+  background: #161616;
+  border: 1px solid #2a2a2a;
+  border-radius: 10px;
+  padding: 1rem 1.5rem;
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   transition: border-color 0.15s;
 }
-.project-card:hover { border-color: #7c6cfc; }
-.project-name { font-weight: 600; margin-bottom: 0.2rem; }
-.project-repo { font-size: 0.8rem; color: #666; font-family: monospace; }
-.project-right { display: flex; align-items: center; gap: 1rem; }
-.last-deploy { font-size: 0.8rem; color: #555; }
 
-.status { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 500; }
-.status-idle     { background: #1a1a1a; color: #666; }
-.status-pending  { background: #2a2206; color: #d4a800; }
-.status-building { background: #1a2a38; color: #60b4ff; }
-.status-running  { background: #0e2a14; color: #40c060; }
-.status-active   { background: #0e2a14; color: #40c060; }
-.status-failed   { background: #2d1414; color: #ff6060; }
-.status-stopped  { background: #1a1a1a; color: #666; }
-.status-error    { background: #2d1414; color: #ff6060; }
+.project-card:hover {
+  border-color: #7c6cfc;
+}
 
-.empty-state { color: #555; padding: 3rem 0; }
-.mt-1 { margin-top: 1rem; }
-.state-msg { color: #666; }
+.project-name {
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+}
+
+.project-repo {
+  font-size: 0.8rem;
+  color: #666;
+  font-family: monospace;
+}
+
+.project-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.last-deploy {
+  font-size: 0.8rem;
+  color: #555;
+}
+
+.status {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.status-idle {
+  background: #1a1a1a;
+  color: #666;
+}
+
+.status-pending {
+  background: #2a2206;
+  color: #d4a800;
+}
+
+.status-building {
+  background: #1a2a38;
+  color: #60b4ff;
+}
+
+.status-running {
+  background: #0e2a14;
+  color: #40c060;
+}
+
+.status-active {
+  background: #0e2a14;
+  color: #40c060;
+}
+
+.status-failed {
+  background: #2d1414;
+  color: #ff6060;
+}
+
+.status-stopped {
+  background: #1a1a1a;
+  color: #666;
+}
+
+.status-error {
+  background: #2d1414;
+  color: #ff6060;
+}
+
+.empty-state {
+  color: #555;
+  padding: 3rem 0;
+}
+
+.mt-1 {
+  margin-top: 1rem;
+}
+
+.state-msg {
+  color: #666;
+}
+
 .alert.error {
-  background: #2d1414; border: 1px solid #5a1a1a; color: #ff7070;
-  border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.85rem; margin-bottom: 1rem;
+  background: #2d1414;
+  border: 1px solid #5a1a1a;
+  color: #ff7070;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
 }
 
 .modal-backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.7);
-  display: flex; align-items: center; justify-content: center; z-index: 100;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
 }
+
 .modal {
-  background: #161616; border: 1px solid #2a2a2a; border-radius: 12px;
-  padding: 2rem; width: 500px; max-height: 90vh; overflow-y: auto;
-  display: flex; flex-direction: column; gap: 1rem;
+  background: #161616;
+  border: 1px solid #2a2a2a;
+  border-radius: 12px;
+  padding: 2rem;
+  width: 500px;
+  max-height: 90vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
 }
-.modal h2 { font-size: 1.1rem; font-weight: 600; }
-label { display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.85rem; color: #9a9a9a; }
-.hint { color: #555; font-size: 0.78rem; }
-.hint a { color: #7c6cfc; }
-input, select {
-  background: #1f1f1f; border: 1px solid #333; border-radius: 6px;
-  padding: 0.6rem 0.75rem; color: #e2e2e2; font-size: 0.9rem; outline: none;
+
+.modal h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: #9a9a9a;
+}
+
+.hint {
+  color: #555;
+  font-size: 0.78rem;
+}
+
+.hint a {
+  color: #7c6cfc;
+}
+
+input,
+select {
+  background: #1f1f1f;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  color: #e2e2e2;
+  font-size: 0.9rem;
+  outline: none;
   transition: border-color 0.15s;
 }
-input:focus, select:focus { border-color: #7c6cfc; }
-.modal-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 0.5rem; }
+
+input:focus,
+select:focus {
+  border-color: #7c6cfc;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
 .btn-primary {
-  background: #7c6cfc; color: #fff; border: none; border-radius: 6px;
-  padding: 0.6rem 1.25rem; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+  background: #7c6cfc;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
   transition: opacity 0.15s;
 }
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary:hover:not(:disabled) { opacity: 0.85; }
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
 .btn-ghost {
-  background: none; color: #9a9a9a; border: 1px solid #333; border-radius: 6px;
-  padding: 0.6rem 1.25rem; font-size: 0.9rem; cursor: pointer;
+  background: none;
+  color: #9a9a9a;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.9rem;
+  cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
-.btn-ghost:hover { border-color: #666; color: #e2e2e2; }
-.btn-sm { padding: 0.25rem 0.6rem; font-size: 0.8rem; }
+
+.btn-ghost:hover {
+  border-color: #666;
+  color: #e2e2e2;
+}
+
+.btn-danger {
+  background: #2d1414;
+  color: #ff8080;
+  border: 1px solid #5a1a1a;
+  border-radius: 6px;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s, border-color 0.15s;
+}
+
+.btn-danger:hover:not(:disabled) {
+  border-color: #7c2323;
+  opacity: 0.92;
+}
+
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-sm {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+}
 
 .dns-check {
-  background: #0d0d0d; border: 1px solid #2a2a2a; border-radius: 8px;
+  background: #0d0d0d;
+  border: 1px solid #2a2a2a;
+  border-radius: 8px;
   padding: 0.75rem 1rem;
 }
-.dns-row { display: flex; align-items: center; gap: 0.6rem; }
-.dns-label { font-size: 0.85rem; color: #888; font-family: monospace; flex: 1; }
-.dns-status { font-size: 0.8rem; white-space: nowrap; }
-.dns-checking { color: #666; }
-.dns-ok { color: #40c060; }
-.dns-fail { color: #ff6060; }
-.btn-recheck {
-  background: none; border: 1px solid #333; color: #666; border-radius: 4px;
-  padding: 0.1rem 0.4rem; font-size: 0.8rem; cursor: pointer; line-height: 1.4;
+
+.dns-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
 }
-.btn-recheck:hover { border-color: #555; color: #aaa; }
-.dns-hint { font-size: 0.78rem; color: #444; margin-top: 0.4rem; }
+
+.dns-label {
+  font-size: 0.85rem;
+  color: #888;
+  font-family: monospace;
+  flex: 1;
+}
+
+.dns-status {
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.dns-checking {
+  color: #666;
+}
+
+.dns-ok {
+  color: #40c060;
+}
+
+.dns-fail {
+  color: #ff6060;
+}
+
+.btn-recheck {
+  background: none;
+  border: 1px solid #333;
+  color: #666;
+  border-radius: 4px;
+  padding: 0.1rem 0.4rem;
+  font-size: 0.8rem;
+  cursor: pointer;
+  line-height: 1.4;
+}
+
+.btn-recheck:hover {
+  border-color: #555;
+  color: #aaa;
+}
+
+.dns-hint {
+  font-size: 0.78rem;
+  color: #444;
+  margin-top: 0.4rem;
+}
 </style>
