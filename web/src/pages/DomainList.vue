@@ -24,7 +24,12 @@
       >
         <div class="domain-name">{{ d.hostname }}</div>
         <div class="domain-meta">
-          <span :class="`status status-${d.status}`">{{ d.status }}</span>
+          <div class="status-row">
+            <span class="meta-label">Let's Encrypt</span>
+            <span :class="`status status-${d.letsEncryptStatus ?? d.status}`">
+              {{ d.letsEncryptStatus ?? d.status }}
+            </span>
+          </div>
           <span class="projects-count">{{ d._count.routes }} project{{ d._count.routes !== 1 ? 's' : '' }}</span>
         </div>
       </RouterLink>
@@ -159,7 +164,9 @@ h1 { font-size: 1.4rem; font-weight: 600; }
 .domain-card:hover { border-color: #7c6cfc; background: #1a1a28; }
 
 .domain-name { font-size: 1rem; font-weight: 600; margin-bottom: 0.75rem; color: #e2e2e2; }
-.domain-meta { display: flex; align-items: center; gap: 0.75rem; }
+.domain-meta { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; }
+.status-row { display: inline-flex; align-items: center; gap: 0.5rem; }
+.meta-label { font-size: 0.74rem; color: #7a7a7a; }
 .projects-count { font-size: 0.8rem; color: #666; }
 
 .status { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 500; }

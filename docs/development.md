@@ -19,26 +19,31 @@ npm run dev       # starts on :5173 (proxies /trpc and /webhook → :3001)
 
 ## DB scripts (`server/package.json`)
 
-| Script | Command | Use |
-|---|---|---|
-| `db:push` | `prisma db push` | Dev only — apply schema directly, no migration file created |
-| `db:migrate` | `prisma migrate deploy` | Production — apply pending migrations (runs automatically on startup) |
-| `db:generate` | `prisma generate` | Regenerate the Prisma client after schema changes |
-| `db:studio` | `prisma studio` | Open a browser-based DB editor |
+| Script        | Command                 | Use                                                                   |
+| ------------- | ----------------------- | --------------------------------------------------------------------- |
+| `db:push`     | `prisma db push`        | Dev only — apply schema directly, no migration file created           |
+| `db:migrate`  | `prisma migrate deploy` | Production — apply pending migrations (runs automatically on startup) |
+| `db:generate` | `prisma generate`       | Regenerate the Prisma client after schema changes                     |
+| `db:studio`   | `prisma studio`         | Open a browser-based DB editor                                        |
 
 ## Keeping migrations in sync with schema.prisma
 
-**This is critical.** The file `server/prisma/migrations/0001_init/migration.sql` is what actually runs in production when the container starts. If `schema.prisma` changes but the migration SQL does not, the API will crash on boot with a `P2022` column-not-found error.
+The file `server/prisma/migrations/0001_init/migration.sql` is what actually
+runs in production when the container starts. If `schema.prisma` changes but the
+migration SQL does not, the API will crash on boot with a `P2022`
+column-not-found error.
 
 ### Rules
 
-- **In dev**, use `npm run db:push` freely — it syncs the local SQLite file directly without touching migrations.
-- **Before committing schema changes**, update the migration SQL so production stays in sync.
+- **In dev**, use `npm run db:push` freely — it syncs the local SQLite file
+  directly without touching migrations.
+- **Before committing schema changes**, update the migration SQL so production
+  stays in sync.
 
 ### When you change `schema.prisma`
 
-**Option A — additive change (new column with a default, new table):**
-Create a new migration file:
+**Option A — additive change (new column with a default, new table):** Create a
+new migration file:
 
 ```bash
 cd server
@@ -51,8 +56,8 @@ npx prisma migrate diff \
 
 Then commit both `schema.prisma` and the new migration file.
 
-**Option B — breaking change (column removed, renamed, type changed):**
-Since this project is pre-1.0 and easy to wipe, just rewrite the baseline migration:
+**Option B — breaking change (column removed, renamed, type changed):** Since
+this project is pre-1.0 and easy to wipe, just rewrite the baseline migration:
 
 ```bash
 cd server
@@ -62,7 +67,9 @@ npx prisma migrate diff \
   --script > prisma/migrations/0001_init/migration.sql
 ```
 
-Then commit. Anyone running an existing instance will need to wipe their DB (see [DANGER: Wipe the data](../README.md#danger-wipe-the-data-fresh-start) in the README).
+Then commit. Anyone running an existing instance will need to wipe their DB (see
+[DANGER: Wipe the data](../README.md#danger-wipe-the-data-fresh-start) in the
+README).
 
 ### Verify before pushing
 
@@ -79,6 +86,16 @@ If the last command exits non-zero, the migration SQL needs updating.
 
 ## Architecture notes
 
-- **Single-host only.** The deployment queue is in-memory; multi-instance requires Redis.
-- **Docker socket.** `sitey-api` has full access to the Docker daemon — treat it as root-equivalent.
-- **Secrets.** JWT secret is auto-generated on first boot and stored in the DB. Passwords are argon2id-hashed. GitHub App private key is stored as-is in SQLite — encrypt at rest if your threat model requires it.
+- **Single-host only.** The deployment queue is in-memory; multi-instance
+  requires Redis.
+- **Docker socket.** `sitey-api` has full access to the Docker daemon — treat it
+  as root-equivalent.
+- **Secrets.** JWT secret is auto-generated on first boot and stored in the DB.
+  Passwords are argon2id-hashed. GitHub App private key is stored as-is in
+  SQLite — encrypt at rest if your threat model requires it.
+
+## See logs
+
+```bash
+docker compose logs sitey-api
+```

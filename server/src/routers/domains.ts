@@ -3,16 +3,22 @@ import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, settledProcedure } from '../trpc.js'
 import { db } from '../lib/db.js'
-import { reloadCaddy } from '../services/caddy.js'
+import { reloadCaddy, getLetsEncryptStatusesFromCaddy } from '../services/caddy.js'
 
 export const domainsRouter = router({
   list: settledProcedure.query(async () => {
-    return db.domain.findMany({
+    const domains = await db.domain.findMany({
       orderBy: { createdAt: 'desc' },
       include: {
         _count: { select: { routes: true } },
       },
     })
+
+    const statusByHostname = await getLetsEncryptStatusesFromCaddy(domains.map(d => d.hostname))
+    return domains.map(d => ({
+      ...d,
+      letsEncryptStatus: statusByHostname[d.hostname.toLowerCase()] ?? d.status,
+    }))
   }),
 
   get: settledProcedure
