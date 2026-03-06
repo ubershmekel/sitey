@@ -41,8 +41,9 @@ model Project {
   outputDir     String         @default("dist")   // static: output directory
 
   // Build / run
-  buildMode     String         @default("auto") // auto | dockerfile
-  containerPort Int            @default(3000)
+  buildMode        String         @default("auto") // auto | dockerfile
+  serverRunCommand String         @default("") // custom CMD for auto-generated server Dockerfile
+  containerPort    Int            @default(3000)
   hostPort      Int?           // auto-allocated fallback port when the project has no routes
   envVars       String         @default("{}") // JSON map
 

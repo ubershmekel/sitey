@@ -39,6 +39,7 @@ export const projectsRouter = router({
       deployMode: z.enum(['server', 'static']).default('server'),
       buildCommand: z.string().default(''),
       outputDir: z.string().default('dist'),
+      serverRunCommand: z.string().default(''),
       buildMode: z.enum(['auto', 'dockerfile']).default('auto'),
       containerPort: z.number().int().min(1).max(65535).default(3000),
       envVars: z.record(z.string()).default({}),
@@ -62,6 +63,7 @@ export const projectsRouter = router({
       deployMode: z.enum(['server', 'static']).optional(),
       buildCommand: z.string().optional(),
       outputDir: z.string().optional(),
+      serverRunCommand: z.string().optional(),
       buildMode: z.enum(['auto', 'dockerfile']).optional(),
       containerPort: z.number().int().min(1).max(65535).optional(),
       envVars: z.record(z.string()).optional(),
@@ -125,17 +127,27 @@ export const projectsRouter = router({
     }),
 
   getWebhookInfo: settledProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.string(), domainId: z.string().optional() }))
     .query(async ({ input }) => {
       const project = await db.project.findUniqueOrThrow({
         where: { id: input.id },
         select: { webhookSecret: true, githubMode: true },
       })
-      const siteUrl = process.env.SITEY_URL ?? `http://localhost:3001`
+      const domains = await db.domain.findMany({
+        select: { id: true, hostname: true },
+        orderBy: { createdAt: 'asc' },
+      })
+      const chosen = input.domainId
+        ? domains.find((d: { id: string; hostname: string }) => d.id === input.domainId)
+        : domains.length === 1 ? domains[0] : null
+      const baseUrl = chosen
+        ? `https://${chosen.hostname}`
+        : `http://localhost:3001`
       return {
-        webhookUrl: `${siteUrl}/webhook/github/${input.id}`,
+        webhookUrl: `${baseUrl}/webhook/github/${input.id}`,
         webhookSecret: project.webhookSecret,
         githubMode: project.githubMode,
+        domains,
       }
     }),
 })

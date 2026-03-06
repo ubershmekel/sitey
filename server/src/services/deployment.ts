@@ -14,6 +14,7 @@ import {
   runOrReplaceContainer,
   createNetworkIfMissing,
   generateDefaultDockerfile,
+  generateServerDockerfile,
   generateStaticDockerfile,
   pruneProjectImages,
   allocateHostPort,
@@ -115,6 +116,12 @@ async function runDeployment(project: ProjectWithRoutes, deployment: Deployment)
         fs.writeFileSync(
           dockerfilePath,
           generateStaticDockerfile(project.buildCommand, project.outputDir, project.containerPort),
+        )
+      } else if (project.serverRunCommand) {
+        onLog('[deploy] No Dockerfile found — generating server Dockerfile with custom run command')
+        fs.writeFileSync(
+          dockerfilePath,
+          generateServerDockerfile(project.buildCommand, project.serverRunCommand, project.containerPort),
         )
       } else {
         onLog('[deploy] No Dockerfile found — generating default Node.js Dockerfile')

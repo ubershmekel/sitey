@@ -1,0 +1,57 @@
+<template>
+  <Layout>
+    <div class="callback-wrap">
+      <div v-if="status === 'loading'" class="msg">Completing GitHub App setup…</div>
+      <div v-else-if="status === 'error'" class="msg error">
+        <div class="msg-title">Setup failed</div>
+        <div class="msg-detail">{{ errorMsg }}</div>
+        <RouterLink to="/settings" class="btn-link">Back to Settings</RouterLink>
+      </div>
+    </div>
+  </Layout>
+</template>
+
+<script setup lang="ts">
+import { onMounted, ref } from 'vue'
+import { RouterLink, useRouter } from 'vue-router'
+import Layout from '../components/Layout.vue'
+import { trpc } from '../trpc'
+
+const router = useRouter()
+const status = ref<'loading' | 'error'>('loading')
+const errorMsg = ref('')
+
+onMounted(async () => {
+  const params = new URLSearchParams(window.location.search)
+  const code = params.get('code')
+  if (!code) {
+    status.value = 'error'
+    errorMsg.value = 'No code returned from GitHub.'
+    return
+  }
+  try {
+    await trpc.github.exchangeManifestCode.mutate({ code })
+    router.replace('/settings?app_created=1')
+  } catch (e: unknown) {
+    status.value = 'error'
+    errorMsg.value = (e as { message?: string })?.message ?? 'Unknown error'
+  }
+})
+</script>
+
+<style scoped>
+.callback-wrap {
+  display: flex; align-items: center; justify-content: center;
+  padding: 6rem 2rem;
+}
+.msg {
+  text-align: center; color: #888; font-size: 0.95rem;
+}
+.msg.error { color: #ff7070; }
+.msg-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 0.5rem; }
+.msg-detail { font-size: 0.85rem; color: #cc4444; margin-bottom: 1.5rem; }
+.btn-link {
+  color: #7c6cfc; font-size: 0.9rem; text-decoration: none;
+}
+.btn-link:hover { text-decoration: underline; }
+</style>

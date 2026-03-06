@@ -220,6 +220,36 @@ export async function pruneProjectImages(
 
 // ── Dockerfile generators ─────────────────────────────────────────────────────
 
+/** Server Dockerfile with optional build step and custom run command */
+export function generateServerDockerfile(
+  buildCommand: string,
+  serverRunCommand: string,
+  containerPort = 3000,
+): string {
+  const buildStep = buildCommand.trim() ? `RUN ${buildCommand.trim()}\n` : ''
+  const cmd = serverRunCommand.trim()
+  return `FROM node:25-alpine AS deps
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --omit=dev
+
+FROM node:25-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+${buildStep}
+FROM node:25-alpine AS runner
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=builder /app .
+ENV NODE_ENV=production
+ENV PORT=${containerPort}
+EXPOSE ${containerPort}
+CMD ["sh", "-c", "${cmd}"]
+`
+}
+
 export function generateDefaultDockerfile(containerPort = 3000): string {
   return `FROM node:25-alpine AS deps
 WORKDIR /app

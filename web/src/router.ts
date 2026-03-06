@@ -6,6 +6,7 @@ const routes = [
   { path: '/setup', component: () => import('./pages/Setup.vue'), meta: { public: true } },
   { path: '/login', component: () => import('./pages/Login.vue'), meta: { public: true } },
   { path: '/change-password', component: () => import('./pages/ChangePassword.vue'), meta: { public: true } },
+  { path: '/github/app/callback', component: () => import('./pages/GithubAppCallback.vue') },
   { path: '/', component: () => import('./pages/ProjectList.vue') },
   { path: '/domains', component: () => import('./pages/Dashboard.vue') },
   { path: '/domains/:id', component: () => import('./pages/DomainDetail.vue') },

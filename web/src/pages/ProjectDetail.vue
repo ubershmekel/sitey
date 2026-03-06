@@ -48,6 +48,12 @@
       <div v-if="project.githubMode === 'webhook' && webhookInfo" class="webhook-card">
         <h2>GitHub Webhook Setup</h2>
         <p class="hint">Add this webhook to your GitHub repo settings → Webhooks → Add webhook.</p>
+        <div v-if="webhookInfo.domains.length > 1" class="webhook-row">
+          <span class="wh-label">Domain</span>
+          <select v-model="webhookDomainId" @change="refetchWebhookInfo" class="domain-select">
+            <option v-for="d in webhookInfo.domains" :key="d.id" :value="d.id">{{ d.hostname }}</option>
+          </select>
+        </div>
         <div class="webhook-row">
           <span class="wh-label">Payload URL</span>
           <code>{{ webhookInfo.webhookUrl }}</code>
@@ -123,6 +129,7 @@ const error = ref('')
 const deploying = ref(false)
 const deployError = ref('')
 const webhookInfo = ref<WebhookInfo | null>(null)
+const webhookDomainId = ref<string | null>(null)
 const selectedDeployId = ref<string | null>(null)
 const logLines = ref<string[]>([])
 const logBox = ref<HTMLElement | null>(null)
@@ -139,7 +146,7 @@ async function fetchProject() {
   try {
     project.value = await trpc.projects.get.query({ id: projectId })
     if (project.value.githubMode === 'webhook') {
-      webhookInfo.value = await trpc.projects.getWebhookInfo.query({ id: projectId })
+      await refetchWebhookInfo()
     }
     if (project.value.deployments[0]) {
       selectedDeployId.value = project.value.deployments[0].id
@@ -182,6 +189,17 @@ async function fetchLogs() {
 async function refreshLogs() {
   await fetchProject()
   await fetchLogs()
+}
+
+async function refetchWebhookInfo() {
+  const info = await trpc.projects.getWebhookInfo.query({
+    id: projectId,
+    ...(webhookDomainId.value ? { domainId: webhookDomainId.value } : {}),
+  })
+  webhookInfo.value = info
+  if (!webhookDomainId.value && info.domains.length === 1) {
+    webhookDomainId.value = info.domains[0].id
+  }
 }
 
 async function rotateSecret() {
@@ -309,5 +327,10 @@ code { background: #1f1f1f; padding: 0.25rem 0.5rem; border-radius: 4px; font-fa
 .btn-ghost-sm {
   background: none; color: #9a9a9a; border: 1px solid #333; border-radius: 5px;
   padding: 0.3rem 0.6rem; font-size: 0.8rem; cursor: pointer;
+}
+
+.domain-select {
+  background: #1f1f1f; border: 1px solid #333; border-radius: 5px;
+  padding: 0.3rem 0.5rem; color: #e2e2e2; font-size: 0.85rem; flex: 1;
 }
 </style>

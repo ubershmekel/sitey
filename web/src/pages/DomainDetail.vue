@@ -14,14 +14,14 @@
         </div>
       </div>
 
-      <div v-if="domain.projects.length === 0" class="empty-state">
+      <div v-if="domainProjects.length === 0" class="empty-state">
         <p>No projects yet. Add one to deploy an app to this domain.</p>
         <button class="btn-primary mt-1" @click="showAddProject = true">Add project</button>
       </div>
 
       <div v-else class="project-list">
         <RouterLink
-          v-for="p in domain.projects"
+          v-for="p in domainProjects"
           :key="p.id"
           :to="`/projects/${p.id}`"
           class="project-card"
@@ -51,42 +51,39 @@
           <input v-model="np.name" type="text" required placeholder="my-app" pattern="[a-z0-9\-]+" />
         </label>
         <label>
-          Repo owner / org
-          <input v-model="np.repoOwner" required placeholder="acme-corp" />
-        </label>
-        <label>
-          Repo name
-          <input v-model="np.repoName" required placeholder="my-node-app" />
+          GitHub repository
+          <input
+            v-model="np.githubUrl"
+            type="text"
+            required
+            placeholder="owner/repo or https://github.com/owner/repo"
+            @blur="parseGithubUrl"
+          />
         </label>
         <label>
           Branch
-          <input v-model="np.branch" required placeholder="main" />
+          <input v-model="np.branch" type="text" placeholder="main" list="dd-branch-list" />
+          <datalist id="dd-branch-list">
+            <option v-for="b in branches" :key="b" :value="b" />
+          </datalist>
+        </label>
+
+        <label>
+          Build command <span class="hint">(optional)</span>
+          <input v-model="np.buildCommand" type="text" placeholder="npm run build" />
         </label>
         <label>
-          Subdomain <span class="hint">(leave blank to use root domain)</span>
-          <input v-model="np.subdomain" placeholder="app" />
+          Output directory <span class="hint">(for static sites)</span>
+          <input v-model="np.outputDir" type="text" placeholder="dist" />
         </label>
         <label>
+          Server run command <span class="hint">(leave blank for a static site)</span>
+          <input v-model="np.serverRunCommand" type="text" placeholder="node server.js" />
+        </label>
+        <label v-if="np.serverRunCommand">
           Container port
           <input v-model.number="np.containerPort" type="number" min="1" max="65535" required />
         </label>
-
-        <div class="form-row">
-          <label style="flex:1">
-            Build mode
-            <select v-model="np.buildMode">
-              <option value="auto">Auto (generate Dockerfile)</option>
-              <option value="dockerfile">Use repo Dockerfile</option>
-            </select>
-          </label>
-          <label style="flex:1">
-            GitHub integration
-            <select v-model="np.githubMode">
-              <option value="webhook">Webhook</option>
-              <option value="app">GitHub App</option>
-            </select>
-          </label>
-        </div>
 
         <div class="modal-actions">
           <button type="button" class="btn-ghost" @click="showAddProject = false">Cancel</button>
@@ -100,7 +97,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import Layout from '../components/Layout.vue'
 import { trpc } from '../trpc'
@@ -117,17 +114,27 @@ const error = ref('')
 const showAddProject = ref(false)
 const adding = ref(false)
 const addError = ref('')
+const branches = ref<string[]>([])
 
-const np = reactive({
+const domainProjects = computed(() =>
+  (domain.value?.routes ?? [])
+    .map(r => r.project)
+    .filter(p => !p.protected),
+)
+
+const emptyForm = () => ({
   name: '',
+  githubUrl: '',
   repoOwner: '',
   repoName: '',
   branch: 'main',
-  subdomain: '',
-  buildMode: 'auto' as 'auto' | 'dockerfile',
+  buildCommand: '',
+  outputDir: 'dist',
+  serverRunCommand: '',
   containerPort: 3000,
-  githubMode: 'webhook' as 'webhook' | 'app',
 })
+
+const np = ref(emptyForm())
 
 async function fetchDomain() {
   loading.value = true
@@ -141,13 +148,50 @@ async function fetchDomain() {
   }
 }
 
+function parseGithubUrl() {
+  const val = np.value.githubUrl.trim()
+  const match = val.match(/(?:github\.com\/)([^/]+)\/([^/]+?)(?:\.git)?$/) ?? val.match(/^([^/]+)\/([^/]+)$/)
+  if (match) {
+    np.value.repoOwner = match[1]
+    np.value.repoName = match[2]
+    fetchBranches()
+  }
+}
+
+async function fetchBranches() {
+  const { repoOwner, repoName } = np.value
+  if (!repoOwner || !repoName) return
+  try {
+    const res = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/branches?per_page=50`)
+    if (res.ok) {
+      const data = await res.json() as { name: string }[]
+      branches.value = data.map(b => b.name)
+    }
+  } catch { /* ignore */ }
+}
+
 async function addProject() {
   addError.value = ''
   adding.value = true
+  parseGithubUrl()
   try {
-    await trpc.projects.create.mutate({ ...np, domainId })
+    const isStatic = !np.value.serverRunCommand.trim()
+    const project = await trpc.projects.create.mutate({
+      name: np.value.name.trim(),
+      repoOwner: np.value.repoOwner.trim(),
+      repoName: np.value.repoName.trim(),
+      branch: np.value.branch.trim() || 'main',
+      deployMode: isStatic ? 'static' : 'server',
+      buildCommand: np.value.buildCommand.trim(),
+      outputDir: np.value.outputDir.trim() || 'dist',
+      serverRunCommand: np.value.serverRunCommand.trim(),
+      buildMode: 'auto',
+      containerPort: np.value.containerPort,
+    })
+    await trpc.projects.addRoute.mutate({ projectId: project.id, domainId })
     showAddProject.value = false
-    Object.assign(np, { name: '', repoOwner: '', repoName: '', branch: 'main', subdomain: '', containerPort: 3000 })
+    np.value = emptyForm()
+    branches.value = []
     await fetchDomain()
   } catch (e: unknown) {
     addError.value = (e as { message?: string })?.message ?? 'Failed to create project'
@@ -222,7 +266,6 @@ h1 { font-size: 1.4rem; font-weight: 600; }
 .modal h2 { font-size: 1.1rem; font-weight: 600; }
 label { display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.85rem; color: #9a9a9a; }
 .hint { color: #555; font-size: 0.78rem; }
-.form-row { display: flex; gap: 1rem; }
 input, select {
   background: #1f1f1f; border: 1px solid #333; border-radius: 6px;
   padding: 0.6rem 0.75rem; color: #e2e2e2; font-size: 0.9rem; outline: none;
