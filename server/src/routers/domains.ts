@@ -85,11 +85,16 @@ export const domainsRouter = router({
   checkDns: settledProcedure
     .input(z.object({ hostname: z.string().min(1) }))
     .query(async ({ input }) => {
+      const hostname = input.hostname.trim().toLowerCase()
+      const isWildcard = hostname.startsWith('*.')
+      const checkedHostname = isWildcard
+        ? `sitey-dns-check.${hostname.slice(2)}`
+        : hostname
       try {
-        const addresses = await resolve4(input.hostname)
-        return { resolves: true, addresses }
+        const addresses = await resolve4(checkedHostname)
+        return { resolves: true, addresses, checkedHostname, wildcard: isWildcard }
       } catch {
-        return { resolves: false, addresses: [] as string[] }
+        return { resolves: false, addresses: [] as string[], checkedHostname, wildcard: isWildcard }
       }
     }),
 })

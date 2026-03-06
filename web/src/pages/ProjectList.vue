@@ -100,9 +100,26 @@
             v-model="form.githubUrl"
             type="text"
             required
+            list="repo-list"
             placeholder="owner/repo or https://github.com/owner/repo"
+            @input="parseGithubUrl"
             @blur="parseGithubUrl"
           />
+          <datalist id="repo-list">
+            <option v-for="repo in appRepos" :key="repo.id" :value="repo.fullName" />
+          </datalist>
+          <span v-if="reposLoading" class="hint">Loading repos from GitHub App...</span>
+          <span v-else-if="repoLoadError" class="hint">{{ repoLoadError }}</span>
+          <span v-else-if="hasGitHubApp && appRepos.length > 0" class="hint">
+            Autocomplete powered by your GitHub App repositories.
+          </span>
+          <span v-else-if="hasGitHubApp && repoInstallations === 0" class="hint">
+            GitHub App is configured but not installed on any account or org yet.
+            <a v-if="repoInstallUrl" :href="repoInstallUrl" target="_blank" rel="noopener">Install app</a>.
+          </span>
+          <span v-else-if="hasGitHubApp" class="hint">
+            No repositories available from your GitHub App installation yet.
+          </span>
         </label>
         <label>
           Branch
@@ -110,6 +127,13 @@
           <datalist id="branch-list">
             <option v-for="b in branches" :key="b" :value="b" />
           </datalist>
+        </label>
+        <label>
+          Domain <span class="hint">(optional)</span>
+          <select v-model="form.domainId">
+            <option value="">No domain yet</option>
+            <option v-for="d in domains" :key="d.id" :value="d.id">{{ d.hostname }}</option>
+          </select>
         </label>
         <label>
           Build command <span class="hint">(optional)</span>
@@ -147,6 +171,8 @@ import { trpc } from '../trpc'
 
 type Project = Awaited<ReturnType<typeof trpc.projects.list.query>>[number]
 type Route = Project['routes'][number]
+type Domain = Awaited<ReturnType<typeof trpc.domains.list.query>>[number]
+type AppRepo = Awaited<ReturnType<typeof trpc.github.listAppRepos.query>>['repos'][number]
 
 const projects = ref<Project[]>([])
 const loading = ref(true)
@@ -155,6 +181,12 @@ const showAdd = ref(false)
 const adding = ref(false)
 const addError = ref('')
 const branches = ref<string[]>([])
+const appRepos = ref<AppRepo[]>([])
+const reposLoading = ref(false)
+const repoLoadError = ref('')
+const repoInstallations = ref(0)
+const repoInstallUrl = ref('')
+const domains = ref<Pick<Domain, 'id' | 'hostname'>[]>([])
 
 const hasDomain = ref(false)
 const hasGitHubApp = ref(false)
@@ -164,6 +196,7 @@ const form = ref({
   githubUrl: '',
   repoOwner: '',
   repoName: '',
+  domainId: '',
   branch: 'main',
   buildCommand: '',
   outputDir: 'dist',
@@ -174,6 +207,9 @@ const form = ref({
 const userProjects = computed(() => projects.value.filter(p => !p.protected))
 const hasProject = computed(() => userProjects.value.length > 0)
 const onboardingDone = computed(() => hasDomain.value && hasGitHubApp.value && hasProject.value)
+const repoByFullName = computed(() => {
+  return new Map(appRepos.value.map(repo => [repo.fullName.toLowerCase(), repo]))
+})
 
 function routeLabel(r: Route): string {
   const host = r.domain?.hostname ?? '<server>'
@@ -186,6 +222,10 @@ function parseGithubUrl() {
   if (match) {
     form.value.repoOwner = match[1]
     form.value.repoName = match[2]
+    const selected = repoByFullName.value.get(`${match[1]}/${match[2]}`.toLowerCase())
+    if (selected?.defaultBranch && (!form.value.branch.trim() || form.value.branch === 'main')) {
+      form.value.branch = selected.defaultBranch
+    }
     fetchBranches()
   }
 }
@@ -214,6 +254,7 @@ async function fetchAll() {
     projects.value = projectList
     hasDomain.value = domainList.length > 0
     hasGitHubApp.value = appConfig.configured
+    domains.value = domainList.map((d) => ({ id: d.id, hostname: d.hostname }))
   } catch (e: unknown) {
     error.value = (e as { message?: string })?.message ?? 'Failed to load'
   } finally {
@@ -221,8 +262,26 @@ async function fetchAll() {
   }
 }
 
+async function loadRepoSuggestions() {
+  reposLoading.value = true
+  repoLoadError.value = ''
+  try {
+    const res = await trpc.github.listAppRepos.query()
+    appRepos.value = res.repos
+    repoInstallations.value = res.installations
+    repoInstallUrl.value = res.app.installUrl ?? ''
+  } catch {
+    appRepos.value = []
+    repoInstallations.value = 0
+    repoInstallUrl.value = ''
+    repoLoadError.value = 'Could not load GitHub App repositories.'
+  } finally {
+    reposLoading.value = false
+  }
+}
+
 const emptyForm = () => ({
-  name: '', githubUrl: '', repoOwner: '', repoName: '',
+  name: '', githubUrl: '', repoOwner: '', repoName: '', domainId: '',
   branch: 'main', buildCommand: '', outputDir: 'dist', serverRunCommand: '', containerPort: 3000,
 })
 
@@ -232,7 +291,7 @@ async function addProject() {
   parseGithubUrl()
   try {
     const isStatic = !form.value.serverRunCommand.trim()
-    await trpc.projects.create.mutate({
+    const created = await trpc.projects.create.mutate({
       name: form.value.name.trim(),
       repoOwner: form.value.repoOwner.trim(),
       repoName: form.value.repoName.trim(),
@@ -243,6 +302,12 @@ async function addProject() {
       serverRunCommand: form.value.serverRunCommand.trim(),
       containerPort: form.value.containerPort,
     })
+    if (form.value.domainId) {
+      await trpc.projects.addRoute.mutate({
+        projectId: created.id,
+        domainId: form.value.domainId,
+      })
+    }
     showAdd.value = false
     form.value = emptyForm()
     branches.value = []
@@ -254,7 +319,17 @@ async function addProject() {
   }
 }
 
-watch(showAdd, (v) => { if (!v) { form.value = emptyForm(); branches.value = [] } })
+watch(showAdd, async (v) => {
+  if (!v) {
+    form.value = emptyForm()
+    branches.value = []
+    return
+  }
+  if (domains.value.length === 1) {
+    form.value.domainId = domains.value[0].id
+  }
+  await loadRepoSuggestions()
+})
 
 onMounted(fetchAll)
 </script>
@@ -356,6 +431,7 @@ h1 { font-size: 1.4rem; font-weight: 600; }
 .modal h2 { font-size: 1.1rem; font-weight: 600; }
 label { display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.85rem; color: #9a9a9a; }
 .hint { color: #555; font-size: 0.78rem; }
+.hint a { color: #7c6cfc; }
 input, select {
   background: #1f1f1f; border: 1px solid #333; border-radius: 6px;
   padding: 0.6rem 0.75rem; color: #e2e2e2; font-size: 0.95rem; outline: none;

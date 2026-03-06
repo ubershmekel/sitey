@@ -55,11 +55,17 @@
           <input v-model="newHostname" type="text" required placeholder="myapp.com" @blur="checkDns" />
         </label>
         <div v-if="dnsResult !== null" class="dns-check">
-          <span v-if="dnsResult.resolves" class="dns-ok">
-            ✓ Resolves → {{ dnsResult.addresses.join(', ') }}
+          <span v-if="dnsResult.resolves && !dnsResult.wildcard" class="dns-ok">
+            Resolves: {{ dnsResult.addresses.join(', ') }}
+          </span>
+          <span v-else-if="dnsResult.resolves && dnsResult.wildcard" class="dns-ok">
+            Wildcard test resolves ({{ dnsResult.checkedHostname }}): {{ dnsResult.addresses.join(', ') }}
+          </span>
+          <span v-else-if="!dnsResult.resolves && dnsResult.wildcard" class="dns-fail">
+            Wildcard test host {{ dnsResult.checkedHostname }} is not resolving.
           </span>
           <span v-else class="dns-fail">
-            ✗ DNS not resolving — make sure an A record points to this server
+            DNS not resolving - make sure an A record points to this server
           </span>
         </div>
         <label>
@@ -94,7 +100,12 @@ const newHostname = ref('')
 const newEmail = ref('')
 const adding = ref(false)
 const addError = ref('')
-type DnsResult = { resolves: boolean; addresses: string[] } | null
+type DnsResult = {
+  resolves: boolean
+  addresses: string[]
+  checkedHostname: string
+  wildcard: boolean
+} | null
 const dnsResult = ref<DnsResult>(null)
 
 async function checkDns() {
@@ -119,8 +130,13 @@ async function addDomain() {
   addError.value = ''
   adding.value = true
   try {
+    const hostname = newHostname.value.trim().toLowerCase()
+    if (hostname.startsWith('*.')) {
+      addError.value = 'Enter the base hostname without "*." (for example: s.basementphilosophy.com). Configure wildcard in DNS only.'
+      return
+    }
     await trpc.domains.create.mutate({
-      hostname: newHostname.value.trim().toLowerCase(),
+      hostname,
       letsEncryptEmail: newEmail.value.trim(),
     })
     showAdd.value = false
@@ -240,3 +256,4 @@ input:focus { border-color: #7c6cfc; }
   color: #9dcfff;
 }
 </style>
+

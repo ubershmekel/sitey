@@ -39,6 +39,19 @@
       <div v-if="appConfig?.configured" class="app-status">
         <span class="badge badge-ok">Connected (App ID: {{ appConfig.appId }})</span>
         <button class="btn-danger btn-sm" style="margin-left:1rem" @click="clearAppConfig">Disconnect</button>
+        <div class="app-meta">
+          <span v-if="repoStatusLoading" class="section-hint" style="margin:0.6rem 0 0">Checking app installations...</span>
+          <span v-else-if="repoStatusError" class="section-hint warn" style="margin:0.6rem 0 0">{{ repoStatusError }}</span>
+          <template v-else>
+            <div class="section-hint" style="margin:0.6rem 0 0">
+              Installations: {{ repoInstallations }} • Repositories visible: {{ repoCount }}
+            </div>
+            <p v-if="repoInstallations === 0" class="section-hint warn" style="margin-top:0.5rem">
+              The app is created but not installed yet, so project autocomplete cannot see any repositories.
+              <a v-if="repoInstallUrl" :href="repoInstallUrl" target="_blank" rel="noopener">Install app on GitHub</a>.
+            </p>
+          </template>
+        </div>
       </div>
 
       <template v-else>
@@ -141,6 +154,7 @@ async function changePassword() {
 // ── GitHub App ────────────────────────────────────────────────────────────────
 type AppConfig = Awaited<ReturnType<typeof trpc.github.getAppConfig.query>>
 type Manifest = Awaited<ReturnType<typeof trpc.github.getManifest.query>>
+type AppRepoInfo = Awaited<ReturnType<typeof trpc.github.listAppRepos.query>>
 
 const route = useRoute()
 const appConfig = ref<AppConfig | null>(null)
@@ -150,6 +164,11 @@ const selectedDomainId = ref<string | null>(null)
 const app = reactive({ appId: '', privateKey: '', webhookSecret: '', saving: false })
 const appError = ref('')
 const appSuccess = ref(false)
+const repoStatusLoading = ref(false)
+const repoStatusError = ref('')
+const repoInstallations = ref(0)
+const repoCount = ref(0)
+const repoInstallUrl = ref('')
 const appCreated = computed(() => route.query.app_created === '1')
 const manifestLocalhost = computed(() => {
   if (selectedDomainId.value) {
@@ -178,8 +197,34 @@ async function fetchAppConfig() {
     const config = await trpc.github.getAppConfig.query()
     appConfig.value = config
     if (config.appId) app.appId = config.appId
+    if (config.configured) {
+      await fetchRepoInfo()
+    } else {
+      repoInstallations.value = 0
+      repoCount.value = 0
+      repoInstallUrl.value = ''
+      repoStatusError.value = ''
+    }
   } catch { /* ignore */ }
   await fetchManifest()
+}
+
+async function fetchRepoInfo() {
+  repoStatusLoading.value = true
+  repoStatusError.value = ''
+  try {
+    const info: AppRepoInfo = await trpc.github.listAppRepos.query()
+    repoInstallations.value = info.installations
+    repoCount.value = info.repos.length
+    repoInstallUrl.value = info.app.installUrl ?? ''
+  } catch (e: unknown) {
+    repoInstallations.value = 0
+    repoCount.value = 0
+    repoInstallUrl.value = ''
+    repoStatusError.value = (e as { message?: string })?.message ?? 'Could not read GitHub App installation status.'
+  } finally {
+    repoStatusLoading.value = false
+  }
 }
 
 async function saveAppConfig() {
@@ -206,6 +251,10 @@ async function clearAppConfig() {
   await trpc.github.clearAppConfig.mutate()
   appConfig.value = null
   app.appId = ''; app.privateKey = ''; app.webhookSecret = ''
+  repoInstallations.value = 0
+  repoCount.value = 0
+  repoInstallUrl.value = ''
+  repoStatusError.value = ''
 }
 
 onMounted(fetchAppConfig)
@@ -374,6 +423,7 @@ textarea {
   padding: 0.5rem 0.75rem;
 }
 .section-hint.warn code { background: #2a2200; border-radius: 3px; padding: 0.1em 0.3em; font-size: 0.9em; }
+.section-hint a { color: #7c6cfc; }
 
 .domain-select-row {
   display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;

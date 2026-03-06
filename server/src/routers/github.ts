@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
+import jwt from 'jsonwebtoken'
 import { router, settledProcedure } from '../trpc.js'
 import { db } from '../lib/db.js'
 
@@ -9,6 +10,8 @@ const KEYS = {
   PRIVATE_KEY: 'github_app_private_key',
   WEBHOOK_SECRET: 'github_app_webhook_secret',
 } as const
+
+const GITHUB_API_BASE = 'https://api.github.com'
 
 async function getConfig(key: string) {
   const row = await db.systemConfig.findUnique({ where: { key } })
@@ -21,6 +24,38 @@ async function setConfig(key: string, value: string) {
     create: { key, value },
     update: { value },
   })
+}
+
+function toPem(key: string) {
+  return key.includes('\\n') ? key.replace(/\\n/g, '\n') : key
+}
+
+function createAppJwt(appId: string, privateKey: string) {
+  const now = Math.floor(Date.now() / 1000)
+  return jwt.sign(
+    { iat: now - 60, exp: now + (9 * 60), iss: appId },
+    toPem(privateKey),
+    { algorithm: 'RS256' },
+  )
+}
+
+async function githubFetch(path: string, init?: RequestInit) {
+  return fetch(`${GITHUB_API_BASE}${path}`, {
+    ...init,
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+      ...(init?.headers ?? {}),
+    },
+  })
+}
+
+function splitOwnerRepo(fullName: string) {
+  const [owner, name] = fullName.split('/')
+  return {
+    owner: owner ?? '',
+    name: name ?? '',
+  }
 }
 
 export const githubRouter = router({
@@ -106,6 +141,122 @@ export const githubRouter = router({
       where: { key: { in: Object.values(KEYS) } },
     })
     return { ok: true }
+  }),
+
+  listAppRepos: settledProcedure.query(async () => {
+    const appId = await getConfig(KEYS.APP_ID)
+    const privateKey = await getConfig(KEYS.PRIVATE_KEY)
+    if (!appId || !privateKey) {
+      return {
+        configured: false,
+        installations: 0,
+        app: { slug: null as string | null, name: null as string | null, installUrl: null as string | null },
+        repos: [],
+      }
+    }
+
+    let appJwt = ''
+    try {
+      appJwt = createAppJwt(appId, privateKey)
+    } catch {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Invalid GitHub App private key.' })
+    }
+
+    let appSlug: string | null = null
+    let appName: string | null = null
+    try {
+      const appRes = await githubFetch('/app', {
+        headers: { Authorization: `Bearer ${appJwt}` },
+      })
+      if (appRes.ok) {
+        const appData = await appRes.json() as { slug?: string; name?: string }
+        appSlug = appData.slug ?? null
+        appName = appData.name ?? null
+      }
+    } catch {
+      // best-effort metadata; keep going
+    }
+
+    const installations: { id: number }[] = []
+    for (let page = 1; ; page++) {
+      const res = await githubFetch(`/app/installations?per_page=100&page=${page}`, {
+        headers: { Authorization: `Bearer ${appJwt}` },
+      })
+      if (!res.ok) {
+        const text = await res.text()
+        throw new TRPCError({ code: 'BAD_REQUEST', message: `GitHub API error: ${text}` })
+      }
+      const rows = await res.json() as Array<{ id: number }>
+      installations.push(...rows)
+      if (rows.length < 100) break
+    }
+
+    const deduped = new Map<string, {
+      id: number
+      owner: string
+      name: string
+      fullName: string
+      private: boolean
+      defaultBranch: string | null
+      installationId: string
+    }>()
+
+    for (const installation of installations) {
+      const tokenRes = await githubFetch(`/app/installations/${installation.id}/access_tokens`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${appJwt}` },
+      })
+      if (!tokenRes.ok) {
+        const text = await tokenRes.text()
+        throw new TRPCError({ code: 'BAD_REQUEST', message: `GitHub API error: ${text}` })
+      }
+      const tokenData = await tokenRes.json() as { token: string }
+      const accessToken = tokenData.token
+
+      for (let page = 1; ; page++) {
+        const reposRes = await githubFetch(`/installation/repositories?per_page=100&page=${page}`, {
+          headers: { Authorization: `Bearer ${accessToken}` },
+        })
+        if (!reposRes.ok) {
+          const text = await reposRes.text()
+          throw new TRPCError({ code: 'BAD_REQUEST', message: `GitHub API error: ${text}` })
+        }
+        const payload = await reposRes.json() as {
+          repositories: Array<{
+            id: number
+            full_name: string
+            private: boolean
+            default_branch: string | null
+          }>
+        }
+
+        for (const repo of payload.repositories) {
+          const parsed = splitOwnerRepo(repo.full_name)
+          deduped.set(repo.full_name.toLowerCase(), {
+            id: repo.id,
+            owner: parsed.owner,
+            name: parsed.name,
+            fullName: repo.full_name,
+            private: repo.private,
+            defaultBranch: repo.default_branch,
+            installationId: String(installation.id),
+          })
+        }
+        if (payload.repositories.length < 100) break
+      }
+    }
+
+    const repos = Array.from(deduped.values()).sort((a, b) => a.fullName.localeCompare(b.fullName))
+    return {
+      configured: true,
+      installations: installations.length,
+      app: {
+        slug: appSlug,
+        name: appName,
+        installUrl: appSlug ? `https://github.com/apps/${appSlug}/installations/new` : null,
+      },
+      repos,
+    }
   }),
 
   /** Set per-project GitHub App installation ID */

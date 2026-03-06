@@ -49,7 +49,7 @@
 
         <div class="dns-check">
           <div class="dns-row">
-            <span class="dns-label">{{ domain.hostname }}</span>
+            <span class="dns-label">{{ domain?.hostname }}</span>
             <span v-if="dnsResult === null" class="dns-status dns-checking">checking…</span>
             <span v-else-if="dnsResult.resolves" class="dns-status dns-ok">
               resolves → {{ dnsResult.addresses.join(', ') }}
@@ -90,9 +90,26 @@
             v-model="np.githubUrl"
             type="text"
             required
+            list="domain-repo-list"
             placeholder="owner/repo or https://github.com/owner/repo"
+            @input="parseGithubUrl"
             @blur="parseGithubUrl"
           />
+          <datalist id="domain-repo-list">
+            <option v-for="repo in appRepos" :key="repo.id" :value="repo.fullName" />
+          </datalist>
+          <span v-if="reposLoading" class="hint">Loading repos from GitHub App...</span>
+          <span v-else-if="repoLoadError" class="hint">{{ repoLoadError }}</span>
+          <span v-else-if="reposConfigured && appRepos.length > 0" class="hint">
+            Autocomplete powered by your GitHub App repositories.
+          </span>
+          <span v-else-if="reposConfigured && repoInstallations === 0" class="hint">
+            GitHub App is configured but not installed on any account or org yet.
+            <a v-if="repoInstallUrl" :href="repoInstallUrl" target="_blank" rel="noopener">Install app</a>.
+          </span>
+          <span v-else-if="reposConfigured" class="hint">
+            No repositories available from your GitHub App installation yet.
+          </span>
         </label>
         <label>
           Branch
@@ -131,12 +148,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, RouterLink } from 'vue-router'
 import Layout from '../components/Layout.vue'
 import { trpc } from '../trpc'
 
 type Domain = Awaited<ReturnType<typeof trpc.domains.get.query>>
+type AppRepo = Awaited<ReturnType<typeof trpc.github.listAppRepos.query>>['repos'][number]
 
 const route = useRoute()
 const domainId = route.params.id as string
@@ -149,6 +167,12 @@ const showAddProject = ref(false)
 const adding = ref(false)
 const addError = ref('')
 const branches = ref<string[]>([])
+const appRepos = ref<AppRepo[]>([])
+const reposLoading = ref(false)
+const reposConfigured = ref(false)
+const repoLoadError = ref('')
+const repoInstallations = ref(0)
+const repoInstallUrl = ref('')
 
 // ── Edit domain ───────────────────────────────────────────────────────────────
 const showEdit = ref(false)
@@ -205,6 +229,9 @@ const emptyForm = () => ({
 })
 
 const np = ref(emptyForm())
+const repoByFullName = computed(() => {
+  return new Map(appRepos.value.map(repo => [repo.fullName.toLowerCase(), repo]))
+})
 
 async function fetchDomain() {
   loading.value = true
@@ -224,6 +251,10 @@ function parseGithubUrl() {
   if (match) {
     np.value.repoOwner = match[1]
     np.value.repoName = match[2]
+    const selected = repoByFullName.value.get(`${match[1]}/${match[2]}`.toLowerCase())
+    if (selected?.defaultBranch && (!np.value.branch.trim() || np.value.branch === 'main')) {
+      np.value.branch = selected.defaultBranch
+    }
     fetchBranches()
   }
 }
@@ -238,6 +269,26 @@ async function fetchBranches() {
       branches.value = data.map(b => b.name)
     }
   } catch { /* ignore */ }
+}
+
+async function loadRepoSuggestions() {
+  reposLoading.value = true
+  repoLoadError.value = ''
+  try {
+    const res = await trpc.github.listAppRepos.query()
+    appRepos.value = res.repos
+    reposConfigured.value = res.configured
+    repoInstallations.value = res.installations
+    repoInstallUrl.value = res.app.installUrl ?? ''
+  } catch {
+    appRepos.value = []
+    reposConfigured.value = false
+    repoInstallations.value = 0
+    repoInstallUrl.value = ''
+    repoLoadError.value = 'Could not load GitHub App repositories.'
+  } finally {
+    reposLoading.value = false
+  }
 }
 
 async function addProject() {
@@ -279,6 +330,15 @@ function relativeTime(ts: string | Date) {
   if (h < 24) return `${h}h ago`
   return `${Math.floor(h / 24)}d ago`
 }
+
+watch(showAddProject, async (v) => {
+  if (!v) {
+    np.value = emptyForm()
+    branches.value = []
+    return
+  }
+  await loadRepoSuggestions()
+})
 
 onMounted(fetchDomain)
 </script>
@@ -336,6 +396,7 @@ h1 { font-size: 1.4rem; font-weight: 600; }
 .modal h2 { font-size: 1.1rem; font-weight: 600; }
 label { display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.85rem; color: #9a9a9a; }
 .hint { color: #555; font-size: 0.78rem; }
+.hint a { color: #7c6cfc; }
 input, select {
   background: #1f1f1f; border: 1px solid #333; border-radius: 6px;
   padding: 0.6rem 0.75rem; color: #e2e2e2; font-size: 0.9rem; outline: none;
