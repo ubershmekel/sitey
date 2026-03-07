@@ -5,6 +5,7 @@ import { router, settledProcedure } from "../trpc.js";
 import { db } from "../lib/db.js";
 import { generateWebhookSecret } from "../services/crypto.js";
 import { reloadCaddy } from "../services/caddy.js";
+import { enqueueDeployment } from "../services/deployment.js";
 
 const SUBDOMAIN_LABEL_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
 const randomSubdomainSuffix = customAlphabet(
@@ -107,13 +108,24 @@ export const projectsRouter = router({
     )
     .mutation(async ({ input }) => {
       const webhookSecret = generateWebhookSecret();
-      return db.project.create({
+      const project = await db.project.create({
         data: {
           ...input,
           envVars: JSON.stringify(input.envVars),
           webhookSecret,
         },
       });
+
+      const deployment = await db.deployment.create({
+        data: {
+          projectId: project.id,
+          status: 'queued',
+          triggeredBy: 'manual',
+        },
+      });
+      enqueueDeployment(project, deployment);
+
+      return project;
     }),
 
   update: settledProcedure

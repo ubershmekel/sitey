@@ -4,16 +4,34 @@ import fs from 'node:fs'
 
 const DATA_ROOT = process.env.DATA_ROOT ?? '/opt/sitey'
 
+export function projectRootPath(projectId: string): string {
+  return path.join(DATA_ROOT, 'projects', projectId)
+}
+
 export function projectRepoPath(projectId: string): string {
-  return path.join(DATA_ROOT, 'projects', projectId, 'repo')
+  return path.join(projectRootPath(projectId), 'repo')
 }
 
 export function projectLogsDir(projectId: string): string {
-  return path.join(DATA_ROOT, 'projects', projectId, 'logs')
+  return path.join(projectRootPath(projectId), 'logs')
+}
+
+export function projectDockerfilePath(projectId: string): string {
+  return path.join(projectRootPath(projectId), 'Dockerfile')
 }
 
 export function deploymentLogPath(projectId: string, deploymentId: string): string {
   return path.join(projectLogsDir(projectId), `${deploymentId}.log`)
+}
+
+export async function isTrackedFile(repoPath: string, filePath: string): Promise<boolean> {
+  try {
+    const git = simpleGit(repoPath)
+    await git.raw(['ls-files', '--error-unmatch', '--', filePath])
+    return true
+  } catch {
+    return false
+  }
 }
 
 /**

@@ -41,17 +41,20 @@ export async function createNetworkIfMissing(): Promise<void> {
 
 export async function buildImage(opts: {
   projectId: string;
-  repoPath: string;
+  contextPath: string;
   tag: string;
+  dockerfile: string;
   onLog: (line: string) => void;
 }): Promise<void> {
-  const { projectId, repoPath, tag, onLog } = opts;
+  const { projectId, contextPath, tag, dockerfile, onLog } = opts;
 
-  onLog(`[docker] Building image ${tag} from ${repoPath}`);
+  onLog(
+    `[docker] Building image ${tag} from ${contextPath} (dockerfile: ${dockerfile})`,
+  );
 
   const stream = await docker.buildImage(
-    { context: repoPath, src: ["."] },
-    { t: tag, labels: { "sitey.project": projectId } },
+    { context: contextPath, src: ["."] },
+    { t: tag, dockerfile, labels: { "sitey.project": projectId } },
   );
 
   await new Promise<void>((resolve, reject) => {
@@ -95,8 +98,8 @@ export async function runOrReplaceContainer(opts: {
   await stopAndRemoveContainer(containerName, onLog);
 
   const labels: Record<string, string> = {
-    'sitey.managed': 'true',
-    'sitey.project': project.id,
+    "sitey.managed": "true",
+    "sitey.project": project.id,
   };
   const env = Object.entries(envVars).map(([k, v]) => `${k}=${v}`);
 
@@ -182,19 +185,24 @@ export function generateServerDockerfile(
   buildCommand: string,
   serverRunCommand: string,
   containerPort = 3000,
+  sourceRoot = ".",
 ): string {
-  const buildStep = buildCommand.trim() ? `RUN ${buildCommand.trim()}\n` : ''
-  const cmd = serverRunCommand.trim()
+  const buildStep = buildCommand.trim() ? `RUN ${buildCommand.trim()}\n` : "";
+  const cmd = serverRunCommand.trim();
+  // package.json and package-lock.json
+  const packageJsonSource =
+    sourceRoot === "." ? "package*.json" : `${sourceRoot}/package*.json`;
+  const fullSource = sourceRoot === "." ? "." : `${sourceRoot}/.`;
   return `FROM node:25-alpine AS deps
 WORKDIR /app
-COPY package*.json ./
+COPY ${packageJsonSource} ./
 RUN npm ci --omit=dev
 
 FROM node:25-alpine AS builder
 WORKDIR /app
-COPY package*.json ./
+COPY ${packageJsonSource} ./
 RUN npm ci
-COPY . .
+COPY ${fullSource} .
 ${buildStep}
 FROM node:25-alpine AS runner
 WORKDIR /app
@@ -204,20 +212,26 @@ ENV NODE_ENV=production
 ENV PORT=${containerPort}
 EXPOSE ${containerPort}
 CMD ["sh", "-c", "${cmd}"]
-`
+`;
 }
 
-export function generateDefaultDockerfile(containerPort = 3000): string {
+export function generateDefaultDockerfile(
+  containerPort = 3000,
+  sourceRoot = ".",
+): string {
+  const packageJsonSource =
+    sourceRoot === "." ? "package*.json" : `${sourceRoot}/package*.json`;
+  const fullSource = sourceRoot === "." ? "." : `${sourceRoot}/.`;
   return `FROM node:25-alpine AS deps
 WORKDIR /app
-COPY package*.json ./
+COPY ${packageJsonSource} ./
 RUN npm ci --omit=dev
 
 FROM node:25-alpine AS builder
 WORKDIR /app
-COPY package*.json ./
+COPY ${packageJsonSource} ./
 RUN npm ci
-COPY . .
+COPY ${fullSource} .
 RUN npm run build --if-present
 
 FROM node:25-alpine
@@ -235,13 +249,13 @@ export function generateStaticDockerfile(
   buildCommand: string,
   outputDir: string,
   containerPort = 3000,
+  sourceRoot = ".",
 ): string {
-  const cmd = buildCommand.trim() || "npm run build";
+  const cmd = buildCommand.trim() || 'echo "No build step"';
+  const fullSource = sourceRoot === "." ? "." : `${sourceRoot}/.`;
   return `FROM node:25-alpine AS builder
 WORKDIR /app
-COPY package*.json ./
-RUN npm install
-COPY . .
+COPY ${fullSource} .
 RUN ${cmd}
 
 FROM caddy:alpine

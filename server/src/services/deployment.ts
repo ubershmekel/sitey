@@ -8,7 +8,15 @@ import path from 'node:path'
 import type { Deployment, Project } from '@prisma/client'
 import { db } from '../lib/db.js'
 import { deployQueue } from '../lib/queue.js'
-import { cloneOrPull, projectRepoPath, deploymentLogPath, projectLogsDir } from './git.js'
+import {
+  cloneOrPull,
+  isTrackedFile,
+  projectRootPath,
+  projectRepoPath,
+  projectDockerfilePath,
+  deploymentLogPath,
+  projectLogsDir,
+} from './git.js'
 import {
   buildImage,
   runOrReplaceContainer,
@@ -24,6 +32,11 @@ import { nanoid } from 'nanoid'
 
 type RouteWithDomain = { domain: { hostname: string } | null; pathPrefix: string }
 type ProjectWithRoutes = Project & { routes: RouteWithDomain[] }
+type OnLog = (line: string) => void
+type DockerBuildSource = {
+  contextPath: string
+  dockerfilePath: string
+}
 
 function containerName(project: Project): string {
   return `sitey-${project.id}`
@@ -32,6 +45,67 @@ function containerName(project: Project): string {
 function imageTag(project: Project, sha: string): string {
   const short = sha.slice(0, 12)
   return `sitey/${project.id}:${short}`
+}
+
+function buildManagedDockerfile(project: Project, onLog: OnLog): string {
+  if (project.deployMode === 'static') {
+    onLog('[deploy] Auto mode: generating Sitey Dockerfile for static site')
+    return generateStaticDockerfile(
+      project.buildCommand,
+      project.outputDir,
+      project.containerPort,
+      'repo',
+    )
+  }
+
+  if (project.serverRunCommand) {
+    onLog('[deploy] Auto mode: generating Sitey Dockerfile with custom run command')
+    return generateServerDockerfile(
+      project.buildCommand,
+      project.serverRunCommand,
+      project.containerPort,
+      'repo',
+    )
+  }
+
+  onLog('[deploy] Auto mode: generating default Sitey Node.js Dockerfile')
+  return generateDefaultDockerfile(project.containerPort, 'repo')
+}
+
+function ensureManagedDockerfile(project: Project, managedDockerfilePath: string, onLog: OnLog): void {
+  if (fs.existsSync(managedDockerfilePath)) {
+    onLog(`[deploy] Auto mode: using existing managed Dockerfile: ${managedDockerfilePath}`)
+    return
+  }
+
+  fs.mkdirSync(path.dirname(managedDockerfilePath), { recursive: true })
+  fs.writeFileSync(managedDockerfilePath, buildManagedDockerfile(project, onLog))
+  onLog(`[deploy] Wrote managed Dockerfile: ${managedDockerfilePath}`)
+}
+
+async function resolveDockerBuildSource(project: Project, onLog: OnLog): Promise<DockerBuildSource> {
+  const projectRoot = projectRootPath(project.id)
+  const repoPath = projectRepoPath(project.id)
+  const managedDockerfilePath = projectDockerfilePath(project.id)
+  const repoDockerfilePath = path.join(repoPath, 'Dockerfile')
+  const repoDockerfileTracked =
+    fs.existsSync(repoDockerfilePath) && await isTrackedFile(repoPath, 'Dockerfile')
+
+  if (project.buildMode === 'dockerfile') {
+    if (repoDockerfileTracked) {
+      onLog('[deploy] Using tracked Dockerfile from repository root')
+      return { contextPath: repoPath, dockerfilePath: repoDockerfilePath }
+    }
+    throw new Error('Build mode is dockerfile, but repository has no tracked Dockerfile at root')
+  }
+
+  if (repoDockerfileTracked) {
+    onLog('[deploy] Using tracked Dockerfile from repository root')
+    return { contextPath: repoPath, dockerfilePath: repoDockerfilePath }
+  }
+
+  ensureManagedDockerfile(project, managedDockerfilePath, onLog)
+  return { contextPath: projectRoot, dockerfilePath: managedDockerfilePath }
 }
 
 // ── Public API ────────────────────────────────────────────────────────────────
@@ -107,32 +181,22 @@ async function runDeployment(project: ProjectWithRoutes, deployment: Deployment)
       data: { commitSha: sha, commitMessage: message },
     })
 
-    // 3. Ensure Dockerfile exists (auto mode)
-    const repoPath = projectRepoPath(project.id)
-    const dockerfilePath = path.join(repoPath, 'Dockerfile')
-
-    if (project.buildMode === 'auto' && !fs.existsSync(dockerfilePath)) {
-      if (project.deployMode === 'static') {
-        onLog('[deploy] No Dockerfile found — generating static site Dockerfile')
-        fs.writeFileSync(
-          dockerfilePath,
-          generateStaticDockerfile(project.buildCommand, project.outputDir, project.containerPort),
-        )
-      } else if (project.serverRunCommand) {
-        onLog('[deploy] No Dockerfile found — generating server Dockerfile with custom run command')
-        fs.writeFileSync(
-          dockerfilePath,
-          generateServerDockerfile(project.buildCommand, project.serverRunCommand, project.containerPort),
-        )
-      } else {
-        onLog('[deploy] No Dockerfile found — generating default Node.js Dockerfile')
-        fs.writeFileSync(dockerfilePath, generateDefaultDockerfile(project.containerPort))
-      }
-    }
+    // 3. Resolve Dockerfile strategy
+    const dockerBuild = await resolveDockerBuildSource(project, onLog)
+    const dockerfile = path
+      .relative(dockerBuild.contextPath, dockerBuild.dockerfilePath)
+      .split(path.sep)
+      .join('/')
 
     // 4. Build image
     const tag = imageTag(project, sha)
-    await buildImage({ projectId: project.id, repoPath, tag, onLog })
+    await buildImage({
+      projectId: project.id,
+      contextPath: dockerBuild.contextPath,
+      tag,
+      dockerfile,
+      onLog,
+    })
 
     // 5. Resolve host port fallback (used when the project has no routable routes)
     const hasRoutableRoutes = project.routes.some((r: RouteWithDomain) => r.domain || r.pathPrefix)
