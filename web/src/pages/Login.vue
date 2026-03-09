@@ -1,7 +1,7 @@
 <template>
   <div class="login-wrap">
     <form class="login-card" @submit.prevent="handleLogin">
-      <div class="brand">⬡ Sitey</div>
+      <SiteyLogo class="brand" />
       <h1>Sign in</h1>
 
       <div v-if="auth.error" class="alert error">{{ auth.error }}</div>
@@ -27,6 +27,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import SiteyLogo from '../components/SiteyLogo.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -72,7 +73,7 @@ async function handleLogin() {
   font-size: 1.5rem;
   font-weight: 700;
   color: #7c6cfc;
-  text-align: center;
+  justify-content: center;
   margin-bottom: -0.5rem;
 }
 

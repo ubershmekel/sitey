@@ -2,7 +2,7 @@
   <div class="layout">
     <nav class="sidebar">
       <div class="sidebar-header">
-        <span class="logo">⬡ Sitey</span>
+        <SiteyLogo class="logo" />
       </div>
 
       <div class="nav-section">
@@ -35,6 +35,7 @@
 import { watch } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import SiteyLogo from './SiteyLogo.vue'
 
 const auth = useAuthStore()
 const router = useRouter()

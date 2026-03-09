@@ -1,7 +1,7 @@
 <template>
   <div class="wrap">
     <form class="card" @submit.prevent="handleSubmit">
-      <div class="brand">⬡ Sitey</div>
+      <SiteyLogo class="brand" />
       <h1>Change password</h1>
       <p class="subtitle">You must set a new password before continuing.</p>
 
@@ -34,6 +34,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import SiteyLogo from '../components/SiteyLogo.vue'
 
 const auth = useAuthStore()
 const router = useRouter()
@@ -82,7 +83,7 @@ async function handleSubmit() {
   flex-direction: column;
   gap: 1.25rem;
 }
-.brand { font-size: 1.5rem; font-weight: 700; color: #7c6cfc; text-align: center; }
+.brand { font-size: 1.5rem; font-weight: 700; color: #7c6cfc; justify-content: center; }
 h1 { font-size: 1.2rem; font-weight: 600; text-align: center; color: #e2e2e2; }
 .subtitle { font-size: 0.85rem; color: #666; text-align: center; margin-top: -0.75rem; }
 label {

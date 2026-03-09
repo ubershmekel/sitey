@@ -1,7 +1,7 @@
 <template>
   <div class="setup-wrap">
     <form class="setup-card" @submit.prevent="handleSetup">
-      <div class="brand">⬡ Sitey</div>
+      <SiteyLogo class="brand" />
       <h1>Welcome — let's get you set up</h1>
       <p class="subtitle">Create your admin account to get started.</p>
 
@@ -29,6 +29,7 @@ import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { trpc } from '../trpc'
 import { useAuthStore } from '../stores/auth'
+import SiteyLogo from '../components/SiteyLogo.vue'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -78,7 +79,7 @@ async function handleSetup() {
   font-size: 1.5rem;
   font-weight: 700;
   color: #7c6cfc;
-  text-align: center;
+  justify-content: center;
   margin-bottom: -0.5rem;
 }
 
