@@ -2,11 +2,13 @@
   <div class="layout">
     <nav class="sidebar">
       <div class="sidebar-header">
-        <SiteyLogo class="logo" />
+        <RouterLink to="/" class="logo-link">
+          <SiteyLogo class="logo" />
+        </RouterLink>
       </div>
 
       <div class="nav-section">
-        <RouterLink to="/" class="nav-item" active-class="active">
+        <RouterLink to="/projects" class="nav-item" active-class="active">
           <span class="icon">▦</span> Projects
         </RouterLink>
         <RouterLink to="/domains" class="nav-item" active-class="active">
@@ -66,6 +68,8 @@ watch(() => auth.needsPasswordChange, (needs) => {
   padding: 1.25rem 1.25rem 1rem;
   border-bottom: 1px solid #2a2a2a;
 }
+
+.logo-link { text-decoration: none; display: block; }
 
 .logo {
   font-size: 1.2rem;

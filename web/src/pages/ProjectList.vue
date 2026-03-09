@@ -9,56 +9,6 @@
     <div v-else-if="error" class="alert error">{{ error }}</div>
 
     <template v-else>
-      <!-- Onboarding checklist -->
-      <div v-if="!onboardingDone" class="onboarding">
-        <h2 class="onboarding-title">Getting started</h2>
-
-        <!-- Step 1: Domain -->
-        <div class="step" :class="{ done: hasDomain }">
-          <div class="step-check">{{ hasDomain ? '✓' : '1' }}</div>
-          <div class="step-body">
-            <div class="step-heading">Set up a domain</div>
-            <div class="step-desc">
-              Add the domain you own and point its DNS A record to this server's IP.
-              For wildcard subdomains, also add a <code>*</code> A record.
-            </div>
-          </div>
-          <RouterLink to="/domains" class="step-action">
-            {{ hasDomain ? 'Manage domains' : 'Go to Domains →' }}
-          </RouterLink>
-        </div>
-
-        <!-- Step 2: GitHub App -->
-        <div class="step" :class="{ done: hasGitHubApp }">
-          <div class="step-check">{{ hasGitHubApp ? '✓' : '2' }}</div>
-          <div class="step-body">
-            <div class="step-heading">Connect GitHub</div>
-            <div class="step-desc">
-              Create a GitHub App so Sitey can clone your repos and receive push webhooks.
-              Go to Settings and click <strong>Create GitHub App automatically</strong> — Sitey will
-              pre-fill everything and create the app in one click.
-            </div>
-          </div>
-          <RouterLink to="/settings" class="step-action">
-            {{ hasGitHubApp ? 'Manage in Settings' : 'Go to Settings →' }}
-          </RouterLink>
-        </div>
-
-        <!-- Step 3: Project -->
-        <div class="step" :class="{ done: hasProject }">
-          <div class="step-check">{{ hasProject ? '✓' : '3' }}</div>
-          <div class="step-body">
-            <div class="step-heading">Create your first project</div>
-            <div class="step-desc">
-              Connect a GitHub repository to a domain and deploy it.
-            </div>
-          </div>
-          <button class="step-action btn-step" @click="showAdd = true">
-            {{ hasProject ? 'New project' : 'Create project →' }}
-          </button>
-        </div>
-      </div>
-
       <!-- Project grid -->
       <div v-if="userProjects.length > 0" class="project-grid">
         <RouterLink
@@ -188,9 +138,6 @@ const repoInstallations = ref(0)
 const repoInstallUrl = ref('')
 const domains = ref<Pick<Domain, 'id' | 'hostname'>[]>([])
 
-const hasDomain = ref(false)
-const hasGitHubApp = ref(false)
-
 const form = ref({
   name: '',
   githubUrl: '',
@@ -204,9 +151,9 @@ const form = ref({
   containerPort: 3000,
 })
 
+const hasGitHubApp = ref(false)
+
 const userProjects = computed(() => projects.value.filter(p => !p.protected))
-const hasProject = computed(() => userProjects.value.length > 0)
-const onboardingDone = computed(() => hasDomain.value && hasGitHubApp.value && hasProject.value)
 const repoByFullName = computed(() => {
   return new Map(appRepos.value.map(repo => [repo.fullName.toLowerCase(), repo]))
 })
@@ -258,7 +205,6 @@ async function fetchAll() {
       trpc.github.getAppConfig.query(),
     ])
     projects.value = projectList
-    hasDomain.value = domainList.length > 0
     hasGitHubApp.value = appConfig.configured
     domains.value = domainList.map((d) => ({ id: d.id, hostname: d.hostname }))
   } catch (e: unknown) {
