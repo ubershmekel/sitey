@@ -1,6 +1,7 @@
 node_modules/
 dist/
 .env
+!server/.env
 data/
 *.db
 *.db-shm

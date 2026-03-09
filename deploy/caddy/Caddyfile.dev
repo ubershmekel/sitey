@@ -13,6 +13,6 @@
         reverse_proxy host.docker.internal:3001
     }
     handle {
-        reverse_proxy host.docker.internal:5173
+        reverse_proxy host.docker.internal:3000
     }
 }

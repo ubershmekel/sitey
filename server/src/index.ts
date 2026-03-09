@@ -14,11 +14,14 @@ import { execSync } from 'node:child_process'
 const PORT = parseInt(process.env.PORT ?? '3001')
 const HOST = '0.0.0.0'
 
-// Run Prisma migrations before starting
+// Run Prisma migrations before starting (production only — dev uses db:push)
 function runMigrations() {
+  if (process.env.NODE_ENV !== 'production') return
   try {
     console.log('[startup] Running database migrations...')
-    execSync('npx prisma migrate deploy', { stdio: 'inherit', cwd: process.cwd() })
+    // shell:true needed on Windows so npm.cmd is resolved via the shell
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    execSync('npm run db:migrate', { stdio: 'inherit', cwd: process.cwd(), shell: true, env: process.env } as any)
     console.log('[startup] Migrations complete.')
   } catch (err) {
     console.error('[startup] Migration failed:', err)

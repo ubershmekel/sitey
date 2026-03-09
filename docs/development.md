@@ -4,9 +4,11 @@
 
 ```bash
 # Install dependencies
-cd server && npm install
-cd ../web  && npm install
+npm install
+npm run dev
 
+# Optional manual startup of each service:
+#
 # Start the API (terminal 1)
 cd server
 npm run db:push   # apply schema directly to dev DB (skips migration history)
@@ -14,7 +16,7 @@ npm run dev       # starts on :3001
 
 # Start the web (terminal 2)
 cd web
-npm run dev       # starts on :5173 (proxies /trpc and /webhook → :3001)
+npm run dev       # starts on :3000 (proxies /trpc and /webhook → :3001)
 ```
 
 ## DB scripts (`server/package.json`)
@@ -105,7 +107,8 @@ npm run dev
 ```
 
 - **API** → `http://localhost:3001` (`tsx watch` auto-restarts on file save)
-- **Web** → `http://localhost:5173` (Vite HMR, proxies `/trpc`, `/webhook`, `/health` to `:3001`)
+- **Web** → `http://localhost:3000` (Vite HMR, proxies `/trpc`, `/webhook`,
+  `/health` to `:3001`)
 
 No Docker needed for everyday UI/API work. On first boot the generated admin
 password is printed to the terminal.
@@ -121,13 +124,14 @@ If your DNS points to a VPS, you can forward ports 80 and 443 from the VPS to
 your local machine. Caddy runs locally, gets real Let's Encrypt certs, and
 traffic flows through the tunnel.
 
-**On the VPS**, enable `GatewayPorts` so the tunnel binds to all interfaces
-(not just loopback):
+**On the VPS**, enable `GatewayPorts` so the tunnel binds to all interfaces (not
+just loopback):
 
 ```bash
 # /etc/ssh/sshd_config
 GatewayPorts yes
 ```
+
 ```bash
 systemctl restart sshd
 ```
@@ -151,11 +155,13 @@ Add `-vvv` to the ssh command to debug tunnel issues.
 #### Option 2 — Caddy in Docker, everything else native
 
 **One-time setup:** add to `server/.env`:
+
 ```
 CADDY_ADMIN_URL=http://localhost:2019
 ```
 
 **Start only Caddy (dev mode):**
+
 ```bash
 cd deploy
 
@@ -167,13 +173,14 @@ docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d caddy
 ```
 
 The dev Caddyfile (`deploy/caddy/Caddyfile.dev`) proxies to
-`host.docker.internal:3001` (API) and `host.docker.internal:5173` (Vite). Port
+`host.docker.internal:3001` (API) and `host.docker.internal:3000` (Vite). Port
 2019 is exposed to the host so the native server can push Caddy config updates
 (domains, HTTPS routes) exactly like production.
 
 Then run `npm run dev` from the repo root as usual.
 
 **Switch back to full production stack:**
+
 ```bash
 cd deploy
 docker compose down
@@ -181,6 +188,7 @@ docker compose up -d --build
 ```
 
 **Targeted rebuild (faster than full rebuild):**
+
 ```bash
 cd deploy
 docker compose up -d --build sitey-api   # only rebuild the API
