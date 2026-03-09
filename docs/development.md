@@ -94,8 +94,106 @@ If the last command exits non-zero, the migration SQL needs updating.
   Passwords are argon2id-hashed. GitHub App private key is stored as-is in
   SQLite — encrypt at rest if your threat model requires it.
 
+## Running with hot-reload (no Docker rebuilds)
+
+The root `package.json` has a `dev` script that starts both in parallel:
+
+```bash
+# From repo root — installs deps if needed, then starts both
+npm install
+npm run dev
+```
+
+- **API** → `http://localhost:3001` (`tsx watch` auto-restarts on file save)
+- **Web** → `http://localhost:5173` (Vite HMR, proxies `/trpc`, `/webhook`, `/health` to `:3001`)
+
+No Docker needed for everyday UI/API work. On first boot the generated admin
+password is printed to the terminal.
+
+### With Caddy for HTTPS testing
+
+When you need TLS or domain routing, run only Caddy in Docker and keep
+everything else native.
+
+#### Option 1 — SSH tunnel from a VPS (recommended for real DNS + Let's Encrypt)
+
+If your DNS points to a VPS, you can forward ports 80 and 443 from the VPS to
+your local machine. Caddy runs locally, gets real Let's Encrypt certs, and
+traffic flows through the tunnel.
+
+**On the VPS**, enable `GatewayPorts` so the tunnel binds to all interfaces
+(not just loopback):
+
+```bash
+# /etc/ssh/sshd_config
+GatewayPorts yes
+```
+```bash
+systemctl restart sshd
+```
+
+**On your local machine**, open the tunnel:
+
+```bash
+ssh -N -o ExitOnForwardFailure=yes \
+  -R 0.0.0.0:80:localhost:80 \
+  -R 0.0.0.0:443:localhost:443 \
+  root@<YOUR_VPS_IP>
+```
+
+Now traffic hitting `<YOUR_VPS_IP>:80/443` is forwarded to Caddy running
+locally. DNS still points to the VPS, Let's Encrypt HTTP-01 challenges work
+normally, and you can iterate on code with `npm run dev` without touching the
+VPS at all.
+
+Add `-vvv` to the ssh command to debug tunnel issues.
+
+#### Option 2 — Caddy in Docker, everything else native
+
+**One-time setup:** add to `server/.env`:
+```
+CADDY_ADMIN_URL=http://localhost:2019
+```
+
+**Start only Caddy (dev mode):**
+```bash
+cd deploy
+
+# Tear down the full stack first (or just stop api/web containers)
+docker compose down
+
+# Start Caddy with the dev Caddyfile (proxies to host machine instead of containers)
+docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d caddy
+```
+
+The dev Caddyfile (`deploy/caddy/Caddyfile.dev`) proxies to
+`host.docker.internal:3001` (API) and `host.docker.internal:5173` (Vite). Port
+2019 is exposed to the host so the native server can push Caddy config updates
+(domains, HTTPS routes) exactly like production.
+
+Then run `npm run dev` from the repo root as usual.
+
+**Switch back to full production stack:**
+```bash
+cd deploy
+docker compose down
+docker compose up -d --build
+```
+
+**Targeted rebuild (faster than full rebuild):**
+```bash
+cd deploy
+docker compose up -d --build sitey-api   # only rebuild the API
+docker compose up -d --build sitey-web   # only rebuild the web
+```
+
 ## See logs
 
 ```bash
-docker compose logs sitey-api
+# Production containers
+docker compose -f deploy/docker-compose.yml logs sitey-api -f
+docker compose -f deploy/docker-compose.yml logs caddy -f
+
+# View live Caddy config (JSON)
+curl http://localhost:2019/config/ | jq .
 ```

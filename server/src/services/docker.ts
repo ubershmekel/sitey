@@ -245,22 +245,3 @@ CMD ["node", "server.js"]
 `;
 }
 
-export function generateStaticDockerfile(
-  buildCommand: string,
-  outputDir: string,
-  containerPort = 3000,
-  sourceRoot = ".",
-): string {
-  const cmd = buildCommand.trim() || 'echo "No build step"';
-  const fullSource = sourceRoot === "." ? "." : `${sourceRoot}/.`;
-  return `FROM node:25-alpine AS builder
-WORKDIR /app
-COPY ${fullSource} .
-RUN ${cmd}
-
-FROM caddy:alpine
-COPY --from=builder /app/${outputDir} /srv
-RUN printf ':${containerPort} {\\n    root * /srv\\n    encode gzip\\n    try_files {path} /index.html\\n    file_server\\n}\\n' > /etc/caddy/Caddyfile
-EXPOSE ${containerPort}
-`;
-}

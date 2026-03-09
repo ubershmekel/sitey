@@ -130,7 +130,9 @@ function appendAdminHandlers(lines: string[]): void {
   lines.push('        reverse_proxy sitey-api:3001')
   lines.push('    }')
   lines.push('    handle {')
-  lines.push('        reverse_proxy sitey-web:80')
+  lines.push('        root * /srv/web')
+  lines.push('        try_files {path} /index.html')
+  lines.push('        file_server')
   lines.push('    }')
 }
 
@@ -138,6 +140,9 @@ type ActiveRoute = {
   subdomain: string
   pathPrefix: string
   project: {
+    id: string
+    deployMode: string
+    outputDir: string
     containerName: string | null
     containerPort: number
   } | null
@@ -152,14 +157,31 @@ function resolveRouteHostname(domainHostname: string, routeSubdomain: string): s
 }
 
 function appendRouteHandler(lines: string[], route: ActiveRoute): void {
-  const cname = route.project!.containerName!
-  const port = route.project!.containerPort
-  if (route.pathPrefix) {
-    lines.push(`    handle_path ${route.pathPrefix}/* {`)
-    lines.push(`        reverse_proxy ${cname}:${port}`)
-    lines.push('    }')
+  const project = route.project!
+  if (project.deployMode === 'static') {
+    const repoBase = `/srv/projects/${project.id}/repo`
+    const dir = project.outputDir ? `${repoBase}/${project.outputDir}` : repoBase
+    if (route.pathPrefix) {
+      lines.push(`    handle_path ${route.pathPrefix}/* {`)
+      lines.push(`        root * ${dir}`)
+      lines.push('        try_files {path} /index.html')
+      lines.push('        file_server')
+      lines.push('    }')
+    } else {
+      lines.push(`    root * ${dir}`)
+      lines.push('    try_files {path} /index.html')
+      lines.push('    file_server')
+    }
   } else {
-    lines.push(`    reverse_proxy ${cname}:${port}`)
+    const cname = project.containerName!
+    const port = project.containerPort
+    if (route.pathPrefix) {
+      lines.push(`    handle_path ${route.pathPrefix}/* {`)
+      lines.push(`        reverse_proxy ${cname}:${port}`)
+      lines.push('    }')
+    } else {
+      lines.push(`    reverse_proxy ${cname}:${port}`)
+    }
   }
 }
 
@@ -219,7 +241,11 @@ export async function buildCaddyfile(): Promise<string> {
   // (for example: app.example.com) instead of a raw "*.example.com" block.
   for (const domain of domains) {
     const activeRoutes = domain.routes
-      .filter(r => r.project?.status === 'running' && r.project?.containerName) as ActiveRoute[]
+      .filter(r => {
+        const p = r.project
+        if (!p || p.status !== 'running') return false
+        return p.deployMode === 'static' || !!p.containerName
+      }) as ActiveRoute[]
 
     if (!domain.hostname.startsWith('*.')) {
       appendSiteBlock(lines, domain.hostname, domain.letsEncryptEmail, activeRoutes)

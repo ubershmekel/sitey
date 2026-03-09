@@ -141,7 +141,7 @@
         </label>
         <label>
           Output directory <span class="hint">(for static sites)</span>
-          <input v-model="form.outputDir" type="text" placeholder="dist" />
+          <input v-model="form.outputDir" type="text" placeholder="dist (leave empty for repo root)" />
         </label>
         <label>
           Server run command <span class="hint">(leave blank for a static site)</span>
@@ -199,7 +199,7 @@ const form = ref({
   domainId: '',
   branch: 'main',
   buildCommand: '',
-  outputDir: 'dist',
+  outputDir: '',
   serverRunCommand: '',
   containerPort: 3000,
 })
@@ -288,7 +288,7 @@ async function loadRepoSuggestions() {
 
 const emptyForm = () => ({
   name: '', githubUrl: '', repoOwner: '', repoName: '', domainId: '',
-  branch: 'main', buildCommand: '', outputDir: 'dist', serverRunCommand: '', containerPort: 3000,
+  branch: 'main', buildCommand: '', outputDir: '', serverRunCommand: '', containerPort: 3000,
 })
 
 async function addProject() {
@@ -304,7 +304,7 @@ async function addProject() {
       branch: form.value.branch.trim() || 'main',
       deployMode: isStatic ? 'static' : 'server',
       buildCommand: form.value.buildCommand.trim(),
-      outputDir: form.value.outputDir.trim() || 'dist',
+      outputDir: form.value.outputDir.trim(),
       serverRunCommand: form.value.serverRunCommand.trim(),
       containerPort: form.value.containerPort,
     })

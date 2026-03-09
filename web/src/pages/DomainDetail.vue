@@ -118,7 +118,7 @@
         </label>
         <label>
           Output directory <span class="hint">(for static sites)</span>
-          <input v-model="np.outputDir" type="text" placeholder="dist" />
+          <input v-model="np.outputDir" type="text" placeholder="dist (leave empty for repo root)" />
         </label>
         <label>
           Server run command <span class="hint">(leave blank for a static site)</span>
@@ -258,7 +258,7 @@ const emptyForm = () => ({
   repoName: '',
   branch: 'main',
   buildCommand: '',
-  outputDir: 'dist',
+  outputDir: '',
   serverRunCommand: '',
   containerPort: 3000,
 })
@@ -339,7 +339,7 @@ async function addProject() {
       branch: np.value.branch.trim() || 'main',
       deployMode: isStatic ? 'static' : 'server',
       buildCommand: np.value.buildCommand.trim(),
-      outputDir: np.value.outputDir.trim() || 'dist',
+      outputDir: np.value.outputDir.trim(),
       serverRunCommand: np.value.serverRunCommand.trim(),
       buildMode: 'auto',
       containerPort: np.value.containerPort,

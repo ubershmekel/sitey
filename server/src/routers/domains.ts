@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, settledProcedure } from '../trpc.js'
 import { db } from '../lib/db.js'
-import { reloadCaddy, getLetsEncryptStatusesFromCaddy, getWildcardStatusProbeHostname } from '../services/caddy.js'
+import { reloadCaddy, getLetsEncryptStatusesFromCaddy, getWildcardStatusProbeHostname, buildCaddyfile } from '../services/caddy.js'
 
 const HOSTNAME_REGEX =
   /^(?:\*\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/
@@ -88,6 +88,9 @@ export const domainsRouter = router({
       reloadCaddy().catch(err => console.error('[domains] Caddy reload failed:', err))
       return { ok: true }
     }),
+
+  getCaddyfile: settledProcedure
+    .query(() => buildCaddyfile()),
 
   checkDns: settledProcedure
     .input(z.object({ hostname: z.string().min(1) }))

@@ -38,7 +38,7 @@ model Project {
   // Deploy mode
   deployMode    String         @default("server") // server | static
   buildCommand  String         @default("")       // static: e.g. "npm run build"
-  outputDir     String         @default("dist")   // static: output directory
+  outputDir     String         @default("")        // static: output directory (empty = repo root)
 
   // Build / run
   buildMode        String         @default("auto") // auto | dockerfile

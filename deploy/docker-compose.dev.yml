@@ -1,0 +1,22 @@
+# Dev override — runs only Caddy in Docker.
+# Server and web run natively on the host (npm run dev from repo root).
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d caddy
+#
+# This overrides the caddy service to:
+#   - Mount the dev Caddyfile (proxies to host.docker.internal instead of containers)
+#   - Expose port 2019 so the native sitey-api can push Caddy config updates
+#   - Add host.docker.internal on Linux (Docker Desktop on Windows/Mac handles this automatically)
+
+services:
+  caddy:
+    volumes:
+      - ./caddy/Caddyfile.dev:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+    ports:
+      - "80:80"
+      - "443:443"
+      - "2019:2019"   # expose admin API to host so native server can reload Caddy
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # Linux only; no-op on Docker Desktop

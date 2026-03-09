@@ -1,36 +1,42 @@
-import simpleGit from 'simple-git'
-import path from 'node:path'
-import fs from 'node:fs'
+import simpleGit from "simple-git";
+import path from "node:path";
+import fs from "node:fs";
 
-const DATA_ROOT = process.env.DATA_ROOT ?? '/opt/sitey'
+const DATA_ROOT = process.env.DATA_ROOT ?? "/opt/sitey";
 
 export function projectRootPath(projectId: string): string {
-  return path.join(DATA_ROOT, 'projects', projectId)
+  return path.join(DATA_ROOT, "projects", projectId);
 }
 
 export function projectRepoPath(projectId: string): string {
-  return path.join(projectRootPath(projectId), 'repo')
+  return path.join(projectRootPath(projectId), "repo");
 }
 
 export function projectLogsDir(projectId: string): string {
-  return path.join(projectRootPath(projectId), 'logs')
+  return path.join(projectRootPath(projectId), "logs");
 }
 
 export function projectDockerfilePath(projectId: string): string {
-  return path.join(projectRootPath(projectId), 'Dockerfile')
+  return path.join(projectRootPath(projectId), "Dockerfile");
 }
 
-export function deploymentLogPath(projectId: string, deploymentId: string): string {
-  return path.join(projectLogsDir(projectId), `${deploymentId}.log`)
+export function deploymentLogPath(
+  projectId: string,
+  deploymentId: string,
+): string {
+  return path.join(projectLogsDir(projectId), `${deploymentId}.log`);
 }
 
-export async function isTrackedFile(repoPath: string, filePath: string): Promise<boolean> {
+export async function isTrackedFile(
+  repoPath: string,
+  filePath: string,
+): Promise<boolean> {
   try {
-    const git = simpleGit(repoPath)
-    await git.raw(['ls-files', '--error-unmatch', '--', filePath])
-    return true
+    const git = simpleGit(repoPath);
+    await git.raw(["ls-files", "--error-unmatch", "--", filePath]);
+    return true;
   } catch {
-    return false
+    return false;
   }
 }
 
@@ -39,36 +45,36 @@ export async function isTrackedFile(repoPath: string, filePath: string): Promise
  * Returns the HEAD commit SHA after the operation.
  */
 export async function cloneOrPull(opts: {
-  repoOwner: string
-  repoName: string
-  branch: string
-  projectId: string
-  onLog: (line: string) => void
+  repoOwner: string;
+  repoName: string;
+  branch: string;
+  projectId: string;
+  onLog: (line: string) => void;
 }): Promise<{ sha: string; message: string }> {
-  const { repoOwner, repoName, branch, projectId, onLog } = opts
-  const repoUrl = `https://github.com/${repoOwner}/${repoName}.git`
-  const repoPath = projectRepoPath(projectId)
+  const { repoOwner, repoName, branch, projectId, onLog } = opts;
+  const repoUrl = `https://github.com/${repoOwner}/${repoName}.git`;
+  const repoPath = projectRepoPath(projectId);
 
-  fs.mkdirSync(path.dirname(repoPath), { recursive: true })
+  fs.mkdirSync(path.dirname(repoPath), { recursive: true });
 
-  if (fs.existsSync(path.join(repoPath, '.git'))) {
-    onLog(`[git] Pulling latest from ${repoUrl} (${branch})`)
-    const git = simpleGit(repoPath)
-    await git.fetch('origin')
-    await git.checkout(branch)
-    await git.pull('origin', branch, { '--ff-only': null })
+  if (fs.existsSync(path.join(repoPath, ".git"))) {
+    onLog(`[git] Pulling latest from ${repoUrl} (${branch})`);
+    const git = simpleGit(repoPath);
+    await git.fetch("origin");
+    await git.checkout(branch);
+    await git.pull("origin", branch, { "--ff-only": null });
   } else {
-    onLog(`[git] Cloning ${repoUrl} (${branch}) → ${repoPath}`)
-    fs.mkdirSync(repoPath, { recursive: true })
-    const git = simpleGit()
-    await git.clone(repoUrl, repoPath, ['--branch', branch, '--single-branch'])
+    onLog(`[git] Cloning ${repoUrl} (${branch}) → ${repoPath}`);
+    fs.mkdirSync(repoPath, { recursive: true });
+    const git = simpleGit();
+    await git.clone(repoUrl, repoPath, ["--branch", branch, "--single-branch"]);
   }
 
-  const git = simpleGit(repoPath)
-  const log = await git.log({ maxCount: 1 })
-  const latest = log.latest
+  const git = simpleGit(repoPath);
+  const log = await git.log({ maxCount: 1 });
+  const latest = log.latest;
   return {
-    sha: latest?.hash ?? 'unknown',
-    message: latest?.message ?? '',
-  }
+    sha: latest?.hash ?? "unknown",
+    message: latest?.message ?? "",
+  };
 }

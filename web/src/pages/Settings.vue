@@ -111,6 +111,14 @@
       </template>
     </section>
 
+    <!-- Caddy config debug -->
+    <section class="settings-section">
+      <h2>Active Caddy config</h2>
+      <p class="section-hint">The Caddyfile currently pushed to Caddy. Useful for debugging HTTPS / routing issues.</p>
+      <button class="btn-ghost" @click="loadCaddyfile">{{ caddyfileLoading ? 'Loading…' : 'Show config' }}</button>
+      <pre v-if="caddyfile" class="block-code" style="margin-top:0.75rem;white-space:pre;overflow-x:auto">{{ caddyfile }}</pre>
+    </section>
+
     <!-- About -->
     <section class="settings-section about">
       <h2>About Sitey</h2>
@@ -255,6 +263,19 @@ async function clearAppConfig() {
   repoCount.value = 0
   repoInstallUrl.value = ''
   repoStatusError.value = ''
+}
+
+// ── Caddy debug ───────────────────────────────────────────────────────────────
+const caddyfile = ref('')
+const caddyfileLoading = ref(false)
+
+async function loadCaddyfile() {
+  caddyfileLoading.value = true
+  try {
+    caddyfile.value = await trpc.domains.getCaddyfile.query()
+  } finally {
+    caddyfileLoading.value = false
+  }
 }
 
 onMounted(fetchAppConfig)
@@ -446,6 +467,12 @@ textarea {
   padding: 0.25rem 0.6rem;
   font-size: 0.8rem;
 }
+
+.btn-ghost {
+  background: none; color: #9a9a9a; border: 1px solid #333; border-radius: 6px;
+  padding: 0.5rem 1rem; font-size: 0.85rem; cursor: pointer;
+}
+.btn-ghost:hover { border-color: #666; color: #e2e2e2; }
 
 .about p {
   font-size: 0.85rem;

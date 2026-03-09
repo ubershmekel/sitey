@@ -18,12 +18,20 @@
           <h1>{{ project.name }}</h1>
           <div v-if="projectUrl" class="project-url">
             <a :href="projectUrl" target="_blank" rel="noopener">{{ projectUrl }}</a>
+            <span class="project-url-sep">·</span>
+            <a :href="projectUrl.replace('https://', 'http://')" target="_blank" rel="noopener" class="url-http">http</a>
           </div>
           <div v-else-if="fallbackUrl" class="project-url hint">
             No domain route yet. Fallback: {{ fallbackUrl }}
           </div>
           <div v-else class="project-url hint">
             No route assigned yet.
+          </div>
+          <div v-if="project.status === 'failed'" class="deploy-notice deploy-notice-failed">
+            Last deploy failed — site may be unavailable. Check logs below.
+          </div>
+          <div v-else-if="project.status === 'building' || project.status === 'queued'" class="deploy-notice deploy-notice-building">
+            Deploy in progress — site will be available once it completes.
           </div>
         </div>
         <div class="header-actions">
@@ -372,6 +380,11 @@ h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 0.25rem; }
 .project-url { font-size: 0.85rem; }
 .project-url a { color: #7c6cfc; text-decoration: none; }
 .project-url a:hover { text-decoration: underline; }
+.project-url-sep { color: #444; margin: 0 0.35rem; }
+.url-http { color: #666; font-size: 0.8rem; }
+.deploy-notice { font-size: 0.78rem; margin-top: 0.3rem; padding: 0.2rem 0.5rem; border-radius: 4px; }
+.deploy-notice-failed { background: #2d1414; color: #ff8080; }
+.deploy-notice-building { background: #1a2a38; color: #60b4ff; }
 .header-actions { display: flex; align-items: center; gap: 1rem; }
 
 .info-grid {

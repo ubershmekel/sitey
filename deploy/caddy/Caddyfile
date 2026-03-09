@@ -12,6 +12,8 @@
         reverse_proxy sitey-api:3001
     }
     handle {
-        reverse_proxy sitey-web:80
+        root * /srv/web
+        try_files {path} /index.html
+        file_server
     }
 }

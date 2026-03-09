@@ -5,6 +5,7 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
+import { spawn } from 'node:child_process'
 import type { Deployment, Project } from '@prisma/client'
 import { db } from '../lib/db.js'
 import { deployQueue } from '../lib/queue.js'
@@ -23,7 +24,6 @@ import {
   createNetworkIfMissing,
   generateDefaultDockerfile,
   generateServerDockerfile,
-  generateStaticDockerfile,
   pruneProjectImages,
   allocateHostPort,
 } from './docker.js'
@@ -48,16 +48,6 @@ function imageTag(project: Project, sha: string): string {
 }
 
 function buildManagedDockerfile(project: Project, onLog: OnLog): string {
-  if (project.deployMode === 'static') {
-    onLog('[deploy] Auto mode: generating Sitey Dockerfile for static site')
-    return generateStaticDockerfile(
-      project.buildCommand,
-      project.outputDir,
-      project.containerPort,
-      'repo',
-    )
-  }
-
   if (project.serverRunCommand) {
     onLog('[deploy] Auto mode: generating Sitey Dockerfile with custom run command')
     return generateServerDockerfile(
@@ -180,6 +170,35 @@ async function runDeployment(project: ProjectWithRoutes, deployment: Deployment)
       where: { id: deployment.id },
       data: { commitSha: sha, commitMessage: message },
     })
+
+    if (project.deployMode === 'static') {
+      // 3. Run build command in the repo directory (node/npm available in this container)
+      const repoPath = projectRepoPath(project.id)
+      const buildCmd = project.buildCommand.trim() || 'echo "No build step"'
+      onLog(`[deploy] Running build: ${buildCmd}`)
+      await new Promise<void>((resolve, reject) => {
+        const proc = spawn('sh', ['-c', buildCmd], { cwd: repoPath })
+        proc.stdout.on('data', (d: Buffer) => onLog(d.toString().trimEnd()))
+        proc.stderr.on('data', (d: Buffer) => onLog(d.toString().trimEnd()))
+        proc.on('close', (code: number | null) => code === 0 ? resolve() : reject(new Error(`Build exited with code ${code}`)))
+        proc.on('error', reject)
+      })
+
+      // 4. Push updated Caddy config (serves repo/<outputDir> directly)
+      try {
+        await reloadCaddy()
+        onLog('[deploy] Caddy config reloaded')
+      } catch (err) {
+        onLog(`[deploy] Warning: Caddy reload failed: ${(err as Error).message}`)
+      }
+
+      // 5. Mark success
+      onLog(`[deploy] Static deployment successful! Serving from ${repoPath}/${project.outputDir}`)
+      logStream.end()
+      await db.deployment.update({ where: { id: deployment.id }, data: { status: 'success', finishedAt: new Date() } })
+      await db.project.update({ where: { id: project.id }, data: { status: 'running', containerId: null, containerName: null } })
+      return
+    }
 
     // 3. Resolve Dockerfile strategy
     const dockerBuild = await resolveDockerBuildSource(project, onLog)

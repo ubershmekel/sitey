@@ -5,9 +5,6 @@ networks:
   sitey-public:
     name: sitey-public
     driver: bridge
-  sitey-internal:
-    name: sitey-internal
-    driver: bridge
 
 # ─── Volumes ──────────────────────────────────────────────────────────────────
 volumes:
@@ -16,12 +13,13 @@ volumes:
 # ─── Services ─────────────────────────────────────────────────────────────────
 services:
 
-  # ── Caddy (TLS termination + reverse proxy) ───────────────────────────────
-  # Config is pushed at runtime via the Admin API (POST caddy:2019/load).
-  # sitey-api calls reloadCaddy() on startup and whenever domains change.
-  # The mounted Caddyfile is only the minimal bootstrap config (admin API on).
+  # ── Caddy (TLS termination + reverse proxy + static file server) ───────────
+  # The sitey-web SPA is baked into this image at /srv/web.
+  # User static sites are served from /srv/projects/<id>/repo/<outputDir>.
   caddy:
-    image: caddy:alpine
+    build:
+      context: ..
+      dockerfile: deploy/caddy/Dockerfile
     restart: unless-stopped
     ports:
       - "80:80"
@@ -30,20 +28,9 @@ services:
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
+      - ${DATA_ROOT:-./data}/projects:/srv/projects:ro
     networks:
       - sitey-public
-
-  # ── Sitey Web (Caddy: serves Vue SPA + proxies API to sitey-api) ──────────
-  sitey-web:
-    build:
-      context: ../web
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    depends_on:
-      - caddy
-    networks:
-      - sitey-public
-      - sitey-internal
 
   # ── Sitey API ─────────────────────────────────────────────────────────────
   sitey-api:
@@ -73,4 +60,3 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - sitey-public
-      - sitey-internal
