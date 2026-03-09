@@ -3,7 +3,7 @@ import { z } from 'zod'
 import { TRPCError } from '@trpc/server'
 import { router, settledProcedure } from '../trpc.js'
 import { db } from '../lib/db.js'
-import { reloadCaddy, getLetsEncryptStatusesFromCaddy, getWildcardStatusProbeHostname, buildCaddyfile } from '../services/caddy.js'
+import { reloadCaddy, getWildcardStatusProbeHostname, buildCaddyfile, scheduleDomainStatusRefresh, isDomainStatusStale } from '../services/caddy.js'
 
 const HOSTNAME_REGEX =
   /^(?:\*\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/
@@ -21,10 +21,14 @@ export const domainsRouter = router({
       },
     })
 
-    const statusByHostname = await getLetsEncryptStatusesFromCaddy(domains.map(d => d.hostname))
+    // Trigger background TLS probes for stale domains — does not block response
+    for (const d of domains) {
+      if (isDomainStatusStale(d.statusCheckedAt)) scheduleDomainStatusRefresh(d)
+    }
+
     return domains.map(d => ({
       ...d,
-      letsEncryptStatus: statusByHostname[d.hostname.toLowerCase()] ?? d.status,
+      letsEncryptStatus: d.status,
     }))
   }),
 
@@ -64,9 +68,11 @@ export const domainsRouter = router({
         throw new TRPCError({ code: 'CONFLICT', message: 'Domain already exists' })
       }
       const domain = await db.domain.create({ data: input })
-      // Push updated Caddy config — provisions TLS cert for this domain immediately
-      reloadCaddy().catch(err => console.error('[domains] Caddy reload failed:', err))
-      return domain
+      // Push updated Caddy config — provisions TLS cert for this domain immediately.
+      // Caddy failure is non-fatal: the domain exists in the DB. Return a warning so the UI can surface it.
+      const warning = await reloadCaddy().then(() => null, err => String(err))
+      if (warning) console.error('[domains] Caddy reload failed after create:', warning)
+      return { ...domain, warning }
     }),
 
   update: settledProcedure

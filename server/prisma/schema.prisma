@@ -21,6 +21,7 @@ model Domain {
   hostname         String         @unique
   letsEncryptEmail String
   status           String         @default("pending") // pending | active | error
+  statusCheckedAt  DateTime?
   createdAt        DateTime       @default(now())
   updatedAt        DateTime       @updatedAt
   routes           ProjectRoute[]

@@ -274,6 +274,39 @@ export async function buildCaddyfile(): Promise<string> {
   return lines.join('\n')
 }
 
+// ---------------------------------------------------------------------------
+// Background TLS status refresh — stale-while-revalidate
+// ---------------------------------------------------------------------------
+
+const STALE_TTL_MS = 5 * 60 * 1000 // 5 minutes
+const inFlightRefreshes = new Set<string>() // domain IDs currently being probed
+
+export function isDomainStatusStale(statusCheckedAt: Date | null): boolean {
+  if (!statusCheckedAt) return true
+  return Date.now() - statusCheckedAt.getTime() > STALE_TTL_MS
+}
+
+export function scheduleDomainStatusRefresh(domain: { id: string; hostname: string }): void {
+  if (inFlightRefreshes.has(domain.id)) return // already in-flight
+
+  inFlightRefreshes.add(domain.id)
+
+  const probeHostname = domain.hostname.startsWith('*.')
+    ? (getWildcardStatusProbeHostname(domain.hostname) ?? domain.hostname)
+    : domain.hostname
+
+  getLetsEncryptStatusFromCaddy(probeHostname)
+    .then(
+      status => db.domain.update({ where: { id: domain.id }, data: { status, statusCheckedAt: new Date() } }),
+      err => {
+        console.error(`[caddy] Background status refresh failed for ${domain.hostname}:`, err)
+        return db.domain.update({ where: { id: domain.id }, data: { status: 'error', statusCheckedAt: new Date() } })
+      },
+    )
+    .catch(err => console.error(`[caddy] Failed to persist status for ${domain.hostname}:`, err))
+    .finally(() => inFlightRefreshes.delete(domain.id))
+}
+
 export async function reloadCaddy(): Promise<void> {
   const caddyfile = await buildCaddyfile()
   const adminUrl = new URL(CADDY_ADMIN_URL)

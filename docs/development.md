@@ -86,6 +86,42 @@ npx prisma migrate diff \
 
 If the last command exits non-zero, the migration SQL needs updating.
 
+## API performance principles
+
+These rules exist to prevent read paths from becoming slow under load.
+
+- **Read APIs must be DB-first.** `list` and `get` endpoints read from SQLite
+  only. Never call an external service (Caddy, Docker, DNS) inline on a read
+  path.
+- **External checks are fire-and-forget.** If a response needs data that
+  requires an external call, return the cached DB value immediately and trigger
+  a background refresh that writes the result back to the DB for the next
+  request.
+- **Status is eventually consistent.** Callers should expect stale status
+  values and surface freshness metadata (e.g. `statusCheckedAt`) in the UI
+  rather than implying real-time accuracy.
+- **Deduplicate in-flight work.** Background refreshes use an in-process
+  `Set`/`Map` keyed by record ID so concurrent page loads don't fan out into
+  duplicate external calls. A TTL (currently 5 min for TLS status) prevents
+  cache stampedes after restarts.
+- **Don't let external failures block reads, but do surface them.** If a
+  background probe errors (Caddy down, network timeout), write `status: 'error'`
+  to the DB and log server-side — the read response still returns immediately,
+  and the UI shows the failure state on the next poll.
+- **The DB is the source of truth; Caddy config is derived state.** A domain
+  exists when it's in the DB. The Caddy config is just a projection of that
+  data — it can always be rebuilt from the DB and reloaded. This means a Caddy
+  failure on `create`/`delete` is a delivery problem, not a correctness problem.
+  Never let it throw and fail the whole mutation — that implies the DB write
+  didn't happen, which is wrong. Instead, `await` Caddy separately, catch the
+  error, and return a non-fatal `warning` field alongside the normal result so
+  the UI can surface it without treating the operation as failed:
+  ```ts
+  const domain = await db.domain.create(...)
+  const warning = await reloadCaddy().then(() => null, err => String(err))
+  return { ...domain, warning }
+  ```
+
 ## Architecture notes
 
 - **Single-host only.** The deployment queue is in-memory; multi-instance
