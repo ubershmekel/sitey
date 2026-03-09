@@ -37,8 +37,8 @@
               pre-fill everything and create the app in one click.
             </div>
           </div>
-          <RouterLink to="/settings" class="step-action">
-            {{ hasGitHubApp ? 'Manage in Settings' : 'Go to Settings →' }}
+          <RouterLink to="/integrations" class="step-action">
+            {{ hasGitHubApp ? 'Manage in Integrations' : 'Go to Integrations →' }}
           </RouterLink>
         </div>
 

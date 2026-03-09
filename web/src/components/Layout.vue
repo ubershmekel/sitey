@@ -14,6 +14,9 @@
         <RouterLink to="/domains" class="nav-item" active-class="active">
           <span class="icon">◈</span> Domains
         </RouterLink>
+        <RouterLink to="/integrations" class="nav-item" active-class="active">
+          <span class="icon">⑂</span> Integrations
+        </RouterLink>
         <RouterLink to="/settings" class="nav-item" active-class="active">
           <span class="icon">⚙</span> Settings
         </RouterLink>

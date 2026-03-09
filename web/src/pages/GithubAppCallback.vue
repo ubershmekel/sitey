@@ -5,7 +5,7 @@
       <div v-else-if="status === 'error'" class="msg error">
         <div class="msg-title">Setup failed</div>
         <div class="msg-detail">{{ errorMsg }}</div>
-        <RouterLink to="/settings" class="btn-link">Back to Settings</RouterLink>
+        <RouterLink to="/integrations" class="btn-link">Back to Settings</RouterLink>
       </div>
     </div>
   </Layout>
@@ -31,7 +31,7 @@ onMounted(async () => {
   }
   try {
     await trpc.github.exchangeManifestCode.mutate({ code })
-    router.replace('/settings?app_created=1')
+    router.replace('/integrations?app_created=1')
   } catch (e: unknown) {
     status.value = 'error'
     errorMsg.value = (e as { message?: string })?.message ?? 'Unknown error'

@@ -28,89 +28,6 @@
       </form>
     </section>
 
-    <!-- GitHub App Config -->
-    <section class="settings-section">
-      <h2>GitHub App integration</h2>
-
-      <div v-if="appCreated" class="alert success" style="margin-bottom:1.25rem">
-        GitHub App created and connected successfully.
-      </div>
-
-      <div v-if="appConfig?.configured" class="app-status">
-        <span class="badge badge-ok">Connected (App ID: {{ appConfig.appId }})</span>
-        <button class="btn-danger btn-sm" style="margin-left:1rem" @click="clearAppConfig">Disconnect</button>
-        <div class="app-meta">
-          <span v-if="repoStatusLoading" class="section-hint" style="margin:0.6rem 0 0">Checking app installations...</span>
-          <span v-else-if="repoStatusError" class="section-hint warn" style="margin:0.6rem 0 0">{{ repoStatusError }}</span>
-          <template v-else>
-            <div class="section-hint" style="margin:0.6rem 0 0">
-              Installations: {{ repoInstallations }} • Repositories visible: {{ repoCount }}
-            </div>
-            <p v-if="repoInstallations === 0" class="section-hint warn" style="margin-top:0.5rem">
-              The app is created but not installed yet, so project autocomplete cannot see any repositories.
-              <a v-if="repoInstallUrl" :href="repoInstallUrl" target="_blank" rel="noopener">Install app on GitHub</a>.
-            </p>
-          </template>
-        </div>
-      </div>
-
-      <template v-else>
-        <p class="section-hint">
-          Click below to create and connect a GitHub App in one step.
-          Sitey will open GitHub with everything pre-filled — just click <strong>Create GitHub App</strong>.
-        </p>
-        <!-- Domain selector -->
-        <div v-if="manifestDomains.length > 1" class="domain-select-row">
-          <label class="domain-label" for="manifest-domain">Domain for GitHub App</label>
-          <select id="manifest-domain" v-model="selectedDomainId" @change="fetchManifest" class="domain-select">
-            <option v-for="d in manifestDomains" :key="d.id" :value="d.id">{{ d.hostname }}</option>
-          </select>
-        </div>
-
-        <p class="section-hint warn" v-if="manifestLocalhost">
-          No domain configured — the automatic flow requires a publicly accessible URL so GitHub
-          can redirect back. Use the manual form below for local dev, or add a domain first.
-        </p>
-
-        <!-- Auto setup: POST form to GitHub -->
-        <form
-          v-if="manifest"
-          :action="manifest.actionUrl"
-          method="post"
-          target="_blank"
-          class="auto-form"
-        >
-          <input type="hidden" name="manifest" :value="manifest.manifest" />
-          <button type="submit" class="btn-primary">
-            Create GitHub App automatically →
-          </button>
-        </form>
-
-        <details class="manual-details">
-          <summary>Manual setup (advanced)</summary>
-          <form @submit.prevent="saveAppConfig" class="settings-form" style="margin-top:1rem">
-            <div v-if="appError" class="alert error">{{ appError }}</div>
-            <div v-if="appSuccess" class="alert success">GitHub App config saved.</div>
-            <label>
-              GitHub App ID
-              <input v-model="app.appId" type="text" placeholder="123456" />
-            </label>
-            <label>
-              Private key (PEM)
-              <textarea v-model="app.privateKey" rows="6" placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;..." />
-            </label>
-            <label>
-              Webhook secret
-              <input v-model="app.webhookSecret" type="password" placeholder="your-webhook-secret" />
-            </label>
-            <button type="submit" class="btn-primary" :disabled="app.saving">
-              {{ app.saving ? 'Saving…' : 'Save' }}
-            </button>
-          </form>
-        </details>
-      </template>
-    </section>
-
     <!-- Caddy config debug -->
     <section class="settings-section">
       <h2>Active Caddy config</h2>
@@ -130,8 +47,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, reactive } from 'vue'
 import Layout from '../components/Layout.vue'
 import { trpc } from '../trpc'
 import { useAuthStore } from '../stores/auth'
@@ -159,112 +75,6 @@ async function changePassword() {
   }
 }
 
-// ── GitHub App ────────────────────────────────────────────────────────────────
-type AppConfig = Awaited<ReturnType<typeof trpc.github.getAppConfig.query>>
-type Manifest = Awaited<ReturnType<typeof trpc.github.getManifest.query>>
-type AppRepoInfo = Awaited<ReturnType<typeof trpc.github.listAppRepos.query>>
-
-const route = useRoute()
-const appConfig = ref<AppConfig | null>(null)
-const manifest = ref<Manifest | null>(null)
-const manifestDomains = ref<{ id: string; hostname: string }[]>([])
-const selectedDomainId = ref<string | null>(null)
-const app = reactive({ appId: '', privateKey: '', webhookSecret: '', saving: false })
-const appError = ref('')
-const appSuccess = ref(false)
-const repoStatusLoading = ref(false)
-const repoStatusError = ref('')
-const repoInstallations = ref(0)
-const repoCount = ref(0)
-const repoInstallUrl = ref('')
-const appCreated = computed(() => route.query.app_created === '1')
-const manifestLocalhost = computed(() => {
-  if (selectedDomainId.value) {
-    const d = manifestDomains.value.find(x => x.id === selectedDomainId.value)
-    return d?.hostname === 'localhost'
-  }
-  // no domain configured — fell back to localhost
-  return manifestDomains.value.length === 0
-})
-
-async function fetchManifest() {
-  try {
-    const mf = await trpc.github.getManifest.query(
-      selectedDomainId.value ? { domainId: selectedDomainId.value } : {},
-    )
-    manifest.value = mf
-    manifestDomains.value = mf.domains
-    if (!selectedDomainId.value && mf.domains.length === 1) {
-      selectedDomainId.value = mf.domains[0].id
-    }
-  } catch { /* ignore */ }
-}
-
-async function fetchAppConfig() {
-  try {
-    const config = await trpc.github.getAppConfig.query()
-    appConfig.value = config
-    if (config.appId) app.appId = config.appId
-    if (config.configured) {
-      await fetchRepoInfo()
-    } else {
-      repoInstallations.value = 0
-      repoCount.value = 0
-      repoInstallUrl.value = ''
-      repoStatusError.value = ''
-    }
-  } catch { /* ignore */ }
-  await fetchManifest()
-}
-
-async function fetchRepoInfo() {
-  repoStatusLoading.value = true
-  repoStatusError.value = ''
-  try {
-    const info: AppRepoInfo = await trpc.github.listAppRepos.query()
-    repoInstallations.value = info.installations
-    repoCount.value = info.repos.length
-    repoInstallUrl.value = info.app.installUrl ?? ''
-  } catch (e: unknown) {
-    repoInstallations.value = 0
-    repoCount.value = 0
-    repoInstallUrl.value = ''
-    repoStatusError.value = (e as { message?: string })?.message ?? 'Could not read GitHub App installation status.'
-  } finally {
-    repoStatusLoading.value = false
-  }
-}
-
-async function saveAppConfig() {
-  appError.value = ''
-  appSuccess.value = false
-  app.saving = true
-  try {
-    await trpc.github.setAppConfig.mutate({
-      appId: app.appId,
-      privateKey: app.privateKey,
-      webhookSecret: app.webhookSecret,
-    })
-    appSuccess.value = true
-    await fetchAppConfig()
-  } catch (e: unknown) {
-    appError.value = (e as { message?: string })?.message ?? 'Failed'
-  } finally {
-    app.saving = false
-  }
-}
-
-async function clearAppConfig() {
-  if (!confirm('Clear GitHub App configuration?')) return
-  await trpc.github.clearAppConfig.mutate()
-  appConfig.value = null
-  app.appId = ''; app.privateKey = ''; app.webhookSecret = ''
-  repoInstallations.value = 0
-  repoCount.value = 0
-  repoInstallUrl.value = ''
-  repoStatusError.value = ''
-}
-
 // ── Caddy debug ───────────────────────────────────────────────────────────────
 const caddyfile = ref('')
 const caddyfileLoading = ref(false)
@@ -278,7 +88,6 @@ async function loadCaddyfile() {
   }
 }
 
-onMounted(fetchAppConfig)
 </script>
 
 <style scoped>
