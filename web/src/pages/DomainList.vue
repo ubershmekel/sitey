@@ -165,8 +165,8 @@ h1 {
 }
 
 .domain-card {
-  background: #161616;
-  border: 1px solid #2a2a2a;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   border-radius: 10px;
   padding: 1.25rem 1.5rem;
   text-decoration: none;
@@ -176,15 +176,15 @@ h1 {
 }
 
 .domain-card:hover {
-  border-color: #7c6cfc;
-  background: #1a1a28;
+  border-color: var(--brand);
+  background: var(--bg-hover);
 }
 
 .domain-name {
   font-size: 1rem;
   font-weight: 600;
   margin-bottom: 0.75rem;
-  color: #e2e2e2;
+  color: var(--text-primary);
 }
 
 .domain-meta {
@@ -202,12 +202,12 @@ h1 {
 
 .meta-label {
   font-size: 0.74rem;
-  color: #7a7a7a;
+  color: var(--text-muted);
 }
 
 .projects-count {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-muted);
 }
 
 .status {
@@ -218,24 +218,24 @@ h1 {
 }
 
 .status-pending {
-  background: #2a2206;
-  color: #d4a800;
+  background: var(--status-warn-bg);
+  color: var(--status-warn-text);
 }
 
 .status-active {
-  background: #0e2a14;
-  color: #40c060;
+  background: var(--status-ok-bg);
+  color: var(--status-ok-text);
 }
 
 .status-error {
-  background: #2d1414;
-  color: #ff6060;
+  background: var(--status-err-bg);
+  color: var(--status-err-text);
 }
 
 .empty-state {
   text-align: center;
   padding: 4rem 2rem;
-  color: #555;
+  color: var(--text-muted);
 }
 
 .empty-icon {
@@ -249,13 +249,13 @@ h1 {
 }
 
 .state-msg {
-  color: #666;
+  color: var(--text-muted);
 }
 
 .alert.error {
-  background: #2d1414;
-  border: 1px solid #5a1a1a;
-  color: #ff7070;
+  background: var(--status-err-bg);
+  border: 1px solid var(--status-err-border);
+  color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   font-size: 0.85rem;
@@ -274,8 +274,8 @@ h1 {
 }
 
 .modal {
-  background: #161616;
-  border: 1px solid #2a2a2a;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   border-radius: 12px;
   padding: 2rem;
   width: 420px;
@@ -294,27 +294,27 @@ label {
   flex-direction: column;
   gap: 0.4rem;
   font-size: 0.85rem;
-  color: #9a9a9a;
+  color: var(--text-secondary);
 }
 
 .hint {
-  color: #555;
+  color: var(--text-muted);
   font-size: 0.78rem;
 }
 
 input {
-  background: #1f1f1f;
-  border: 1px solid #333;
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  color: #e2e2e2;
+  color: var(--text-primary);
   font-size: 0.95rem;
   outline: none;
   transition: border-color 0.15s;
 }
 
 input:focus {
-  border-color: #7c6cfc;
+  border-color: var(--brand);
 }
 
 .modal-actions {
@@ -325,7 +325,7 @@ input:focus {
 }
 
 .btn-primary {
-  background: #7c6cfc;
+  background: var(--brand);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -347,8 +347,8 @@ input:focus {
 
 .btn-ghost {
   background: none;
-  color: #9a9a9a;
-  border: 1px solid #333;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 1.25rem;
   font-size: 0.9rem;
@@ -357,8 +357,8 @@ input:focus {
 }
 
 .btn-ghost:hover {
-  border-color: #666;
-  color: #e2e2e2;
+  border-color: var(--text-muted);
+  color: var(--text-primary);
 }
 
 .dns-check {
@@ -367,20 +367,20 @@ input:focus {
 }
 
 .dns-ok {
-  color: #40c060;
+  color: var(--status-ok-text);
 }
 
 .dns-fail {
-  color: #ff8060;
+  color: var(--status-err-text);
 }
 
 .tip {
-  background: #12192a;
-  border: 1px solid #1e3a5f;
+  background: var(--status-info-bg);
+  border: 1px solid var(--status-info-border);
   border-radius: 8px;
   padding: 0.75rem 1rem;
   font-size: 0.82rem;
-  color: #7aaddc;
+  color: var(--status-info-text);
   line-height: 1.55;
 }
 

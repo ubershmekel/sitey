@@ -55,13 +55,13 @@ async function handleLogin() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: #0f0f0f;
+  background: var(--bg-page);
 }
 
 .login-card {
   width: 360px;
-  background: #161616;
-  border: 1px solid #2a2a2a;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   border-radius: 12px;
   padding: 2.5rem;
   display: flex;
@@ -72,7 +72,7 @@ async function handleLogin() {
 .brand {
   font-size: 1.5rem;
   font-weight: 700;
-  color: #7c6cfc;
+  color: var(--brand);
   justify-content: center;
   margin-bottom: -0.5rem;
 }
@@ -81,7 +81,7 @@ h1 {
   font-size: 1.2rem;
   font-weight: 600;
   text-align: center;
-  color: #e2e2e2;
+  color: var(--text-primary);
 }
 
 label {
@@ -89,23 +89,23 @@ label {
   flex-direction: column;
   gap: 0.4rem;
   font-size: 0.85rem;
-  color: #9a9a9a;
+  color: var(--text-secondary);
 }
 
 input {
-  background: #1f1f1f;
-  border: 1px solid #333;
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  color: #e2e2e2;
+  color: var(--text-primary);
   font-size: 0.95rem;
   outline: none;
   transition: border-color 0.15s;
 }
-input:focus { border-color: #7c6cfc; }
+input:focus { border-color: var(--brand); }
 
 .btn-primary {
-  background: #7c6cfc;
+  background: var(--brand);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -119,9 +119,9 @@ input:focus { border-color: #7c6cfc; }
 .btn-primary:hover:not(:disabled) { opacity: 0.85; }
 
 .alert.error {
-  background: #2d1414;
-  border: 1px solid #5a1a1a;
-  color: #ff7070;
+  background: var(--status-err-bg);
+  border: 1px solid var(--status-err-border);
+  color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   font-size: 0.85rem;

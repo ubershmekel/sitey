@@ -101,8 +101,8 @@ h1 {
 }
 
 .settings-section {
-  background: #161616;
-  border: 1px solid #2a2a2a;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   border-radius: 10px;
   padding: 1.75rem;
   margin-bottom: 1.5rem;
@@ -116,7 +116,7 @@ h1 {
 
 .section-hint {
   font-size: 0.83rem;
-  color: #666;
+  color: var(--text-muted);
   margin-bottom: 1.25rem;
   margin-top: -0.5rem;
 }
@@ -133,21 +133,21 @@ label {
   flex-direction: column;
   gap: 0.4rem;
   font-size: 0.85rem;
-  color: #9a9a9a;
+  color: var(--text-secondary);
 }
 
 .hint {
-  color: #555;
+  color: var(--text-muted);
   font-size: 0.78rem;
 }
 
 input,
 textarea {
-  background: #1f1f1f;
-  border: 1px solid #333;
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  color: #e2e2e2;
+  color: var(--text-primary);
   font-size: 0.9rem;
   outline: none;
   transition: border-color 0.15s;
@@ -156,7 +156,7 @@ textarea {
 
 input:focus,
 textarea:focus {
-  border-color: #7c6cfc;
+  border-color: var(--brand);
 }
 
 textarea {
@@ -181,17 +181,17 @@ textarea {
 }
 
 .badge-ok {
-  background: #0e2a14;
-  color: #40c060;
+  background: var(--status-ok-bg);
+  color: var(--status-ok-text);
 }
 
 .badge-warn {
-  background: #2a2206;
-  color: #d4a800;
+  background: var(--status-warn-bg);
+  color: var(--status-warn-text);
 }
 
 .btn-primary {
-  background: #7c6cfc;
+  background: var(--brand);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -213,8 +213,8 @@ textarea {
 }
 
 .btn-danger {
-  background: #5a1a1a;
-  color: #ff8080;
+  background: var(--status-err-bg);
+  color: var(--status-err-text);
   border: none;
   border-radius: 6px;
   padding: 0.6rem 1.25rem;
@@ -234,43 +234,43 @@ textarea {
 }
 
 .alert.error {
-  background: #2d1414;
-  border: 1px solid #5a1a1a;
-  color: #ff7070;
+  background: var(--status-err-bg);
+  border: 1px solid var(--status-err-border);
+  color: var(--status-err-text);
 }
 
 .alert.success {
-  background: #122d14;
-  border: 1px solid #1a5a1e;
-  color: #70ff80;
+  background: var(--status-ok-bg);
+  border: 1px solid var(--status-ok-border);
+  color: var(--status-ok-text);
 }
 
 .section-hint.warn {
-  color: #c09a30;
-  background: #1e1800;
-  border: 1px solid #3a3000;
+  color: var(--status-warn-text);
+  background: var(--status-warn-bg);
+  border: 1px solid var(--status-warn-border);
   border-radius: 6px;
   padding: 0.5rem 0.75rem;
 }
 .section-hint.warn code { background: #2a2200; border-radius: 3px; padding: 0.1em 0.3em; font-size: 0.9em; }
-.section-hint a { color: #7c6cfc; }
+.section-hint a { color: var(--brand); }
 
 .domain-select-row {
   display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;
 }
-.domain-label { font-size: 0.83rem; color: #666; white-space: nowrap; }
+.domain-label { font-size: 0.83rem; color: var(--text-muted); white-space: nowrap; }
 .domain-select {
-  background: #1f1f1f; border: 1px solid #333; border-radius: 6px;
-  padding: 0.45rem 0.6rem; color: #e2e2e2; font-size: 0.88rem; flex: 1;
+  background: var(--bg-input); border: 1px solid var(--border-strong); border-radius: 6px;
+  padding: 0.45rem 0.6rem; color: var(--text-primary); font-size: 0.88rem; flex: 1;
 }
 
 .auto-form { margin-bottom: 1.25rem; }
 
 .manual-details { margin-top: 1rem; }
 .manual-details summary {
-  font-size: 0.83rem; color: #555; cursor: pointer; user-select: none;
+  font-size: 0.83rem; color: var(--text-muted); cursor: pointer; user-select: none;
 }
-.manual-details summary:hover { color: #888; }
+.manual-details summary:hover { color: var(--text-secondary); }
 
 .btn-sm {
   padding: 0.25rem 0.6rem;
@@ -278,21 +278,22 @@ textarea {
 }
 
 .btn-ghost {
-  background: none; color: #9a9a9a; border: 1px solid #333; border-radius: 6px;
+  background: none; color: var(--text-secondary); border: 1px solid var(--border-strong); border-radius: 6px;
   padding: 0.5rem 1rem; font-size: 0.85rem; cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
 }
-.btn-ghost:hover { border-color: #666; color: #e2e2e2; }
+.btn-ghost:hover { border-color: var(--text-muted); color: var(--text-primary); }
 
 .about p {
   font-size: 0.85rem;
-  color: #666;
+  color: var(--text-muted);
   margin-bottom: 0.5rem;
 }
 
 .block-code {
   display: block;
-  background: #0a0a0a;
-  border: 1px solid #2a2a2a;
+  background: var(--bg-code);
+  border: 1px solid var(--border-default);
   border-radius: 6px;
   padding: 0.75rem 1rem;
   font-family: monospace;

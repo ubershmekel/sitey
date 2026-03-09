@@ -388,12 +388,12 @@ onMounted(fetchDomain)
 
 .breadcrumb {
   font-size: 0.8rem;
-  color: #555;
+  color: var(--text-muted);
   margin-bottom: 0.25rem;
 }
 
 .breadcrumb a {
-  color: #7c6cfc;
+  color: var(--brand);
   text-decoration: none;
 }
 
@@ -419,8 +419,8 @@ h1 {
 }
 
 .project-card {
-  background: #161616;
-  border: 1px solid #2a2a2a;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   border-radius: 10px;
   padding: 1rem 1.5rem;
   text-decoration: none;
@@ -432,7 +432,7 @@ h1 {
 }
 
 .project-card:hover {
-  border-color: #7c6cfc;
+  border-color: var(--brand);
 }
 
 .project-name {
@@ -442,7 +442,7 @@ h1 {
 
 .project-repo {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-muted);
   font-family: monospace;
 }
 
@@ -454,7 +454,7 @@ h1 {
 
 .last-deploy {
   font-size: 0.8rem;
-  color: #555;
+  color: var(--text-muted);
 }
 
 .status {
@@ -464,48 +464,17 @@ h1 {
   font-weight: 500;
 }
 
-.status-idle {
-  background: #1a1a1a;
-  color: #666;
-}
-
-.status-pending {
-  background: #2a2206;
-  color: #d4a800;
-}
-
-.status-building {
-  background: #1a2a38;
-  color: #60b4ff;
-}
-
-.status-running {
-  background: #0e2a14;
-  color: #40c060;
-}
-
-.status-active {
-  background: #0e2a14;
-  color: #40c060;
-}
-
-.status-failed {
-  background: #2d1414;
-  color: #ff6060;
-}
-
-.status-stopped {
-  background: #1a1a1a;
-  color: #666;
-}
-
-.status-error {
-  background: #2d1414;
-  color: #ff6060;
-}
+.status-idle     { background: var(--status-idle-bg);    color: var(--status-idle-text); }
+.status-pending  { background: var(--status-warn-bg);    color: var(--status-warn-text); }
+.status-building { background: var(--status-info-bg);    color: var(--status-info-text); }
+.status-running  { background: var(--status-ok-bg);      color: var(--status-ok-text); }
+.status-active   { background: var(--status-ok-bg);      color: var(--status-ok-text); }
+.status-failed   { background: var(--status-err-bg);     color: var(--status-err-text); }
+.status-stopped  { background: var(--status-idle-bg);    color: var(--status-idle-text); }
+.status-error    { background: var(--status-err-bg);     color: var(--status-err-text); }
 
 .empty-state {
-  color: #555;
+  color: var(--text-muted);
   padding: 3rem 0;
 }
 
@@ -514,13 +483,13 @@ h1 {
 }
 
 .state-msg {
-  color: #666;
+  color: var(--text-muted);
 }
 
 .alert.error {
-  background: #2d1414;
-  border: 1px solid #5a1a1a;
-  color: #ff7070;
+  background: var(--status-err-bg);
+  border: 1px solid var(--status-err-border);
+  color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   font-size: 0.85rem;
@@ -538,8 +507,8 @@ h1 {
 }
 
 .modal {
-  background: #161616;
-  border: 1px solid #2a2a2a;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
   border-radius: 12px;
   padding: 2rem;
   width: 500px;
@@ -560,25 +529,25 @@ label {
   flex-direction: column;
   gap: 0.4rem;
   font-size: 0.85rem;
-  color: #9a9a9a;
+  color: var(--text-secondary);
 }
 
 .hint {
-  color: #555;
+  color: var(--text-muted);
   font-size: 0.78rem;
 }
 
 .hint a {
-  color: #7c6cfc;
+  color: var(--brand);
 }
 
 input,
 select {
-  background: #1f1f1f;
-  border: 1px solid #333;
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  color: #e2e2e2;
+  color: var(--text-primary);
   font-size: 0.9rem;
   outline: none;
   transition: border-color 0.15s;
@@ -586,7 +555,7 @@ select {
 
 input:focus,
 select:focus {
-  border-color: #7c6cfc;
+  border-color: var(--brand);
 }
 
 .modal-actions {
@@ -597,7 +566,7 @@ select:focus {
 }
 
 .btn-primary {
-  background: #7c6cfc;
+  background: var(--brand);
   color: #fff;
   border: none;
   border-radius: 6px;
@@ -619,8 +588,8 @@ select:focus {
 
 .btn-ghost {
   background: none;
-  color: #9a9a9a;
-  border: 1px solid #333;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 1.25rem;
   font-size: 0.9rem;
@@ -629,14 +598,14 @@ select:focus {
 }
 
 .btn-ghost:hover {
-  border-color: #666;
-  color: #e2e2e2;
+  border-color: var(--text-muted);
+  color: var(--text-primary);
 }
 
 .btn-danger {
-  background: #2d1414;
-  color: #ff8080;
-  border: 1px solid #5a1a1a;
+  background: var(--status-err-bg);
+  color: var(--status-err-text);
+  border: 1px solid var(--status-err-border);
   border-radius: 6px;
   padding: 0.6rem 1.25rem;
   font-size: 0.9rem;
@@ -661,8 +630,8 @@ select:focus {
 }
 
 .dns-check {
-  background: #0d0d0d;
-  border: 1px solid #2a2a2a;
+  background: var(--bg-code);
+  border: 1px solid var(--border-default);
   border-radius: 8px;
   padding: 0.75rem 1rem;
 }
@@ -675,7 +644,7 @@ select:focus {
 
 .dns-label {
   font-size: 0.85rem;
-  color: #888;
+  color: var(--text-muted);
   font-family: monospace;
   flex: 1;
 }
@@ -686,36 +655,37 @@ select:focus {
 }
 
 .dns-checking {
-  color: #666;
+  color: var(--text-muted);
 }
 
 .dns-ok {
-  color: #40c060;
+  color: var(--status-ok-text);
 }
 
 .dns-fail {
-  color: #ff6060;
+  color: var(--status-err-text);
 }
 
 .btn-recheck {
   background: none;
-  border: 1px solid #333;
-  color: #666;
+  border: 1px solid var(--border-strong);
+  color: var(--text-muted);
   border-radius: 4px;
   padding: 0.1rem 0.4rem;
   font-size: 0.8rem;
   cursor: pointer;
   line-height: 1.4;
+  transition: border-color 0.15s, color 0.15s;
 }
 
 .btn-recheck:hover {
-  border-color: #555;
-  color: #aaa;
+  border-color: var(--text-muted);
+  color: var(--text-secondary);
 }
 
 .dns-hint {
   font-size: 0.78rem;
-  color: #444;
+  color: var(--text-dim);
   margin-top: 0.4rem;
 }
 </style>

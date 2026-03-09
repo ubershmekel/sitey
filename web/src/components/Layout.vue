@@ -60,8 +60,8 @@ watch(() => auth.needsPasswordChange, (needs) => {
 .sidebar {
   width: 220px;
   min-width: 220px;
-  background: #161616;
-  border-right: 1px solid #2a2a2a;
+  background: var(--bg-card);
+  border-right: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
   padding: 0;
@@ -69,7 +69,7 @@ watch(() => auth.needsPasswordChange, (needs) => {
 
 .sidebar-header {
   padding: 1.25rem 1.25rem 1rem;
-  border-bottom: 1px solid #2a2a2a;
+  border-bottom: 1px solid var(--border-default);
 }
 
 .logo-link { text-decoration: none; display: block; }
@@ -77,7 +77,7 @@ watch(() => auth.needsPasswordChange, (needs) => {
 .logo {
   font-size: 1.2rem;
   font-weight: 700;
-  color: #7c6cfc;
+  color: var(--brand);
   letter-spacing: -0.03em;
 }
 
@@ -95,19 +95,19 @@ watch(() => auth.needsPasswordChange, (needs) => {
   gap: 0.5rem;
   padding: 0.5rem 0.75rem;
   border-radius: 6px;
-  color: #9a9a9a;
+  color: var(--text-secondary);
   text-decoration: none;
   font-size: 0.9rem;
   transition: background 0.15s, color 0.15s;
 }
-.nav-item:hover { background: #1f1f1f; color: #e2e2e2; }
-.nav-item.active { background: #1e1b3a; color: #a89cff; }
+.nav-item:hover { background: var(--bg-input); color: var(--text-primary); }
+.nav-item.active { background: var(--brand-active-bg); color: var(--brand-active-text); }
 
 .icon { font-size: 0.85rem; }
 
 .sidebar-footer {
   padding: 1rem 1.25rem;
-  border-top: 1px solid #2a2a2a;
+  border-top: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -115,7 +115,7 @@ watch(() => auth.needsPasswordChange, (needs) => {
 
 .user-email {
   font-size: 0.8rem;
-  color: #666;
+  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -123,15 +123,15 @@ watch(() => auth.needsPasswordChange, (needs) => {
 
 .logout-btn {
   background: none;
-  border: 1px solid #2a2a2a;
-  color: #9a9a9a;
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
   padding: 0.35rem 0.75rem;
   border-radius: 5px;
   cursor: pointer;
   font-size: 0.8rem;
   transition: border-color 0.15s, color 0.15s;
 }
-.logout-btn:hover { border-color: #555; color: #e2e2e2; }
+.logout-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
 
 .content {
   flex: 1;
