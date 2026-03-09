@@ -39,6 +39,9 @@
           <button class="btn-primary" :disabled="deploying" @click="triggerDeploy">
             {{ deploying ? 'Deploying...' : 'Deploy' }}
           </button>
+          <button class="btn-danger" :disabled="deleting" @click="deleteProject">
+            {{ deleting ? 'Deleting...' : 'Delete' }}
+          </button>
         </div>
       </div>
 
@@ -166,7 +169,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from 'vue'
-import { useRoute, RouterLink } from 'vue-router'
+import { useRoute, useRouter, RouterLink } from 'vue-router'
 import Layout from '../components/Layout.vue'
 import { trpc } from '../trpc'
 
@@ -176,6 +179,7 @@ type WebhookInfo = Awaited<ReturnType<typeof trpc.projects.getWebhookInfo.query>
 type Domain = Awaited<ReturnType<typeof trpc.domains.list.query>>[number]
 
 const route = useRoute()
+const router = useRouter()
 const projectId = route.params.id as string
 
 const project = ref<Project | null>(null)
@@ -184,6 +188,7 @@ const loading = ref(true)
 const error = ref('')
 const deploying = ref(false)
 const deployError = ref('')
+const deleting = ref(false)
 const routeSaving = ref(false)
 const routeError = ref('')
 const webhookInfo = ref<WebhookInfo | null>(null)
@@ -346,6 +351,18 @@ async function refetchWebhookInfo() {
   }
 }
 
+async function deleteProject() {
+  if (!confirm(`Delete project "${project.value?.name}"? This will stop the container and remove all files.`)) return
+  deleting.value = true
+  try {
+    await trpc.projects.delete.mutate({ id: projectId })
+    router.push('/')
+  } catch (e: unknown) {
+    alert((e as { message?: string })?.message ?? 'Failed to delete project')
+    deleting.value = false
+  }
+}
+
 async function rotateSecret() {
   if (!confirm('Rotate webhook secret? You will need to update GitHub.')) return
   const res = await trpc.projects.rotateWebhookSecret.mutate({ id: projectId })
@@ -484,6 +501,14 @@ input:focus, select:focus { border-color: #7c6cfc; }
 }
 .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
 .btn-primary:hover:not(:disabled) { opacity: 0.85; }
+
+.btn-danger {
+  background: #3a1414; color: #ff7070; border: 1px solid #5a2020; border-radius: 6px;
+  padding: 0.6rem 1.25rem; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+  transition: opacity 0.15s;
+}
+.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-danger:hover:not(:disabled) { background: #4a1a1a; border-color: #8a3030; }
 
 .btn-ghost {
   background: none; color: #9a9a9a; border: 1px solid #333; border-radius: 6px;

@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { customAlphabet } from "nanoid";
@@ -6,6 +7,8 @@ import { db } from "../lib/db.js";
 import { generateWebhookSecret } from "../services/crypto.js";
 import { reloadCaddy } from "../services/caddy.js";
 import { enqueueDeployment } from "../services/deployment.js";
+import { stopAndRemoveContainer, pruneProjectImages } from "../services/docker.js";
+import { projectRootPath } from "../services/git.js";
 
 const SUBDOMAIN_LABEL_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
 const randomSubdomainSuffix = customAlphabet(
@@ -170,7 +173,24 @@ export const projectsRouter = router({
           code: "FORBIDDEN",
           message: "This project cannot be deleted",
         });
+
+      // Stop & remove Docker container (best-effort)
+      const noop = () => {};
+      await stopAndRemoveContainer(`sitey-${project.id}`, noop);
+      await pruneProjectImages(project.id, "").catch(noop);
+
+      // Delete project from DB (cascades to routes/deployments)
       await db.project.delete({ where: { id: input.id } });
+
+      // Remove project files on disk (best-effort)
+      const rootPath = projectRootPath(project.id);
+      fs.rm(rootPath, { recursive: true, force: true }, () => {});
+
+      // Reload Caddy so the route is removed
+      reloadCaddy().catch((err) =>
+        console.error("[projects] Caddy reload failed after delete:", err),
+      );
+
       return { ok: true };
     }),
 
