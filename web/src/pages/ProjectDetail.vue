@@ -3,46 +3,47 @@
     <div v-if="loading" class="state-msg">Loading...</div>
     <div v-else-if="error" class="alert error">{{ error }}</div>
     <template v-else-if="project">
-      <div class="page-header">
-        <div>
-          <div class="breadcrumb">
-            <RouterLink to="/">Projects</RouterLink>
-            <template v-if="primaryDomainRoute?.domain">
-              /
-              <RouterLink :to="`/domains/${primaryDomainRoute.domain.id}`">
-                {{ primaryDomainRoute.domain.hostname }}
-              </RouterLink>
-            </template>
-            / {{ project.name }}
-          </div>
-          <h1>{{ project.name }}</h1>
-          <div v-if="projectUrl" class="project-url">
-            <a :href="projectUrl" target="_blank" rel="noopener">{{ projectUrl }}</a>
-            <span class="project-url-sep">·</span>
-            <a :href="projectUrl.replace('https://', 'http://')" target="_blank" rel="noopener" class="url-http">http</a>
-          </div>
-          <div v-else-if="fallbackUrl" class="project-url hint">
-            No domain route yet. Fallback: {{ fallbackUrl }}
-          </div>
-          <div v-else class="project-url hint">
-            No route assigned yet.
-          </div>
-          <div v-if="project.status === 'failed'" class="deploy-notice deploy-notice-failed">
-            Last deploy failed — site may be unavailable. Check logs below.
-          </div>
-          <div v-else-if="project.status === 'building' || project.status === 'queued'" class="deploy-notice deploy-notice-building">
-            Deploy in progress — site will be available once it completes.
-          </div>
-        </div>
-        <div class="header-actions">
-          <span :class="`status status-${project.status}`">{{ project.status }}</span>
-          <button class="btn-primary" :disabled="deploying" @click="triggerDeploy">
-            {{ deploying ? 'Deploying...' : 'Deploy' }}
-          </button>
-          <button class="btn-danger" :disabled="deleting" @click="deleteProject">
-            {{ deleting ? 'Deleting...' : 'Delete' }}
-          </button>
-        </div>
+      <div class="breadcrumb">
+        <RouterLink to="/">Projects</RouterLink>
+        <template v-if="primaryDomainRoute?.domain">
+          /
+          <RouterLink :to="`/domains/${primaryDomainRoute.domain.id}`">
+            {{ primaryDomainRoute.domain.hostname }}
+          </RouterLink>
+        </template>
+        / {{ project.name }}
+      </div>
+
+      <h1>{{ project.name }}</h1>
+
+      <div v-if="projectUrl" class="project-url">
+        <a :href="projectUrl" target="_blank" rel="noopener">{{ projectUrl }}</a>
+        <span class="project-url-sep">·</span>
+        <a :href="projectUrl.replace('https://', 'http://')" target="_blank" rel="noopener" class="url-http">http</a>
+      </div>
+      <div v-else-if="fallbackUrl" class="project-url hint">
+        No domain route yet. Fallback: {{ fallbackUrl }}
+      </div>
+      <div v-else class="project-url hint">
+        No route assigned yet.
+      </div>
+
+      <div v-if="project.status === 'failed'" class="deploy-notice deploy-notice-failed">
+        Last deploy failed — site may be unavailable. Check logs below.
+      </div>
+      <div v-else-if="project.status === 'building' || project.status === 'queued'" class="deploy-notice deploy-notice-building">
+        Deploy in progress — site will be available once it completes.
+      </div>
+
+      <div class="status-field">
+        <span class="field-label">{{ project.deployMode === 'static' ? 'Site' : 'Container' }}</span>
+        <span :class="`status status-${project.status}`">{{ containerLabel(project.status, project.deployMode) }}</span>
+      </div>
+
+      <div class="project-actions">
+        <button class="btn-primary" :disabled="deploying" @click="triggerDeploy">
+          {{ deploying ? 'Deploying...' : 'Deploy' }}
+        </button>
       </div>
 
       <div v-if="deployError" class="alert error">{{ deployError }}</div>
@@ -162,6 +163,14 @@
           <div v-if="logLines.length === 0" class="log-empty">No logs yet.</div>
           <pre v-else class="log-content">{{ logLines.join('\n') }}</pre>
         </div>
+      </div>
+
+      <div class="danger-zone">
+        <h2>Danger zone</h2>
+        <p class="danger-desc">Deleting this project stops the container and removes all files. This cannot be undone.</p>
+        <button class="btn-danger" :disabled="deleting" @click="deleteProject">
+          {{ deleting ? 'Deleting...' : 'Delete project' }}
+        </button>
       </div>
     </template>
   </Layout>
@@ -373,6 +382,25 @@ function copy(text: string) {
   navigator.clipboard.writeText(text)
 }
 
+function containerLabel(status: string, deployMode: string) {
+  if (deployMode === 'static') {
+    const labels: Record<string, string> = {
+      idle:     'Deployed (file server)',
+      building: 'Building…',
+      failed:   'Deploy failed',
+    }
+    return labels[status] ?? status
+  }
+  const labels: Record<string, string> = {
+    idle:     'Not running',
+    building: 'Building…',
+    running:  'Container running',
+    failed:   'Deploy failed',
+    stopped:  'Container stopped',
+  }
+  return labels[status] ?? status
+}
+
 function relativeTime(ts: string | Date) {
   const diff = Date.now() - new Date(ts).getTime()
   const m = Math.floor(diff / 60000)
@@ -387,22 +415,42 @@ onMounted(fetchProject)
 </script>
 
 <style scoped>
-.page-header {
-  display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 2rem;
-}
-.breadcrumb { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.25rem; }
+.breadcrumb { font-size: 0.8rem; color: var(--text-muted); margin-bottom: 0.5rem; }
 .breadcrumb a { color: var(--brand); text-decoration: none; }
 .breadcrumb a:hover { text-decoration: underline; }
+
 h1 { font-size: 1.4rem; font-weight: 600; margin-bottom: 0.25rem; }
-.project-url { font-size: 0.85rem; }
+
+.status-field {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-top: 0.75rem;
+}
+
+.field-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  min-width: 4rem;
+}
+
+.project-url { font-size: 0.85rem; margin-bottom: 0.5rem; }
 .project-url a { color: var(--brand); text-decoration: none; }
 .project-url a:hover { text-decoration: underline; }
 .project-url-sep { color: var(--text-dim); margin: 0 0.35rem; }
 .url-http { color: var(--text-muted); font-size: 0.8rem; }
-.deploy-notice { font-size: 0.78rem; margin-top: 0.3rem; padding: 0.2rem 0.5rem; border-radius: 4px; }
+
+.deploy-notice { font-size: 0.78rem; margin-bottom: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; display: inline-block; }
 .deploy-notice-failed { background: var(--status-err-bg); color: var(--status-err-text); }
 .deploy-notice-building { background: var(--status-info-bg); color: var(--status-info-text); }
-.header-actions { display: flex; align-items: center; gap: 1rem; }
+
+.project-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.75rem;
+  margin-bottom: 2rem;
+}
 
 .info-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -484,7 +532,7 @@ code { background: var(--bg-input); padding: 0.25rem 0.5rem; border-radius: 4px;
 .state-msg { color: var(--text-muted); }
 .alert.error {
   background: var(--status-err-bg); border: 1px solid var(--status-err-border); color: var(--status-err-text);
-  border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.85rem;
+  border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.85rem; margin-bottom: 1rem;
 }
 .mt-1 { margin-top: 1rem; }
 
@@ -523,6 +571,15 @@ input:focus, select:focus { border-color: var(--brand); }
   padding: 0.3rem 0.6rem; font-size: 0.8rem; cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
+
+.danger-zone {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-default);
+  margin-bottom: 2rem;
+}
+.danger-zone h2 { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--status-err-text); }
+.danger-desc { font-size: 0.85rem; color: var(--text-muted); margin-bottom: 1rem; }
 
 .domain-select {
   background: var(--bg-input); border: 1px solid var(--border-strong); border-radius: 5px;

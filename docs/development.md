@@ -86,6 +86,31 @@ npx prisma migrate diff \
 
 If the last command exits non-zero, the migration SQL needs updating.
 
+## UI linearity style
+
+Detail pages (domain, project) follow a single linear column — no split headers
+with content on the left and buttons on the right. The goal is clarity and
+mobile-friendliness.
+
+**Rules:**
+
+- **No split headers.** Don't use `justify-content: space-between` to push
+  actions to the far right. Status badges, primary action buttons (Deploy, Save),
+  and destructive buttons (Delete) all live in the main vertical flow.
+- **The page IS the edit form.** Domain and project detail pages render
+  editable fields inline — there is no separate "Edit" modal or route. A
+  "Save changes" button appears near the top alongside other primary actions.
+- **Action row at the top, danger zone at the bottom.** Primary actions
+  (Save, Add, Deploy) appear in a horizontal row just below the title. Destructive
+  actions (Delete) are separated into a "Danger zone" section at the bottom of
+  the page, with a descriptive label and a top border to visually separate them.
+- **Info cards and secondary content can be a grid.** It's fine for metadata
+  cards (repo, build mode, ports) and route lists to use a multi-column grid
+  layout — these are read-only at a glance. What must stay linear are the
+  primary identity, status, and actions.
+- **DNS and other status checks show inline.** Don't hide status information
+  behind a modal. Show it on the page so the user sees it without clicking.
+
 ## API performance principles
 
 These rules exist to prevent read paths from becoming slow under load.

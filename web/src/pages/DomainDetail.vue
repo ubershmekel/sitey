@@ -3,28 +3,53 @@
     <div v-if="loading" class="state-msg">Loading…</div>
     <div v-else-if="error" class="alert error">{{ error }}</div>
     <template v-else-if="domain">
-      <div class="page-header">
-        <div>
-          <div class="breadcrumb">
-            <RouterLink to="/">Domains</RouterLink> / {{ domain.hostname }}
-          </div>
-          <h1>{{ domain.hostname }}</h1>
+      <div class="breadcrumb">
+        <RouterLink to="/">Domains</RouterLink> / {{ domain.hostname }}
+      </div>
+
+      <h1>{{ domain.hostname }}</h1>
+
+      <div class="page-actions">
+        <button class="btn-primary" :disabled="editSaving" @click="saveEdit">
+          {{ editSaving ? 'Saving…' : 'Save changes' }}
+        </button>
+        <button class="btn-primary" @click="showAddProject = true">+ Add project</button>
+      </div>
+
+      <div v-if="editError" class="alert error">{{ editError }}</div>
+      <div v-if="saveSucceeded" class="alert success">Changes saved.</div>
+
+      <div class="domain-section">
+        <div class="field-row">
+          <span class="field-label">TLS</span>
+          <span :class="`status status-${domain.status}`">{{ tlsLabel(domain.status) }}</span>
         </div>
-        <div class="header-actions">
-          <span :class="`status status-${domain.status}`">{{ domain.status }}</span>
-          <button class="btn-ghost btn-sm" @click="openEdit">Edit</button>
-          <button class="btn-danger btn-sm" :disabled="deletingDomain" @click="deleteDomain">
-            {{ deletingDomain ? 'Deleting…' : 'Delete domain' }}
-          </button>
-          <button class="btn-primary" @click="showAddProject = true">+ Add project</button>
+
+        <label>
+          Let's Encrypt email
+          <input v-model="editEmail" type="email" />
+        </label>
+
+        <div class="dns-check">
+          <div class="dns-row">
+            <span class="dns-label">{{ domain.hostname }}</span>
+            <span v-if="dnsResult === null" class="dns-status dns-checking">checking…</span>
+            <span v-else-if="dnsResult.resolves" class="dns-status dns-ok">
+              resolves → {{ dnsResult.addresses.join(', ') }}
+            </span>
+            <span v-else class="dns-status dns-fail">DNS not resolving</span>
+            <button type="button" class="btn-recheck" @click="checkDns">↻</button>
+          </div>
+          <p class="dns-hint">DNS must point to this server before deploying.</p>
         </div>
       </div>
+
+      <h2 class="section-title">Projects</h2>
 
       <div v-if="domainProjects.length === 0" class="empty-state">
         <p>No projects yet. Add one to deploy an app to this domain.</p>
         <button class="btn-primary mt-1" @click="showAddProject = true">Add project</button>
       </div>
-
       <div v-else class="project-list">
         <RouterLink v-for="p in domainProjects" :key="p.id" :to="`/projects/${p.id}`" class="project-card">
           <div class="project-left">
@@ -39,40 +64,15 @@
           </div>
         </RouterLink>
       </div>
+
+      <div class="danger-zone">
+        <h2>Danger zone</h2>
+        <p class="danger-desc">Deleting this domain removes all its routes. This cannot be undone.</p>
+        <button class="btn-danger" :disabled="deletingDomain" @click="deleteDomain">
+          {{ deletingDomain ? 'Deleting…' : 'Delete domain' }}
+        </button>
+      </div>
     </template>
-
-    <!-- Edit domain modal -->
-    <div v-if="showEdit" class="modal-backdrop" @click.self="showEdit = false">
-      <form class="modal" @submit.prevent="saveEdit">
-        <h2>Edit domain</h2>
-        <div v-if="editError" class="alert error">{{ editError }}</div>
-
-        <div class="dns-check">
-          <div class="dns-row">
-            <span class="dns-label">{{ domain?.hostname }}</span>
-            <span v-if="dnsResult === null" class="dns-status dns-checking">checking…</span>
-            <span v-else-if="dnsResult.resolves" class="dns-status dns-ok">
-              resolves → {{ dnsResult.addresses.join(', ') }}
-            </span>
-            <span v-else class="dns-status dns-fail">DNS not resolving</span>
-            <button type="button" class="btn-recheck" @click="checkDns">↻</button>
-          </div>
-          <p class="dns-hint">DNS must point to this server before deploying.</p>
-        </div>
-
-        <label>
-          Let's Encrypt email
-          <input v-model="editEmail" type="email" required />
-        </label>
-
-        <div class="modal-actions">
-          <button type="button" class="btn-ghost" @click="showEdit = false">Cancel</button>
-          <button type="submit" class="btn-primary" :disabled="editSaving">
-            {{ editSaving ? 'Saving…' : 'Save' }}
-          </button>
-        </div>
-      </form>
-    </div>
 
     <!-- Add project modal -->
     <div v-if="showAddProject" class="modal-backdrop" @click.self="showAddProject = false">
@@ -168,22 +168,14 @@ const repoLoadError = ref('')
 const repoInstallations = ref(0)
 const repoInstallUrl = ref('')
 
-// ── Edit domain ───────────────────────────────────────────────────────────────
-const showEdit = ref(false)
+// ── Inline domain edit ────────────────────────────────────────────────────────
 const editEmail = ref('')
 const editSaving = ref(false)
 const editError = ref('')
+const saveSucceeded = ref(false)
 const deletingDomain = ref(false)
 type DnsResult = { resolves: boolean; addresses: string[] } | null
 const dnsResult = ref<DnsResult>(null)
-
-function openEdit() {
-  editEmail.value = domain.value?.letsEncryptEmail ?? ''
-  editError.value = ''
-  dnsResult.value = null
-  showEdit.value = true
-  checkDns()
-}
 
 async function checkDns() {
   if (!domain.value) return
@@ -193,10 +185,12 @@ async function checkDns() {
 
 async function saveEdit() {
   editError.value = ''
+  saveSucceeded.value = false
   editSaving.value = true
   try {
     await trpc.domains.update.mutate({ id: domainId, letsEncryptEmail: editEmail.value })
-    showEdit.value = false
+    saveSucceeded.value = true
+    setTimeout(() => { saveSucceeded.value = false }, 3000)
     await fetchDomain()
   } catch (e: unknown) {
     editError.value = (e as { message?: string })?.message ?? 'Failed to save'
@@ -273,6 +267,7 @@ async function fetchDomain() {
   error.value = ''
   try {
     domain.value = await trpc.domains.get.query({ id: domainId })
+    editEmail.value = domain.value.letsEncryptEmail ?? ''
   } catch (e: unknown) {
     error.value = (e as { message?: string })?.message ?? 'Failed to load domain'
   } finally {
@@ -356,6 +351,15 @@ async function addProject() {
   }
 }
 
+function tlsLabel(status: string) {
+  const labels: Record<string, string> = {
+    pending: 'Obtaining certificate…',
+    active:  'HTTPS active',
+    error:   'Certificate error',
+  }
+  return labels[status] ?? status
+}
+
 function relativeTime(ts: string | Date) {
   const diff = Date.now() - new Date(ts).getTime()
   const m = Math.floor(diff / 60000)
@@ -375,21 +379,17 @@ watch(showAddProject, async (v) => {
   await loadRepoSuggestions()
 })
 
-onMounted(fetchDomain)
+onMounted(async () => {
+  await fetchDomain()
+  checkDns()
+})
 </script>
 
 <style scoped>
-.page-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  margin-bottom: 2rem;
-}
-
 .breadcrumb {
   font-size: 0.8rem;
   color: var(--text-muted);
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
 }
 
 .breadcrumb a {
@@ -404,18 +404,46 @@ onMounted(fetchDomain)
 h1 {
   font-size: 1.4rem;
   font-weight: 600;
+  margin-bottom: 1.25rem;
 }
 
-.header-actions {
+.field-row {
   display: flex;
   align-items: center;
+  gap: 0.6rem;
+}
+
+.field-label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  min-width: 4rem;
+}
+
+.page-actions {
+  display: flex;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.domain-section {
+  display: flex;
+  flex-direction: column;
   gap: 1rem;
+  margin-bottom: 2rem;
+  max-width: 540px;
+}
+
+.section-title {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 1rem;
 }
 
 .project-list {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+  margin-bottom: 2rem;
 }
 
 .project-card {
@@ -457,6 +485,25 @@ h1 {
   color: var(--text-muted);
 }
 
+.danger-zone {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-default);
+}
+
+.danger-zone h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--status-err-text);
+}
+
+.danger-desc {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
 .status {
   font-size: 0.75rem;
   padding: 0.2rem 0.5rem;
@@ -475,7 +522,7 @@ h1 {
 
 .empty-state {
   color: var(--text-muted);
-  padding: 3rem 0;
+  padding: 2rem 0;
 }
 
 .mt-1 {
@@ -490,6 +537,16 @@ h1 {
   background: var(--status-err-bg);
   border: 1px solid var(--status-err-border);
   color: var(--status-err-text);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
+
+.alert.success {
+  background: var(--status-ok-bg);
+  border: 1px solid var(--status-ok-text);
+  color: var(--status-ok-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   font-size: 0.85rem;
@@ -622,11 +679,6 @@ select:focus {
 .btn-danger:disabled {
   opacity: 0.5;
   cursor: not-allowed;
-}
-
-.btn-sm {
-  padding: 0.25rem 0.6rem;
-  font-size: 0.8rem;
 }
 
 .dns-check {
