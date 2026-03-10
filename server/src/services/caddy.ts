@@ -13,6 +13,7 @@
  */
 
 import { db } from "../lib/db.js";
+import { resolvePublicSiteUrl } from "./siteUrl.js";
 import tls from "node:tls";
 
 const CADDY_ADMIN_URL = process.env.CADDY_ADMIN_URL ?? "http://caddy:2019";
@@ -300,15 +301,18 @@ function appendProbeSiteBlock(
 }
 
 export async function buildCaddyfile(): Promise<string> {
-  const domains = await db.domain.findMany({
-    orderBy: { createdAt: "asc" },
-    include: {
-      routes: {
-        orderBy: { createdAt: "asc" },
-        include: { project: true },
+  const [domains, siteUrlResolution] = await Promise.all([
+    db.domain.findMany({
+      orderBy: { createdAt: "asc" },
+      include: {
+        routes: {
+          orderBy: { createdAt: "asc" },
+          include: { project: true },
+        },
       },
-    },
-  });
+    }),
+    resolvePublicSiteUrl(),
+  ]);
 
   const lines: string[] = [];
 
@@ -318,8 +322,13 @@ export async function buildCaddyfile(): Promise<string> {
   lines.push("}");
   lines.push("");
 
-  // Management site (sitey control panel + API)
-  const siteyDomain = process.env.SITEY_DOMAIN;
+  // Management site (sitey control panel + API).
+  // Prefer SITEY_DOMAIN env var; fall back to PublicSiteUrl (DB/wildcard/env).
+  const siteyDomain =
+    process.env.SITEY_DOMAIN ||
+    (siteUrlResolution.effectiveUrl
+      ? new URL(siteUrlResolution.effectiveUrl).hostname
+      : null);
   const siteyEmail = process.env.SITEY_EMAIL;
   const mgmtHost = siteyDomain || ":80";
   const mgmtHostname = siteyDomain ? sanitizeDnsName(siteyDomain) : null;
@@ -350,6 +359,15 @@ export async function buildCaddyfile(): Promise<string> {
   appendAdminHandlers(lines);
   lines.push("}");
   lines.push("");
+
+  // Always keep a plain HTTP fallback so local/dev access works without TLS.
+  // When mgmtHost is already :80 this would be a duplicate, so skip it.
+  if (mgmtHost !== ":80") {
+    lines.push(":80 {");
+    appendAdminHandlers(lines);
+    lines.push("}");
+    lines.push("");
+  }
 
   // User domains.
   // For wildcard domains, we emit concrete host blocks per route subdomain
