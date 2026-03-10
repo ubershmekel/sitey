@@ -6,14 +6,14 @@
 
 type Job = {
   id: string
-  projectId: string
+  projectId: number
   deploymentId: string
   run: () => Promise<void>
 }
 
 class DeploymentQueue {
   private queue: Job[] = []
-  private running = new Set<string>() // projectIds currently building
+  private running = new Set<number>() // projectIds currently building
 
   enqueue(job: Job) {
     this.queue.push(job)
@@ -37,11 +37,11 @@ class DeploymentQueue {
     }
   }
 
-  isRunning(projectId: string) {
+  isRunning(projectId: number) {
     return this.running.has(projectId)
   }
 
-  queuedFor(projectId: string) {
+  queuedFor(projectId: number) {
     return this.queue.filter(j => j.projectId === projectId).length
   }
 }

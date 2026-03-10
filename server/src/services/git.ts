@@ -4,24 +4,24 @@ import fs from "node:fs";
 
 const DATA_ROOT = process.env.DATA_ROOT ?? "/opt/sitey";
 
-export function projectRootPath(projectId: string): string {
-  return path.join(DATA_ROOT, "projects", projectId);
+export function projectRootPath(projectId: number): string {
+  return path.join(DATA_ROOT, "projects", String(projectId));
 }
 
-export function projectRepoPath(projectId: string): string {
+export function projectRepoPath(projectId: number): string {
   return path.join(projectRootPath(projectId), "repo");
 }
 
-export function projectLogsDir(projectId: string): string {
+export function projectLogsDir(projectId: number): string {
   return path.join(projectRootPath(projectId), "logs");
 }
 
-export function projectDockerfilePath(projectId: string): string {
+export function projectDockerfilePath(projectId: number): string {
   return path.join(projectRootPath(projectId), "Dockerfile");
 }
 
 export function deploymentLogPath(
-  projectId: string,
+  projectId: number,
   deploymentId: string,
 ): string {
   return path.join(projectLogsDir(projectId), `${deploymentId}.log`);
@@ -48,7 +48,7 @@ export async function cloneOrPull(opts: {
   repoOwner: string;
   repoName: string;
   branch: string;
-  projectId: string;
+  projectId: number;
   onLog: (line: string) => void;
 }): Promise<{ sha: string; message: string }> {
   const { repoOwner, repoName, branch, projectId, onLog } = opts;

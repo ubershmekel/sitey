@@ -182,7 +182,7 @@ type Domain = Awaited<ReturnType<typeof trpc.domains.list.query>>[number]
 
 const route = useRoute()
 const router = useRouter()
-const projectId = route.params.id as string
+const projectId = Number(route.params.id)
 
 const project = ref<Project | null>(null)
 const domains = ref<Pick<Domain, 'id' | 'hostname'>[]>([])
@@ -194,13 +194,13 @@ const deleting = ref(false)
 const routeSaving = ref(false)
 const routeError = ref('')
 const webhookInfo = ref<WebhookInfo | null>(null)
-const webhookDomainId = ref<string | null>(null)
+const webhookDomainId = ref<number | null>(null)
 const selectedDeployId = ref<string | null>(null)
 const logLines = ref<string[]>([])
 const logBox = ref<HTMLElement | null>(null)
 
 const newRoute = ref({
-  domainId: '',
+  domainId: null as number | null,
   pathPrefix: '',
 })
 
@@ -284,7 +284,7 @@ async function addRoute() {
   try {
     await trpc.projects.addRoute.mutate({
       projectId,
-      domainId: newRoute.value.domainId,
+      domainId: newRoute.value.domainId ?? undefined,
       pathPrefix: normalizePathPrefix(newRoute.value.pathPrefix),
     })
     newRoute.value.pathPrefix = ''

@@ -4,14 +4,14 @@ WORKDIR /app
 # Install build tools for native modules (argon2)
 RUN apk add --no-cache python3 make g++ git openssl
 
-# Dependencies
+# Dependencies — skip prisma's postinstall generate; we run it explicitly below.
 FROM base AS deps
 COPY package*.json ./
-COPY prisma ./prisma/
-RUN npm install
+RUN PRISMA_GENERATE_SKIP_AUTOINSTALL=true npm install
 
 # Development stage — src is mounted as a volume at runtime
 FROM deps AS dev
+COPY prisma ./prisma/
 RUN npx prisma generate
 ENV NODE_ENV=development
 EXPOSE 3001
@@ -21,6 +21,7 @@ CMD ["npx", "tsx", "watch", "src/index.ts"]
 
 # Build
 FROM deps AS builder
+COPY prisma ./prisma/
 COPY src ./src
 COPY tsconfig.json ./
 RUN npm run build

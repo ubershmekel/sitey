@@ -40,7 +40,7 @@ export async function createNetworkIfMissing(): Promise<void> {
 // ── Image build ───────────────────────────────────────────────────────────────
 
 export async function buildImage(opts: {
-  projectId: string;
+  projectId: number;
   contextPath: string;
   tag: string;
   dockerfile: string;
@@ -54,7 +54,7 @@ export async function buildImage(opts: {
 
   const stream = await docker.buildImage(
     { context: contextPath, src: ["."] },
-    { t: tag, dockerfile, labels: { "sitey.project": projectId } },
+    { t: tag, dockerfile, labels: { "sitey.project": String(projectId) } },
   );
 
   await new Promise<void>((resolve, reject) => {
@@ -99,7 +99,7 @@ export async function runOrReplaceContainer(opts: {
 
   const labels: Record<string, string> = {
     "sitey.managed": "true",
-    "sitey.project": project.id,
+    "sitey.project": String(project.id),
   };
   const env = Object.entries(envVars).map(([k, v]) => `${k}=${v}`);
 
@@ -161,7 +161,7 @@ export async function stopAndRemoveContainer(
 // ── Prune old images ──────────────────────────────────────────────────────────
 
 export async function pruneProjectImages(
-  projectId: string,
+  projectId: number,
   keepTag: string,
 ): Promise<void> {
   const images = await docker.listImages({

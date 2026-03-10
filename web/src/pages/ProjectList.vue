@@ -143,7 +143,7 @@ const form = ref({
   githubUrl: '',
   repoOwner: '',
   repoName: '',
-  domainId: '',
+  domainId: null as number | null,
   branch: 'main',
   buildCommand: '',
   outputDir: '',
@@ -257,7 +257,7 @@ async function addProject() {
     if (form.value.domainId) {
       await trpc.projects.addRoute.mutate({
         projectId: created.id,
-        domainId: form.value.domainId,
+        domainId: form.value.domainId ?? undefined,
       })
     }
     showAdd.value = false

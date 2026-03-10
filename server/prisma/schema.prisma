@@ -17,7 +17,7 @@ model User {
 }
 
 model Domain {
-  id                     String         @id @default(cuid())
+  id                     Int            @id @default(autoincrement())
   hostname               String         @unique
   letsEncryptEmail       String
   status                 String         @default("pending") // pending | active | error
@@ -30,7 +30,7 @@ model Domain {
 }
 
 model Project {
-  id            String         @id @default(cuid())
+  id            Int            @id @default(autoincrement())
   name          String
 
   // GitHub source
@@ -79,10 +79,10 @@ model Project {
 //   domain=set, pathPrefix="/blog"                     -> example.com/blog/
 model ProjectRoute {
   id          String   @id @default(cuid())
-  projectId   String
+  projectId   Int
   project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
-  domainId    String?
+  domainId    Int?
   domain      Domain?  @relation(fields: [domainId], references: [id], onDelete: Cascade)
 
   subdomain   String   @default("") // used when domain.hostname starts with "*."
@@ -98,7 +98,7 @@ model ProjectRoute {
 
 model Deployment {
   id            String    @id @default(cuid())
-  projectId     String
+  projectId     Int
   project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
 
   status        String    @default("queued") // queued | building | running | success | failed

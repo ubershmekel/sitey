@@ -9,7 +9,7 @@ import fs from 'node:fs'
 export const deployRouter = router({
   trigger: settledProcedure
     .input(z.object({
-      projectId: z.string(),
+      projectId: z.number().int(),
       commitSha: z.string().optional(),
       commitMessage: z.string().optional(),
       triggeredBy: z.enum(['manual', 'webhook']).default('manual'),
@@ -35,7 +35,7 @@ export const deployRouter = router({
 
   list: settledProcedure
     .input(z.object({
-      projectId: z.string(),
+      projectId: z.number().int(),
       limit: z.number().int().min(1).max(100).default(20),
     }))
     .query(({ input }) =>
@@ -76,7 +76,7 @@ export const deployRouter = router({
     }),
 
   queueStatus: settledProcedure
-    .input(z.object({ projectId: z.string() }))
+    .input(z.object({ projectId: z.number().int() }))
     .query(({ input }) => ({
       isRunning: deployQueue.isRunning(input.projectId),
       queued: deployQueue.queuedFor(input.projectId),

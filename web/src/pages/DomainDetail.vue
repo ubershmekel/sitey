@@ -162,7 +162,7 @@ type AppRepo = Awaited<ReturnType<typeof trpc.github.listAppRepos.query>>['repos
 
 const route = useRoute()
 const router = useRouter()
-const domainId = route.params.id as string
+const domainId = Number(route.params.id)
 
 const domain = ref<Domain | null>(null)
 const loading = ref(true)

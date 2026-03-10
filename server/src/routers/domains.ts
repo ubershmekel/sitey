@@ -33,7 +33,7 @@ export const domainsRouter = router({
   }),
 
   get: settledProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.number().int() }))
     .query(async ({ input }) => {
       const domain = await db.domain.findUnique({
         where: { id: input.id },
@@ -77,7 +77,7 @@ export const domainsRouter = router({
 
   update: settledProcedure
     .input(z.object({
-      id: z.string(),
+      id: z.number().int(),
       letsEncryptEmail: z.string().email().optional(),
       status: z.enum(['pending', 'active', 'error']).optional(),
       siteySubdomainsEnabled: z.boolean().optional(),
@@ -92,7 +92,7 @@ export const domainsRouter = router({
     }),
 
   delete: settledProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.number().int() }))
     .mutation(async ({ input }) => {
       await db.domain.delete({ where: { id: input.id } })
       // Push updated Caddy config — removes the domain block (cert will expire naturally)

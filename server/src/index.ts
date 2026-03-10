@@ -81,7 +81,7 @@ async function main() {
   app.post<{ Params: { projectId: string } }>(
     '/webhook/github/:projectId',
     async (req, reply) => {
-      const { projectId } = req.params
+      const projectId = Number(req.params.projectId)
       const signature = (req.headers['x-hub-signature-256'] ?? '') as string
       const event = (req.headers['x-github-event'] ?? '') as string
       const rawBodyStr = (req as unknown as { rawBody: string }).rawBody ?? ''

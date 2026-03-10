@@ -71,7 +71,7 @@ export const projectsRouter = router({
   ),
 
   get: settledProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.number().int() }))
     .query(async ({ input }) => {
       const project = await db.project.findUnique({
         where: { id: input.id },
@@ -134,7 +134,7 @@ export const projectsRouter = router({
   update: settledProcedure
     .input(
       z.object({
-        id: z.string(),
+        id: z.number().int(),
         branch: z.string().optional(),
         deployMode: z.enum(["server", "static"]).optional(),
         buildCommand: z.string().optional(),
@@ -160,7 +160,7 @@ export const projectsRouter = router({
     }),
 
   delete: settledProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.number().int() }))
     .mutation(async ({ input }) => {
       const project = await db.project.findUnique({ where: { id: input.id } });
       if (!project)
@@ -199,8 +199,8 @@ export const projectsRouter = router({
   addRoute: settledProcedure
     .input(
       z.object({
-        projectId: z.string(),
-        domainId: z.string().optional(),
+        projectId: z.number().int(),
+        domainId: z.number().int().optional(),
         pathPrefix: z.string().default(""),
         subdomain: z.string().default(""),
       }),
@@ -299,7 +299,7 @@ export const projectsRouter = router({
   // ── Webhook ────────────────────────────────────────────────────────────────
 
   rotateWebhookSecret: settledProcedure
-    .input(z.object({ id: z.string() }))
+    .input(z.object({ id: z.number().int() }))
     .mutation(async ({ input }) => {
       const secret = generateWebhookSecret();
       await db.project.update({
@@ -310,7 +310,7 @@ export const projectsRouter = router({
     }),
 
   getWebhookInfo: settledProcedure
-    .input(z.object({ id: z.string(), domainId: z.string().optional() }))
+    .input(z.object({ id: z.number().int(), domainId: z.string().optional() }))
     .query(async ({ input }) => {
       const project = await db.project.findUniqueOrThrow({
         where: { id: input.id },
@@ -321,11 +321,11 @@ export const projectsRouter = router({
         orderBy: { createdAt: "asc" },
       });
       const webhookDomains = domains.filter(
-        (d: { id: string; hostname: string }) => !isWildcardDomain(d.hostname),
+        (d: { id: number; hostname: string }) => !isWildcardDomain(d.hostname),
       );
       const chosen = input.domainId
         ? webhookDomains.find(
-            (d: { id: string; hostname: string }) => d.id === input.domainId,
+            (d: { id: number; hostname: string }) => d.id === input.domainId,
           )
         : webhookDomains.length === 1
           ? webhookDomains[0]

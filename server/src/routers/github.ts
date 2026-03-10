@@ -66,15 +66,15 @@ function splitOwnerRepo(fullName: string) {
 export const githubRouter = router({
   /** Returns the GitHub App manifest form data for one-click app creation */
   getManifest: settledProcedure
-    .input(z.object({ domainId: z.string().optional() }))
+    .input(z.object({ domainId: z.number().int().optional() }))
     .query(async ({ input }) => {
       const domains = await db.domain.findMany({
         select: { id: true, hostname: true },
         orderBy: { createdAt: 'asc' },
       })
-      const manifestDomains = domains.filter((d: { id: string; hostname: string }) => !isWildcardDomain(d.hostname))
+      const manifestDomains = domains.filter((d: { id: number; hostname: string }) => !isWildcardDomain(d.hostname))
       const chosen = input.domainId
-        ? manifestDomains.find((d: { id: string; hostname: string }) => d.id === input.domainId)
+        ? manifestDomains.find((d: { id: number; hostname: string }) => d.id === input.domainId)
         : manifestDomains.length === 1 ? manifestDomains[0] : null
       const siteUrl = chosen
         ? `https://${chosen.hostname}`
@@ -279,7 +279,7 @@ export const githubRouter = router({
   /** Set per-project GitHub App installation ID */
   setInstallation: settledProcedure
     .input(z.object({
-      projectId: z.string(),
+      projectId: z.number().int(),
       installationId: z.string(),
     }))
     .mutation(({ input }) =>
@@ -291,7 +291,7 @@ export const githubRouter = router({
 
   /** Returns webhook info for manual GitHub webhook setup */
   getWebhookInfo: settledProcedure
-    .input(z.object({ projectId: z.string(), domainId: z.string().optional() }))
+    .input(z.object({ projectId: z.number().int(), domainId: z.string().optional() }))
     .query(async ({ input }) => {
       const project = await db.project.findUniqueOrThrow({
         where: { id: input.projectId },
@@ -301,9 +301,9 @@ export const githubRouter = router({
         select: { id: true, hostname: true },
         orderBy: { createdAt: 'asc' },
       })
-      const webhookDomains = domains.filter((d: { id: string; hostname: string }) => !isWildcardDomain(d.hostname))
+      const webhookDomains = domains.filter((d: { id: number; hostname: string }) => !isWildcardDomain(d.hostname))
       const chosen = input.domainId
-        ? webhookDomains.find((d: { id: string; hostname: string }) => d.id === input.domainId)
+        ? webhookDomains.find((d: { id: number; hostname: string }) => d.id === input.domainId)
         : webhookDomains.length === 1 ? webhookDomains[0] : null
       const baseUrl = chosen
         ? `https://${chosen.hostname}`
