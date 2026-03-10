@@ -41,13 +41,13 @@
           <p v-if="repoInstallations === 0" class="section-hint warn">
             App is created but not installed on any account or org yet —
             project autocomplete won't see any repositories.
-            <a v-if="repoInstallUrl" :href="repoInstallUrl" target="_blank" rel="noopener">Install app on GitHub →</a>
+            <a v-if="appConfig?.installUrl" :href="appConfig.installUrl" target="_blank" rel="noopener">Install app on GitHub →</a>
           </p>
         </template>
         <p v-else class="section-hint warn">{{ repoStatusError }}</p>
 
         <div class="action-row">
-          <a v-if="repoInstallUrl && repoInstallations > 0" :href="repoInstallUrl" target="_blank" rel="noopener" class="btn-ghost">
+          <a v-if="appConfig?.installUrl" :href="appConfig.installUrl" target="_blank" rel="noopener" class="btn-ghost">
             Manage on GitHub
           </a>
           <button class="btn-danger btn-sm" @click="clearAppConfig">Disconnect</button>
@@ -72,13 +72,7 @@
           can redirect back. Use the manual form below for local dev, or add a domain first.
         </p>
 
-        <form
-          v-if="manifest"
-          :action="manifest.actionUrl"
-          method="post"
-          target="_blank"
-          class="auto-form"
-        >
+        <form v-if="manifest" :action="manifest.actionUrl" method="post" target="_blank" class="auto-form">
           <input type="hidden" name="manifest" :value="manifest.manifest" />
           <button type="submit" class="btn-primary">
             Create GitHub App automatically →
@@ -134,7 +128,6 @@ const repoStatusLoading = ref(false)
 const repoStatusError = ref('')
 const repoInstallations = ref(0)
 const repoCount = ref(0)
-const repoInstallUrl = ref('')
 const appCreated = computed(() => route.query.app_created === '1')
 const manifestLocalhost = computed(() => {
   if (selectedDomainId.value) {
@@ -164,11 +157,9 @@ async function fetchRepoInfo() {
     const info: AppRepoInfo = await trpc.github.listAppRepos.query()
     repoInstallations.value = info.installations
     repoCount.value = info.repos.length
-    repoInstallUrl.value = info.app.installUrl ?? ''
   } catch (e: unknown) {
     repoInstallations.value = 0
     repoCount.value = 0
-    repoInstallUrl.value = ''
     repoStatusError.value = (e as { message?: string })?.message ?? 'Could not read GitHub App installation status.'
   } finally {
     repoStatusLoading.value = false
@@ -185,7 +176,6 @@ async function fetchAppConfig() {
     } else {
       repoInstallations.value = 0
       repoCount.value = 0
-      repoInstallUrl.value = ''
       repoStatusError.value = ''
     }
   } catch { /* ignore */ }
@@ -218,7 +208,6 @@ async function clearAppConfig() {
   app.appId = ''; app.privateKey = ''; app.webhookSecret = ''
   repoInstallations.value = 0
   repoCount.value = 0
-  repoInstallUrl.value = ''
   repoStatusError.value = ''
 }
 
@@ -226,8 +215,14 @@ onMounted(fetchAppConfig)
 </script>
 
 <style scoped>
-.page-header { margin-bottom: 2rem; }
-h1 { font-size: 1.4rem; font-weight: 600; }
+.page-header {
+  margin-bottom: 2rem;
+}
+
+h1 {
+  font-size: 1.4rem;
+  font-weight: 600;
+}
 
 .section {
   background: var(--bg-card);
@@ -271,7 +266,9 @@ h1 { font-size: 1.4rem; font-weight: 600; }
   line-height: 1.5;
 }
 
-.section-hint a { color: var(--brand); }
+.section-hint a {
+  color: var(--brand);
+}
 
 .section-hint.warn {
   color: var(--status-warn-text);
@@ -289,8 +286,17 @@ h1 { font-size: 1.4rem; font-weight: 600; }
   white-space: nowrap;
   flex-shrink: 0;
 }
-.badge-ok   { background: var(--status-ok-bg); color: var(--status-ok-text); }
-.badge-idle { background: var(--bg-input); color: var(--text-muted); border: 1px solid var(--border-strong); }
+
+.badge-ok {
+  background: var(--status-ok-bg);
+  color: var(--status-ok-text);
+}
+
+.badge-idle {
+  background: var(--bg-input);
+  color: var(--text-muted);
+  border: 1px solid var(--border-strong);
+}
 
 .connected-body {
   display: flex;
@@ -303,8 +309,15 @@ h1 { font-size: 1.4rem; font-weight: 600; }
   gap: 0.75rem;
   font-size: 0.85rem;
 }
-.meta-label { color: var(--text-muted); min-width: 140px; }
-.meta-value { color: var(--text-secondary); }
+
+.meta-label {
+  color: var(--text-muted);
+  min-width: 140px;
+}
+
+.meta-value {
+  color: var(--text-secondary);
+}
 
 .action-row {
   display: flex;
@@ -313,21 +326,46 @@ h1 { font-size: 1.4rem; font-weight: 600; }
 }
 
 .domain-select-row {
-  display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
 }
-.domain-label { font-size: 0.83rem; color: var(--text-muted); white-space: nowrap; }
+
+.domain-label {
+  font-size: 0.83rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .domain-select {
-  background: var(--bg-input); border: 1px solid var(--border-strong); border-radius: 6px;
-  padding: 0.45rem 0.6rem; color: var(--text-primary); font-size: 0.88rem; flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 0.45rem 0.6rem;
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  flex: 1;
 }
 
-.auto-form { margin-bottom: 1.25rem; }
+.auto-form {
+  margin-bottom: 1.25rem;
+}
 
-.manual-details { margin-top: 1rem; }
+.manual-details {
+  margin-top: 1rem;
+}
+
 .manual-details summary {
-  font-size: 0.83rem; color: var(--text-muted); cursor: pointer; user-select: none;
+  font-size: 0.83rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
 }
-.manual-details summary:hover { color: var(--text-secondary); }
+
+.manual-details summary:hover {
+  color: var(--text-secondary);
+}
 
 .settings-form {
   display: flex;
@@ -344,7 +382,9 @@ label {
   color: var(--text-secondary);
 }
 
-input, textarea, select {
+input,
+textarea,
+select {
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
@@ -355,37 +395,93 @@ input, textarea, select {
   transition: border-color 0.15s;
   font-family: inherit;
 }
-input:focus, textarea:focus { border-color: var(--brand); }
-textarea { resize: vertical; font-family: monospace; font-size: 0.82rem; }
+
+input:focus,
+textarea:focus {
+  border-color: var(--brand);
+}
+
+textarea {
+  resize: vertical;
+  font-family: monospace;
+  font-size: 0.82rem;
+}
 
 .btn-primary {
-  background: var(--brand); color: #fff; border: none; border-radius: 6px;
-  padding: 0.6rem 1.25rem; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+  background: var(--brand);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
   transition: opacity 0.15s;
 }
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary:hover:not(:disabled) { opacity: 0.85; }
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.85;
+}
 
 .btn-ghost {
-  background: none; color: var(--text-secondary); border: 1px solid var(--border-strong); border-radius: 6px;
-  padding: 0.5rem 1rem; font-size: 0.85rem; cursor: pointer; text-decoration: none;
-  display: inline-flex; align-items: center;
+  background: none;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
   transition: border-color 0.15s, color 0.15s;
 }
-.btn-ghost:hover { border-color: var(--text-muted); color: var(--text-primary); }
+
+.btn-ghost:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
 
 .btn-danger {
-  background: var(--status-err-bg); color: var(--status-err-text); border: none; border-radius: 6px;
-  padding: 0.5rem 1rem; font-size: 0.85rem; cursor: pointer;
+  background: var(--status-err-bg);
+  color: var(--status-err-text);
+  border: none;
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  cursor: pointer;
   transition: background 0.15s;
 }
-.btn-danger:hover { background: #7a2020; }
 
-.btn-sm { padding: 0.25rem 0.6rem; font-size: 0.8rem; }
+.btn-danger:hover {
+  background: #7a2020;
+}
+
+.btn-sm {
+  padding: 0.25rem 0.6rem;
+  font-size: 0.8rem;
+}
 
 .alert {
-  border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.85rem;
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
 }
-.alert.error { background: var(--status-err-bg); border: 1px solid var(--status-err-border); color: var(--status-err-text); }
-.alert.success { background: var(--status-ok-bg); border: 1px solid var(--status-ok-border); color: var(--status-ok-text); }
+
+.alert.error {
+  background: var(--status-err-bg);
+  border: 1px solid var(--status-err-border);
+  color: var(--status-err-text);
+}
+
+.alert.success {
+  background: var(--status-ok-bg);
+  border: 1px solid var(--status-ok-border);
+  color: var(--status-ok-text);
+}
 </style>

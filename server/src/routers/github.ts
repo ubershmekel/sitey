@@ -9,6 +9,7 @@ const KEYS = {
   APP_ID: 'github_app_id',
   PRIVATE_KEY: 'github_app_private_key',
   WEBHOOK_SECRET: 'github_app_webhook_secret',
+  APP_SLUG: 'github_app_slug',
 } as const
 
 const GITHUB_API_BASE = 'https://api.github.com'
@@ -114,10 +115,11 @@ export const githubRouter = router({
         const text = await res.text()
         throw new TRPCError({ code: 'BAD_REQUEST', message: `GitHub API error: ${text}` })
       }
-      const data = await res.json() as { id: number; pem: string; webhook_secret: string }
+      const data = await res.json() as { id: number; slug?: string; pem: string; webhook_secret: string }
       await setConfig(KEYS.APP_ID, String(data.id))
       await setConfig(KEYS.PRIVATE_KEY, data.pem)
       await setConfig(KEYS.WEBHOOK_SECRET, data.webhook_secret)
+      if (data.slug) await setConfig(KEYS.APP_SLUG, data.slug)
       return { ok: true, appId: String(data.id) }
     }),
 
@@ -125,7 +127,9 @@ export const githubRouter = router({
     const appId = await getConfig(KEYS.APP_ID)
     const hasPrivateKey = !!(await getConfig(KEYS.PRIVATE_KEY))
     const hasWebhookSecret = !!(await getConfig(KEYS.WEBHOOK_SECRET))
-    return { appId, hasPrivateKey, hasWebhookSecret, configured: !!appId && hasPrivateKey }
+    const appSlug = await getConfig(KEYS.APP_SLUG)
+    const installUrl = appSlug ? `https://github.com/apps/${appSlug}/installations/new` : null
+    return { appId, hasPrivateKey, hasWebhookSecret, configured: !!appId && hasPrivateKey, installUrl }
   }),
 
   setAppConfig: settledProcedure
@@ -138,12 +142,20 @@ export const githubRouter = router({
       await setConfig(KEYS.APP_ID, input.appId)
       await setConfig(KEYS.PRIVATE_KEY, input.privateKey)
       await setConfig(KEYS.WEBHOOK_SECRET, input.webhookSecret)
+      try {
+        const appJwt = createAppJwt(input.appId, input.privateKey)
+        const appRes = await githubFetch('/app', { headers: { Authorization: `Bearer ${appJwt}` } })
+        if (appRes.ok) {
+          const appData = await appRes.json() as { slug?: string }
+          if (appData.slug) await setConfig(KEYS.APP_SLUG, appData.slug)
+        }
+      } catch { /* best-effort */ }
       return { ok: true }
     }),
 
   clearAppConfig: settledProcedure.mutation(async () => {
     await db.systemConfig.deleteMany({
-      where: { key: { in: Object.values(KEYS) } },
+      where: { key: { in: Object.values(KEYS) as string[] } },
     })
     return { ok: true }
   }),
