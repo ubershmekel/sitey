@@ -109,26 +109,29 @@
         <div v-if="routeError" class="alert error mt-1">{{ routeError }}</div>
       </div>
 
-      <div v-if="project.githubMode === 'webhook' && webhookInfo" class="webhook-card">
+      <div v-if="project.githubMode === 'webhook'" class="webhook-card">
         <h2>GitHub Webhook Setup</h2>
         <p class="hint">Add this webhook in GitHub repo settings.</p>
-        <div v-if="webhookInfo.domains.length > 1" class="webhook-row">
-          <span class="wh-label">Domain</span>
-          <select v-model="webhookDomainId" @change="refetchWebhookInfo" class="domain-select">
-            <option v-for="d in webhookInfo.domains" :key="d.id" :value="d.id">{{ d.hostname }}</option>
-          </select>
-        </div>
-        <div class="webhook-row">
-          <span class="wh-label">Payload URL</span>
-          <code>{{ webhookInfo.webhookUrl }}</code>
-          <button class="btn-copy" @click="copy(webhookInfo.webhookUrl)">Copy</button>
-        </div>
-        <div class="webhook-row">
-          <span class="wh-label">Secret</span>
-          <code>{{ webhookInfo.webhookSecret }}</code>
-          <button class="btn-copy" @click="copy(webhookInfo.webhookSecret ?? '')">Copy</button>
-        </div>
-        <button class="btn-ghost mt-1" @click="rotateSecret">Rotate secret</button>
+        <p v-if="webhookError" class="hint webhook-error">{{ webhookError }}</p>
+        <template v-if="webhookInfo">
+          <div v-if="webhookInfo.domains.length > 1" class="webhook-row">
+            <span class="wh-label">Domain</span>
+            <select v-model="webhookDomainId" @change="refetchWebhookInfo" class="domain-select">
+              <option v-for="d in webhookInfo.domains" :key="d.id" :value="d.id">{{ d.hostname }}</option>
+            </select>
+          </div>
+          <div class="webhook-row">
+            <span class="wh-label">Payload URL</span>
+            <code>{{ webhookInfo.webhookUrl }}</code>
+            <button class="btn-copy" @click="copy(webhookInfo.webhookUrl)">Copy</button>
+          </div>
+          <div class="webhook-row">
+            <span class="wh-label">Secret</span>
+            <code>{{ webhookInfo.webhookSecret }}</code>
+            <button class="btn-copy" @click="copy(webhookInfo.webhookSecret ?? '')">Copy</button>
+          </div>
+          <button class="btn-ghost mt-1" @click="rotateSecret">Rotate secret</button>
+        </template>
       </div>
 
       <div class="section">
@@ -194,6 +197,7 @@ const deleting = ref(false)
 const routeSaving = ref(false)
 const routeError = ref('')
 const webhookInfo = ref<WebhookInfo | null>(null)
+const webhookError = ref('')
 const webhookDomainId = ref<number | null>(null)
 const selectedDeployId = ref<string | null>(null)
 const logLines = ref<string[]>([])
@@ -343,13 +347,19 @@ async function refreshLogs() {
 }
 
 async function refetchWebhookInfo() {
-  const info = await trpc.projects.getWebhookInfo.query({
-    id: projectId,
-    ...(webhookDomainId.value ? { domainId: webhookDomainId.value } : {}),
-  })
-  webhookInfo.value = info
-  if (!webhookDomainId.value && info.domains.length === 1) {
-    webhookDomainId.value = info.domains[0].id
+  webhookError.value = ''
+  try {
+    const info = await trpc.projects.getWebhookInfo.query({
+      id: projectId,
+      ...(webhookDomainId.value ? { domainId: webhookDomainId.value } : {}),
+    })
+    webhookInfo.value = info
+    if (!webhookDomainId.value && info.domains.length === 1) {
+      webhookDomainId.value = info.domains[0].id
+    }
+  } catch (e: unknown) {
+    webhookInfo.value = null
+    webhookError.value = (e as { message?: string })?.message ?? 'Could not resolve webhook URL.'
   }
 }
 
@@ -587,6 +597,10 @@ h1 {
   font-size: 0.82rem;
   color: var(--text-muted);
   margin-bottom: 1rem;
+}
+
+.webhook-error {
+  color: var(--status-warn-text);
 }
 
 .webhook-row {

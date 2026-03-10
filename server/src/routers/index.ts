@@ -5,6 +5,7 @@ import { projectsRouter } from './projects.js'
 import { deployRouter } from './deploy.js'
 import { githubRouter } from './github.js'
 import { setupRouter } from './setup.js'
+import { systemRouter } from './system.js'
 
 export const appRouter = router({
   setup: setupRouter,
@@ -13,6 +14,7 @@ export const appRouter = router({
   projects: projectsRouter,
   deploy: deployRouter,
   github: githubRouter,
+  system: systemRouter,
 })
 
 export type AppRouter = typeof appRouter

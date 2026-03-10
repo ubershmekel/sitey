@@ -3,6 +3,7 @@ import { TRPCError } from '@trpc/server'
 import jwt from 'jsonwebtoken'
 import { router, settledProcedure } from '../trpc.js'
 import { db } from '../lib/db.js'
+import { normalizeSiteUrl, resolvePublicSiteUrl } from '../services/siteUrl.js'
 
 // GitHub App credentials are stored in SystemConfig with these keys:
 const KEYS = {
@@ -63,6 +64,33 @@ function splitOwnerRepo(fullName: string) {
   }
 }
 
+async function resolveBaseUrl(
+  hostname?: string,
+): Promise<{ url: string; source: 'domain' | 'config' | 'wildcard' | 'env' }> {
+  if (hostname) {
+    const fromDomain = normalizeSiteUrl(`https://${hostname}`)
+    if (!fromDomain) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `Invalid domain hostname: ${hostname}`,
+      })
+    }
+    return { url: fromDomain, source: 'domain' }
+  }
+
+  const resolved = await resolvePublicSiteUrl()
+  if (!resolved.effectiveUrl || resolved.source === 'none') {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Public Site URL is not configured. Configure it in Settings or enable Sitey subdomains on a wildcard domain.',
+    })
+  }
+  return {
+    url: resolved.effectiveUrl,
+    source: resolved.source,
+  }
+}
+
 export const githubRouter = router({
   /** Returns the GitHub App manifest form data for one-click app creation */
   getManifest: settledProcedure
@@ -72,13 +100,13 @@ export const githubRouter = router({
         select: { id: true, hostname: true },
         orderBy: { createdAt: 'asc' },
       })
+      const hasWildcardDomains = domains.some((d: { hostname: string }) => isWildcardDomain(d.hostname))
       const manifestDomains = domains.filter((d: { id: number; hostname: string }) => !isWildcardDomain(d.hostname))
       const chosen = input.domainId
         ? manifestDomains.find((d: { id: number; hostname: string }) => d.id === input.domainId)
         : manifestDomains.length === 1 ? manifestDomains[0] : null
-      const siteUrl = chosen
-        ? `https://${chosen.hostname}`
-        : (process.env.SITEY_URL ?? 'http://localhost:3001').replace(/\/$/, '')
+      const baseUrl = await resolveBaseUrl(chosen?.hostname)
+      const siteUrl = baseUrl.url
       const hostname = (() => { try { return new URL(siteUrl).hostname } catch { return 'sitey' } })()
       const name = `sitey-${hostname}`.slice(0, 34)
       const manifest = {
@@ -94,6 +122,9 @@ export const githubRouter = router({
         actionUrl: 'https://github.com/settings/apps/new',
         manifest: JSON.stringify(manifest),
         domains: manifestDomains,
+        hasWildcardDomains,
+        effectiveSiteUrl: siteUrl,
+        effectiveSiteUrlSource: baseUrl.source,
       }
     }),
 
@@ -305,15 +336,14 @@ export const githubRouter = router({
       const chosen = input.domainId
         ? webhookDomains.find((d: { id: number; hostname: string }) => d.id === input.domainId)
         : webhookDomains.length === 1 ? webhookDomains[0] : null
-      const baseUrl = chosen
-        ? `https://${chosen.hostname}`
-        : (process.env.SITEY_URL ?? 'http://localhost:3001').replace(/\/$/, '')
+      const baseUrl = await resolveBaseUrl(chosen?.hostname)
       return {
-        webhookUrl: `${baseUrl}/webhook/github/${input.projectId}`,
+        webhookUrl: `${baseUrl.url}/webhook/github/${input.projectId}`,
         webhookSecret: project.webhookSecret,
         contentType: 'application/json',
         events: ['push'],
         domains: webhookDomains,
+        effectiveSiteUrlSource: baseUrl.source,
       }
     }),
 })

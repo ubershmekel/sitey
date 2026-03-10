@@ -9,6 +9,7 @@ import { reloadCaddy } from "../services/caddy.js";
 import { enqueueDeployment } from "../services/deployment.js";
 import { stopAndRemoveContainer, pruneProjectImages } from "../services/docker.js";
 import { projectRootPath } from "../services/git.js";
+import { normalizeSiteUrl, resolvePublicSiteUrl } from "../services/siteUrl.js";
 
 const SUBDOMAIN_LABEL_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
 const randomSubdomainSuffix = customAlphabet(
@@ -18,6 +19,29 @@ const randomSubdomainSuffix = customAlphabet(
 
 function isWildcardDomain(hostname: string): boolean {
   return hostname.startsWith("*.");
+}
+
+async function resolveWebhookBaseUrl(hostname?: string): Promise<string> {
+  if (hostname) {
+    const fromDomain = normalizeSiteUrl(`https://${hostname}`);
+    if (!fromDomain) {
+      throw new TRPCError({
+        code: "BAD_REQUEST",
+        message: `Invalid domain hostname: ${hostname}`,
+      });
+    }
+    return fromDomain;
+  }
+
+  const resolved = await resolvePublicSiteUrl();
+  if (!resolved.effectiveUrl) {
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        "Public Site URL is not configured. Configure it in Settings or enable Sitey subdomains on a wildcard domain.",
+    });
+  }
+  return resolved.effectiveUrl;
 }
 
 function slugifySubdomainSeed(input: string): string {
@@ -330,9 +354,7 @@ export const projectsRouter = router({
         : webhookDomains.length === 1
           ? webhookDomains[0]
           : null;
-      const baseUrl = chosen
-        ? `https://${chosen.hostname}`
-        : `http://localhost:3001`;
+      const baseUrl = await resolveWebhookBaseUrl(chosen?.hostname);
       return {
         webhookUrl: `${baseUrl}/webhook/github/${input.id}`,
         webhookSecret: project.webhookSecret,

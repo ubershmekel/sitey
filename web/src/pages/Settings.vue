@@ -4,6 +4,50 @@
       <h1>Settings</h1>
     </div>
 
+    <!-- Public Site URL -->
+    <section class="settings-section">
+      <h2>Public Sitey URL</h2>
+      <p class="section-hint">
+        Used for GitHub callback URLs, webhook setup links, and admin-facing links.
+        This must be publicly reachable.
+      </p>
+
+      <div class="meta-row">
+        <span class="meta-label">Effective URL (in use)</span>
+        <span class="meta-value">{{ publicSiteUrlInfo?.effectiveUrl ?? 'Not configured' }}</span>
+      </div>
+      <div class="meta-row">
+        <span class="meta-label">Source</span>
+        <span class="meta-value">{{ publicUrlSourceLabel }}</span>
+      </div>
+      <div class="meta-row" v-if="publicSiteUrlInfo?.wildcardUrl">
+        <span class="meta-label">Wildcard candidate</span>
+        <span class="meta-value">{{ publicSiteUrlInfo.wildcardUrl }}</span>
+      </div>
+      <p class="section-hint compact" v-if="publicSiteUrlInfo?.wildcardUrl">
+        Wildcard candidate is the automatic URL derived from your wildcard domain. Effective URL is what Sitey is
+        currently using.
+      </p>
+
+      <form @submit.prevent="savePublicSiteUrl" class="settings-form" style="margin-top:1rem">
+        <div v-if="publicSiteUrlError" class="alert error">{{ publicSiteUrlError }}</div>
+        <div v-if="publicSiteUrlSuccess" class="alert success">Public Site URL saved.</div>
+        <label>
+          Override URL
+          <input v-model="publicSiteUrl.value" type="text" placeholder="https://sitey.example.com" autocomplete="off" />
+        </label>
+        <div class="button-row">
+          <button type="submit" class="btn-primary" :disabled="publicSiteUrl.saving">
+            {{ publicSiteUrl.saving ? 'Saving...' : 'Save URL' }}
+          </button>
+          <button v-if="publicSiteUrlInfo?.configuredUrl" type="button" class="btn-ghost"
+            :disabled="publicSiteUrl.saving" @click="clearPublicSiteUrl">
+            Use automatic URL
+          </button>
+        </div>
+      </form>
+    </section>
+
     <!-- Change Password -->
     <section class="settings-section">
       <h2>Change password</h2>
@@ -33,7 +77,8 @@
       <h2>Active Caddy config</h2>
       <p class="section-hint">The Caddyfile currently pushed to Caddy. Useful for debugging HTTPS / routing issues.</p>
       <button class="btn-ghost" @click="loadCaddyfile">{{ caddyfileLoading ? 'Loading…' : 'Show config' }}</button>
-      <pre v-if="caddyfile" class="block-code" style="margin-top:0.75rem;white-space:pre;overflow-x:auto">{{ caddyfile }}</pre>
+      <pre v-if="caddyfile" class="block-code"
+        style="margin-top:0.75rem;white-space:pre;overflow-x:auto">{{ caddyfile }}</pre>
     </section>
 
     <!-- About -->
@@ -47,12 +92,65 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import Layout from '../components/Layout.vue'
 import { trpc } from '../trpc'
 import { useAuthStore } from '../stores/auth'
 
 const auth = useAuthStore()
+type PublicSiteUrlInfo = Awaited<ReturnType<typeof trpc.system.getPublicSiteUrl.query>>
+
+const publicSiteUrlInfo = ref<PublicSiteUrlInfo | null>(null)
+const publicSiteUrl = reactive({ value: '', saving: false })
+const publicSiteUrlError = ref('')
+const publicSiteUrlSuccess = ref(false)
+
+const publicUrlSourceLabel = computed(() => {
+  const source = publicSiteUrlInfo.value?.source
+  if (source === 'config') return 'Saved override'
+  if (source === 'wildcard') return 'Wildcard domain (sitey.<base>)'
+  if (source === 'env') return 'SITEY_URL environment variable'
+  return 'Not resolved'
+})
+
+async function loadPublicSiteUrl() {
+  try {
+    const info = await trpc.system.getPublicSiteUrl.query()
+    publicSiteUrlInfo.value = info
+    publicSiteUrl.value = info.configuredUrl ?? ''
+  } catch (e: unknown) {
+    publicSiteUrlError.value = (e as { message?: string })?.message ?? 'Failed to load Public Site URL.'
+  }
+}
+
+async function savePublicSiteUrl() {
+  publicSiteUrlError.value = ''
+  publicSiteUrlSuccess.value = false
+  publicSiteUrl.saving = true
+  try {
+    await trpc.system.setPublicSiteUrl.mutate({ url: publicSiteUrl.value })
+    publicSiteUrlSuccess.value = true
+    await loadPublicSiteUrl()
+  } catch (e: unknown) {
+    publicSiteUrlError.value = (e as { message?: string })?.message ?? 'Failed to save Public Site URL.'
+  } finally {
+    publicSiteUrl.saving = false
+  }
+}
+
+async function clearPublicSiteUrl() {
+  publicSiteUrlError.value = ''
+  publicSiteUrlSuccess.value = false
+  publicSiteUrl.saving = true
+  try {
+    await trpc.system.clearPublicSiteUrl.mutate()
+    await loadPublicSiteUrl()
+  } catch (e: unknown) {
+    publicSiteUrlError.value = (e as { message?: string })?.message ?? 'Failed to clear Public Site URL.'
+  } finally {
+    publicSiteUrl.saving = false
+  }
+}
 
 // ── Password change ───────────────────────────────────────────────────────────
 const pw = reactive({ current: '', next: '', confirm: '', saving: false })
@@ -88,6 +186,8 @@ async function loadCaddyfile() {
   }
 }
 
+onMounted(loadPublicSiteUrl)
+
 </script>
 
 <style scoped>
@@ -119,6 +219,31 @@ h1 {
   color: var(--text-muted);
   margin-bottom: 1.25rem;
   margin-top: -0.5rem;
+}
+
+.meta-row {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  align-items: start;
+  gap: 1rem;
+  margin-bottom: 0.35rem;
+  font-size: 0.84rem;
+}
+
+.meta-label {
+  color: var(--text-muted);
+}
+
+.meta-value {
+  color: var(--text-primary);
+  font-family: monospace;
+  word-break: break-all;
+  text-align: left;
+}
+
+.section-hint.compact {
+  margin-top: 0.5rem;
+  margin-bottom: 0;
 }
 
 .settings-form {
@@ -168,6 +293,12 @@ textarea {
 .form-row {
   display: flex;
   gap: 0.75rem;
+}
+
+.button-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
 }
 
 .app-status {
@@ -252,25 +383,59 @@ textarea {
   border-radius: 6px;
   padding: 0.5rem 0.75rem;
 }
-.section-hint.warn code { background: #2a2200; border-radius: 3px; padding: 0.1em 0.3em; font-size: 0.9em; }
-.section-hint a { color: var(--brand); }
+
+.section-hint.warn code {
+  background: #2a2200;
+  border-radius: 3px;
+  padding: 0.1em 0.3em;
+  font-size: 0.9em;
+}
+
+.section-hint a {
+  color: var(--brand);
+}
 
 .domain-select-row {
-  display: flex; align-items: center; gap: 0.75rem; margin-bottom: 1.25rem;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
 }
-.domain-label { font-size: 0.83rem; color: var(--text-muted); white-space: nowrap; }
+
+.domain-label {
+  font-size: 0.83rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
 .domain-select {
-  background: var(--bg-input); border: 1px solid var(--border-strong); border-radius: 6px;
-  padding: 0.45rem 0.6rem; color: var(--text-primary); font-size: 0.88rem; flex: 1;
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 0.45rem 0.6rem;
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  flex: 1;
 }
 
-.auto-form { margin-bottom: 1.25rem; }
+.auto-form {
+  margin-bottom: 1.25rem;
+}
 
-.manual-details { margin-top: 1rem; }
+.manual-details {
+  margin-top: 1rem;
+}
+
 .manual-details summary {
-  font-size: 0.83rem; color: var(--text-muted); cursor: pointer; user-select: none;
+  font-size: 0.83rem;
+  color: var(--text-muted);
+  cursor: pointer;
+  user-select: none;
 }
-.manual-details summary:hover { color: var(--text-secondary); }
+
+.manual-details summary:hover {
+  color: var(--text-secondary);
+}
 
 .btn-sm {
   padding: 0.25rem 0.6rem;
@@ -278,11 +443,20 @@ textarea {
 }
 
 .btn-ghost {
-  background: none; color: var(--text-secondary); border: 1px solid var(--border-strong); border-radius: 6px;
-  padding: 0.5rem 1rem; font-size: 0.85rem; cursor: pointer;
+  background: none;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
-.btn-ghost:hover { border-color: var(--text-muted); color: var(--text-primary); }
+
+.btn-ghost:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
 
 .about p {
   font-size: 0.85rem;

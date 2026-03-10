@@ -67,10 +67,10 @@
           </select>
         </div>
 
-        <p class="section-hint warn" v-if="manifestLocalhost">
-          No domain configured — the automatic flow requires a publicly accessible URL so GitHub
-          can redirect back. Use the manual form below for local dev, or add a domain first.
+        <p v-if="manifest?.effectiveSiteUrl" class="section-hint">
+          Callback base URL: <code>{{ manifest.effectiveSiteUrl }}</code> (source: {{ manifest.effectiveSiteUrlSource }})
         </p>
+        <p class="section-hint warn" v-if="manifestError">{{ manifestError }}</p>
 
         <form v-if="manifest" :action="manifest.actionUrl" method="post" target="_blank" class="auto-form">
           <input type="hidden" name="manifest" :value="manifest.manifest" />
@@ -120,6 +120,7 @@ const route = useRoute()
 const appConfig = ref<AppConfig | null>(null)
 const manifest = ref<Manifest | null>(null)
 const manifestDomains = ref<{ id: number; hostname: string }[]>([])
+const manifestError = ref('')
 const selectedDomainId = ref<number | null>(null)
 const app = reactive({ appId: '', privateKey: '', webhookSecret: '', saving: false })
 const appError = ref('')
@@ -129,15 +130,9 @@ const repoStatusError = ref('')
 const repoInstallations = ref(0)
 const repoCount = ref(0)
 const appCreated = computed(() => route.query.app_created === '1')
-const manifestLocalhost = computed(() => {
-  if (selectedDomainId.value) {
-    const d = manifestDomains.value.find(x => x.id === selectedDomainId.value)
-    return d?.hostname === 'localhost'
-  }
-  return manifestDomains.value.length === 0
-})
 
 async function fetchManifest() {
+  manifestError.value = ''
   try {
     const mf = await trpc.github.getManifest.query(
       selectedDomainId.value ? { domainId: selectedDomainId.value } : {},
@@ -147,7 +142,10 @@ async function fetchManifest() {
     if (!selectedDomainId.value && mf.domains.length === 1) {
       selectedDomainId.value = mf.domains[0].id
     }
-  } catch { /* ignore */ }
+  } catch (e: unknown) {
+    manifest.value = null
+    manifestError.value = (e as { message?: string })?.message ?? 'Could not generate GitHub App manifest.'
+  }
 }
 
 async function fetchRepoInfo() {
