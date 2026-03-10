@@ -254,7 +254,7 @@ export async function buildCaddyfile(): Promise<string> {
     const activeRoutes = domain.routes
       .filter(r => {
         const p = r.project
-        if (!p || p.status !== 'running') return false
+        if (!p) return false
         return p.deployMode === 'static' || !!p.containerName
       }) as ActiveRoute[]
 
