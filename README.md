@@ -30,6 +30,22 @@ VM with automatic HTTPS via Caddy + Let's Encrypt.
 
 ## Quick Start (fresh VM)
 
+### One-liner (Ubuntu VPS, including Hetzner)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ubershmekel/sitey/main/deploy/install-ubuntu.sh | bash
+```
+
+This installs Docker, clones/updates Sitey to `/opt/sitey`, starts the stack,
+then prints:
+
+- `URL: http://<your-server-ip>`
+- `Admin password: <one-time-override-password>`
+
+Works on standard Ubuntu VPS hosts (for example: Hetzner, DigitalOcean, Linode).
+
+### Manual steps
+
 ```bash
 # 1. Install Docker (if not already installed)
 curl -fsSL https://get.docker.com | sh

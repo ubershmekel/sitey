@@ -15,7 +15,7 @@ RUN --mount=type=cache,id=sitey-server-npm,target=/root/.npm,sharing=locked \
 FROM deps AS dev
 COPY prisma ./prisma/
 COPY prisma.config.ts ./
-RUN npx prisma generate
+RUN npm run db:generate
 ENV NODE_ENV=development
 EXPOSE 3001
 # CHOKIDAR_USEPOLLING ensures tsx watch detects changes on Docker Desktop for Windows/Mac
@@ -28,8 +28,8 @@ COPY prisma ./prisma/
 COPY prisma.config.ts ./
 COPY src ./src
 COPY tsconfig.json ./
+RUN npm run db:generate
 RUN npm run build
-RUN npx prisma generate
 
 # Production image
 FROM node:22-bookworm-slim AS runner
