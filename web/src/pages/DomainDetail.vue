@@ -10,7 +10,7 @@
       <h1>{{ domain.hostname }}</h1>
 
       <div class="page-actions">
-        <button class="btn-primary" :disabled="editSaving" @click="saveEdit">
+        <button v-if="isWildcard" class="btn-primary" :disabled="editSaving" @click="saveEdit">
           {{ editSaving ? 'Saving…' : 'Save changes' }}
         </button>
         <button class="btn-primary" @click="showAddProject = true">+ Add project</button>
@@ -24,11 +24,6 @@
           <span class="field-label">HTTPS</span>
           <span :class="`status status-${domain.status}`">{{ tlsLabel(domain.status) }}</span>
         </div>
-
-        <label>
-          Let's Encrypt email
-          <input v-model="editEmail" type="email" />
-        </label>
 
         <div v-if="isWildcard" class="field-row sitey-subdomain-row">
           <label class="checkbox-label">
@@ -180,7 +175,6 @@ const repoInstallations = ref(0)
 const repoInstallUrl = ref('')
 
 // ── Inline domain edit ────────────────────────────────────────────────────────
-const editEmail = ref('')
 const editSiteySubdomains = ref(false)
 const editSaving = ref(false)
 const editError = ref('')
@@ -204,7 +198,6 @@ async function saveEdit() {
   try {
     await trpc.domains.update.mutate({
       id: domainId,
-      letsEncryptEmail: editEmail.value,
       ...(isWildcard.value ? { siteySubdomainsEnabled: editSiteySubdomains.value } : {}),
     })
     saveSucceeded.value = true
@@ -285,7 +278,6 @@ async function fetchDomain() {
   error.value = ''
   try {
     domain.value = await trpc.domains.get.query({ id: domainId })
-    editEmail.value = domain.value.letsEncryptEmail ?? ''
     editSiteySubdomains.value = (domain.value as any).siteySubdomainsEnabled ?? false
   } catch (e: unknown) {
     error.value = (e as { message?: string })?.message ?? 'Failed to load domain'

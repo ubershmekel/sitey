@@ -2,7 +2,7 @@
   <Layout>
     <div class="page-header">
       <h1>Domains</h1>
-      <button class="btn-primary" @click="showAdd = true">+ Add domain</button>
+      <button class="btn-primary" @click="openAddModal">+ Add domain</button>
     </div>
 
     <div v-if="loading" class="state-msg">Loading…</div>
@@ -12,7 +12,7 @@
       <div class="empty-icon">◈</div>
       <p>No domains yet.</p>
       <p class="hint">Add your first domain to get started.</p>
-      <button class="btn-primary" @click="showAdd = true">Add domain</button>
+      <button class="btn-primary" @click="openAddModal">Add domain</button>
     </div>
 
     <div v-else class="domain-grid">
@@ -63,11 +63,6 @@
             DNS not resolving - make sure an A record points to this server
           </span>
         </div>
-        <label>
-          Let's Encrypt email
-          <input v-model="newEmail" type="email" required placeholder="you@example.com" />
-        </label>
-
         <div class="modal-actions">
           <button type="button" class="btn-ghost" @click="showAdd = false">Cancel</button>
           <button type="submit" class="btn-primary" :disabled="adding">
@@ -92,7 +87,6 @@ const loading = ref(true)
 const error = ref('')
 const showAdd = ref(false)
 const newHostname = ref('')
-const newEmail = ref('')
 const adding = ref(false)
 const addError = ref('')
 type DnsResult = {
@@ -128,11 +122,9 @@ async function addDomain() {
     const hostname = newHostname.value.trim().toLowerCase()
     await trpc.domains.create.mutate({
       hostname,
-      letsEncryptEmail: newEmail.value.trim(),
     })
     showAdd.value = false
     newHostname.value = ''
-    newEmail.value = ''
     dnsResult.value = null
     await fetchDomains()
   } catch (e: unknown) {
@@ -140,6 +132,10 @@ async function addDomain() {
   } finally {
     adding.value = false
   }
+}
+
+function openAddModal() {
+  showAdd.value = true
 }
 
 onMounted(fetchDomains)

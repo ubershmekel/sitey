@@ -206,9 +206,18 @@ function appendRouteHandler(lines: string[], route: ActiveRoute): void {
   }
 }
 
+function appendTlsDirective(lines: string[], email?: string): void {
+  const trimmedEmail = email?.trim()
+  if (trimmedEmail) {
+    lines.push(`    tls ${trimmedEmail}`)
+    return
+  }
+  lines.push('    tls')
+}
+
 function appendSiteBlock(lines: string[], hostname: string, email: string, routes: ActiveRoute[]): void {
   lines.push(`${hostname} {`)
-  lines.push(`    tls ${email}`)
+  appendTlsDirective(lines, email)
   if (routes.length > 0) {
     for (const route of routes) appendRouteHandler(lines, route)
   } else {
@@ -220,7 +229,7 @@ function appendSiteBlock(lines: string[], hostname: string, email: string, route
 
 function appendProbeSiteBlock(lines: string[], hostname: string, email: string): void {
   lines.push(`${hostname} {`)
-  lines.push(`    tls ${email}`)
+  appendTlsDirective(lines, email)
   lines.push('    respond 204')
   lines.push('}')
   lines.push('')

@@ -12,6 +12,10 @@ function normalizeHostnameInput(hostname: string): string {
   return hostname.trim().toLowerCase().replace(/\.$/, '')
 }
 
+function normalizeOptionalEmail(value: unknown): string {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
 export const domainsRouter = router({
   list: settledProcedure.query(async () => {
     const domains = await db.domain.findMany({
@@ -60,14 +64,19 @@ export const domainsRouter = router({
         value => typeof value === 'string' ? normalizeHostnameInput(value) : value,
         z.string().min(3).regex(HOSTNAME_REGEX, 'Must be a valid hostname (e.g. example.com or *.example.com)'),
       ),
-      letsEncryptEmail: z.string().email(),
+      letsEncryptEmail: z.preprocess(normalizeOptionalEmail, z.string()).optional().default(''),
     }))
     .mutation(async ({ input }) => {
       const existing = await db.domain.findUnique({ where: { hostname: input.hostname } })
       if (existing) {
         throw new TRPCError({ code: 'CONFLICT', message: 'Domain already exists' })
       }
-      const domain = await db.domain.create({ data: input })
+      const domain = await db.domain.create({
+        data: {
+          hostname: input.hostname,
+          letsEncryptEmail: input.letsEncryptEmail,
+        },
+      })
       // Push updated Caddy config — provisions TLS cert for this domain immediately.
       // Caddy failure is non-fatal: the domain exists in the DB. Return a warning so the UI can surface it.
       const warning = await reloadCaddy().then(() => null, err => String(err))
@@ -78,7 +87,7 @@ export const domainsRouter = router({
   update: settledProcedure
     .input(z.object({
       id: z.number().int(),
-      letsEncryptEmail: z.string().email().optional(),
+      letsEncryptEmail: z.preprocess(normalizeOptionalEmail, z.string()).optional(),
       status: z.enum(['pending', 'active', 'error']).optional(),
       siteySubdomainsEnabled: z.boolean().optional(),
     }))

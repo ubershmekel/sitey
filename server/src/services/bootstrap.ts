@@ -160,7 +160,9 @@ export async function generateOverridePassword() {
   await db.$disconnect();
 }
 
-// Allow running directly: `node --enable-source-maps dist/services/bootstrap.js <init|reset>`
+// Allow running directly from either common build path:
+// `node --enable-source-maps dist/services/bootstrap.js <init|reset>`
+// or `node --enable-source-maps dist/bootstrap.js <init|reset>`
 import { fileURLToPath } from "node:url";
 const isMain =
   process.argv[1] === fileURLToPath(import.meta.url) ||

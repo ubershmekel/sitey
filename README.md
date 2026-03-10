@@ -59,7 +59,7 @@ cd sitey/deploy
 docker compose up -d --build
 
 # 4. Generate your login credentials
-docker compose exec sitey-api node --enable-source-maps dist/services/bootstrap.js init
+docker compose exec sitey-api npm run -s bootstrap:init
 ```
 
 This prints a one-time override password. Open the address shown in the logs, go
@@ -139,11 +139,13 @@ Both commands run against the live container and print credentials to stdout.
 
 ```bash
 # Initial setup (before setup wizard is completed)
-docker compose exec sitey-api node --enable-source-maps dist/services/bootstrap.js init
+docker compose exec sitey-api npm run -s bootstrap:init
 
 # Skeleton key password reset (after setup is complete)
-docker compose exec sitey-api node --enable-source-maps dist/services/bootstrap.js reset
+docker compose exec sitey-api npm run -s bootstrap:reset
 ```
+
+These scripts auto-detect whether the container has built JS (`dist/`) or source TS (`src/`) and run the right entrypoint.
 
 ---
 
@@ -169,7 +171,6 @@ started). To enable HTTPS:
 
 ```caddyfile
 your.domain.com {
-    tls your@email.com
     @api path /trpc* /webhook* /health*
     handle @api { reverse_proxy sitey-api:3001 }
     handle     { reverse_proxy sitey-web:80    }
@@ -185,11 +186,10 @@ Caddy will automatically obtain a Let's Encrypt certificate.
 ## Adding a domain + project
 
 1. Open Sitey in your browser and log in.
-2. Click **+ Add domain** → enter your app's hostname (e.g. `myapp.com`) and
-   your Let's Encrypt email. If you've set up a wildcard DNS record
-   (`*.myapp.com → your IP`), new projects will automatically get a random
-   subdomain (e.g. `happy-fox-3k2.myapp.com`) — see
-   [Enabling HTTPS](#enabling-https).
+2. Click **+ Add domain** → enter your app's hostname (e.g. `myapp.com`). If
+   you've set up a wildcard DNS record (`*.myapp.com → your IP`), new projects
+   will automatically get a random subdomain (e.g.
+   `happy-fox-3k2.myapp.com`) — see [Enabling HTTPS](#enabling-https).
 3. On the domain page, click **+ Add project**:
    - Enter repo owner/name (e.g. `acme/my-node-app`) and branch.
    - Choose **Build mode**: `auto` generates a Dockerfile for Node.js apps;

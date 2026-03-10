@@ -15,6 +15,7 @@ RUN --mount=type=cache,id=sitey-server-npm,target=/root/.npm,sharing=locked \
 FROM deps AS dev
 COPY prisma ./prisma/
 COPY prisma.config.ts ./
+COPY scripts ./scripts/
 RUN npm run db:generate
 ENV NODE_ENV=development
 EXPOSE 3001
@@ -26,6 +27,7 @@ CMD ["npx", "tsx", "watch", "src/index.ts"]
 FROM deps AS builder
 COPY prisma ./prisma/
 COPY prisma.config.ts ./
+COPY scripts ./scripts/
 COPY src ./src
 COPY tsconfig.json ./
 RUN npm run db:generate
@@ -41,6 +43,7 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/prisma.config.ts ./
+COPY --from=builder /app/scripts ./scripts
 COPY --from=builder /app/package.json ./
 
 ENV NODE_ENV=production
