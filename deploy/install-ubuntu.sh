@@ -87,15 +87,43 @@ echo "==> Building and starting Sitey"
 docker_cmd compose up -d --build
 
 echo "==> Waiting for API container"
+API_READY=0
 for _ in $(seq 1 60); do
   if docker_cmd compose exec -T sitey-api sh -lc "node -v" >/dev/null 2>&1; then
+    API_READY=1
     break
   fi
   sleep 2
 done
 
+if [[ "${API_READY}" -ne 1 ]]; then
+  echo "Sitey API did not become ready in time."
+  echo "Recent API logs:"
+  docker_cmd compose logs --tail=80 sitey-api || true
+  echo
+  echo "You can retry manually with:"
+  echo "  cd /opt/sitey/deploy"
+  echo "  docker compose exec -T sitey-api node --enable-source-maps dist/services/bootstrap.js init"
+  exit 1
+fi
+
 echo "==> Generating admin override password"
-PASS_OUTPUT="$(docker_cmd compose exec -T sitey-api node --enable-source-maps dist/services/bootstrap.js init)"
+PASS_OUTPUT=""
+for _ in $(seq 1 20); do
+  if PASS_OUTPUT="$(docker_cmd compose exec -T sitey-api node --enable-source-maps dist/services/bootstrap.js init 2>&1)"; then
+    break
+  fi
+  sleep 2
+done
+
+if [[ -z "${PASS_OUTPUT}" ]]; then
+  echo "Failed to generate admin password automatically."
+  echo "Run this command manually:"
+  echo "  cd /opt/sitey/deploy"
+  echo "  docker compose exec -T sitey-api node --enable-source-maps dist/services/bootstrap.js init"
+  exit 1
+fi
+
 ADMIN_PASSWORD="$(printf "%s\n" "${PASS_OUTPUT}" | sed -n 's/.*Password: \([^[:space:]]\+\).*/\1/p' | head -n1)"
 
 echo
