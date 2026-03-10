@@ -330,27 +330,6 @@ select:focus {
   margin-top: 0.5rem;
 }
 
-.btn-primary {
-  background: var(--brand);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 0.6rem 1.25rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary:hover:not(:disabled) {
-  opacity: 0.85;
-}
-
 .btn-ghost {
   background: none;
   color: var(--text-secondary);

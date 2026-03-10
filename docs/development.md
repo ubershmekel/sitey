@@ -111,6 +111,22 @@ mobile-friendliness.
 - **DNS and other status checks show inline.** Don't hide status information
   behind a modal. Show it on the page so the user sees it without clicking.
 
+## Shared component styles
+
+- **Design tokens live in `web/src/styles/theme.css`.** Keep this file focused on
+  variables (colors, status tokens, etc), not component class rules.
+- **Reusable component classes live in `web/src/styles/components.css`.** This is
+  imported once in `web/src/main.ts` and is the single source of truth for
+  shared classes like `.btn-primary`.
+- **Do not redefine shared classes inside page/component `<style scoped>` blocks.**
+  If a screen needs a small variation, use local CSS custom properties instead
+  of copying the whole class.
+- **Current `.btn-primary` override hooks:** `--btn-primary-bg`,
+  `--btn-primary-color`, `--btn-primary-border`, `--btn-primary-radius`,
+  `--btn-primary-padding`, `--btn-primary-font-size`, `--btn-primary-font-weight`.
+  Set these on a local container (for example `.login-card`) to customize only
+  that scope.
+
 ## API performance principles
 
 These rules exist to prevent read paths from becoming slow under load.

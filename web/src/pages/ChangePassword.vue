@@ -79,6 +79,8 @@ async function handleSubmit() {
   border: 1px solid var(--border-default);
   border-radius: 12px;
   padding: 2.5rem;
+  --btn-primary-padding: 0.7rem;
+  --btn-primary-font-size: 0.95rem;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -97,13 +99,6 @@ input {
   transition: border-color 0.15s;
 }
 input:focus { border-color: var(--brand); }
-.btn-primary {
-  background: var(--brand); color: #fff; border: none; border-radius: 6px;
-  padding: 0.7rem; font-size: 0.95rem; font-weight: 600; cursor: pointer;
-  transition: opacity 0.15s;
-}
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary:hover:not(:disabled) { opacity: 0.85; }
 .alert { border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.85rem; }
 .alert.error { background: var(--status-err-bg); border: 1px solid var(--status-err-border); color: var(--status-err-text); }
 .alert.success { background: var(--status-ok-bg); border: 1px solid var(--status-ok-border); color: var(--status-ok-text); }

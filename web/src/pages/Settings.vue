@@ -301,6 +301,10 @@ textarea {
   align-items: center;
 }
 
+.settings-form > .btn-primary {
+  align-self: flex-start;
+}
+
 .app-status {
   margin-bottom: 1rem;
 }
@@ -319,28 +323,6 @@ textarea {
 .badge-warn {
   background: var(--status-warn-bg);
   color: var(--status-warn-text);
-}
-
-.btn-primary {
-  background: var(--brand);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 0.6rem 1.25rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s;
-  align-self: flex-start;
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary:hover:not(:disabled) {
-  opacity: 0.85;
 }
 
 .btn-danger {

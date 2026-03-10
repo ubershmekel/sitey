@@ -64,6 +64,8 @@ async function handleLogin() {
   border: 1px solid var(--border-default);
   border-radius: 12px;
   padding: 2.5rem;
+  --btn-primary-padding: 0.7rem;
+  --btn-primary-font-size: 0.95rem;
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -103,20 +105,6 @@ input {
   transition: border-color 0.15s;
 }
 input:focus { border-color: var(--brand); }
-
-.btn-primary {
-  background: var(--brand);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 0.7rem;
-  font-size: 0.95rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary:hover:not(:disabled) { opacity: 0.85; }
 
 .alert.error {
   background: var(--status-err-bg);
