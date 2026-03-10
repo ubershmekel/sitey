@@ -218,6 +218,10 @@ function appendRouteHandler(lines: string[], route: ActiveRoute): void {
       ? `${repoBase}/${project.outputDir}`
       : repoBase;
     if (route.pathPrefix) {
+      // Redirect exact prefix (no trailing slash) so /zen → /zen/
+      lines.push(`    handle ${route.pathPrefix} {`);
+      lines.push(`        redir ${route.pathPrefix}/ 308`);
+      lines.push("    }");
       lines.push(`    handle_path ${route.pathPrefix}/* {`);
       lines.push(`        root * ${dir}`);
       lines.push("        try_files {path} /index.html");
@@ -232,6 +236,10 @@ function appendRouteHandler(lines: string[], route: ActiveRoute): void {
     const cname = project.containerName!;
     const port = project.containerPort;
     if (route.pathPrefix) {
+      // Redirect exact prefix (no trailing slash) so /app → /app/
+      lines.push(`    handle ${route.pathPrefix} {`);
+      lines.push(`        redir ${route.pathPrefix}/ 308`);
+      lines.push("    }");
       lines.push(`    handle_path ${route.pathPrefix}/* {`);
       lines.push(`        reverse_proxy ${cname}:${port}`);
       lines.push("    }");
@@ -258,6 +266,20 @@ function appendSiteBlock(
   appendTlsDirective(lines, email);
   if (routes.length > 0) {
     for (const route of routes) appendRouteHandler(lines, route);
+    // If every route is path-prefix only, nothing handles unmatched paths.
+    // Add a fallback so they get a 404 instead of a blank 200.
+    const hasCatchAll = routes.some((r) => !r.pathPrefix);
+    if (!hasCatchAll) {
+      lines.push("    handle {");
+      lines.push("        error 404");
+      lines.push("    }");
+      lines.push("    handle_errors {");
+      lines.push("        root * /srv");
+      lines.push("        rewrite * /404.html");
+      lines.push("        templates");
+      lines.push("        file_server");
+      lines.push("    }");
+    }
   } else {
     appendAdminHandlers(lines);
   }
@@ -300,10 +322,31 @@ export async function buildCaddyfile(): Promise<string> {
   const siteyDomain = process.env.SITEY_DOMAIN;
   const siteyEmail = process.env.SITEY_EMAIL;
   const mgmtHost = siteyDomain || ":80";
+  const mgmtHostname = siteyDomain ? sanitizeDnsName(siteyDomain) : null;
+
+  // Collect path-prefix routes on wildcard domains that resolve to the mgmt hostname.
+  // These are embedded in the management block so the sitey app still handles everything else.
+  const mgmtRoutes: ActiveRoute[] = [];
+  if (mgmtHostname) {
+    for (const domain of domains) {
+      if (!domain.hostname.startsWith("*.")) continue;
+      const activeRoutes = domain.routes.filter((r) => {
+        const p = r.project;
+        if (!p) return false;
+        return p.deployMode === "static" || !!p.containerName;
+      }) as ActiveRoute[];
+      for (const route of activeRoutes) {
+        const rh = resolveRouteHostname(domain.hostname, route.subdomain);
+        if (rh === mgmtHostname && route.pathPrefix) mgmtRoutes.push(route);
+      }
+    }
+  }
+
   lines.push(`${mgmtHost} {`);
   if (siteyDomain && siteyEmail) {
     lines.push(`    tls ${siteyEmail}`);
   }
+  for (const route of mgmtRoutes) appendRouteHandler(lines, route);
   appendAdminHandlers(lines);
   lines.push("}");
   lines.push("");
@@ -341,7 +384,6 @@ export async function buildCaddyfile(): Promise<string> {
     }
 
     const probeHostname = getWildcardStatusProbeHostname(domain.hostname);
-    const mgmtHostname = siteyDomain ? sanitizeDnsName(siteyDomain) : null;
     if (
       probeHostname &&
       !routesByHostname.has(probeHostname) &&

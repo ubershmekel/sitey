@@ -7,3 +7,4 @@ RUN npx vite build
 
 FROM caddy:alpine
 COPY --from=web-builder /app/dist /srv/web
+COPY deploy/caddy/404.html /srv/404.html
