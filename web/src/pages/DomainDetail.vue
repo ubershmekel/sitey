@@ -97,80 +97,23 @@
       </div>
     </template>
 
-    <!-- Add project modal -->
-    <div v-if="showAddProject" class="modal-backdrop" @click.self="showAddProject = false">
-      <form class="modal" @submit.prevent="addProject">
-        <h2>Add project</h2>
-        <div v-if="addError" class="alert error">{{ addError }}</div>
-
-        <label>
-          Project name <span class="hint">(lowercase, hyphens only)</span>
-          <input v-model="np.name" type="text" required placeholder="my-app" pattern="[a-z0-9\-]+" />
-        </label>
-        <label>
-          GitHub repository
-          <input v-model="np.githubUrl" type="text" required list="domain-repo-list"
-            placeholder="owner/repo or https://github.com/owner/repo" @input="parseGithubUrl" @blur="parseGithubUrl" />
-          <datalist id="domain-repo-list">
-            <option v-for="repo in appRepos" :key="repo.id" :value="repo.fullName" />
-          </datalist>
-          <span v-if="reposLoading" class="hint">Loading repos from GitHub App...</span>
-          <span v-else-if="repoLoadError" class="hint">{{ repoLoadError }}</span>
-          <span v-else-if="reposConfigured && appRepos.length > 0" class="hint">
-            Autocomplete powered by your GitHub App repositories.
-          </span>
-          <span v-else-if="reposConfigured && repoInstallations === 0" class="hint">
-            GitHub App is configured but not installed on any account or org yet.
-            <a v-if="repoInstallUrl" :href="repoInstallUrl" target="_blank" rel="noopener">Install app</a>.
-          </span>
-          <span v-else-if="reposConfigured" class="hint">
-            No repositories available from your GitHub App installation yet.
-          </span>
-        </label>
-        <label>
-          Branch
-          <input v-model="np.branch" type="text" placeholder="main" list="dd-branch-list" />
-          <datalist id="dd-branch-list">
-            <option v-for="b in branches" :key="b" :value="b" />
-          </datalist>
-        </label>
-
-        <label>
-          Build command <span class="hint">(optional)</span>
-          <input v-model="np.buildCommand" type="text" placeholder="npm run build" />
-        </label>
-        <label>
-          Output directory <span class="hint">(for static sites)</span>
-          <input v-model="np.outputDir" type="text" placeholder="dist (leave empty for repo root)" />
-        </label>
-        <label>
-          Server run command <span class="hint">(leave blank for a static site)</span>
-          <input v-model="np.serverRunCommand" type="text" placeholder="node server.js" />
-        </label>
-        <label v-if="np.serverRunCommand">
-          Container port
-          <input v-model.number="np.containerPort" type="number" min="1" max="65535" required />
-        </label>
-
-        <div class="modal-actions">
-          <button type="button" class="btn-ghost" @click="showAddProject = false">Cancel</button>
-          <button type="submit" class="btn-primary" :disabled="adding">
-            {{ adding ? 'Creating…' : 'Create project' }}
-          </button>
-        </div>
-      </form>
-    </div>
+    <AddProjectModal
+      v-model="showAddProject"
+      title="Add project"
+      :fixed-domain-id="domainId"
+      @created="handleProjectCreated"
+    />
   </Layout>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter, RouterLink } from 'vue-router'
+import AddProjectModal from '../components/AddProjectModal.vue'
 import Layout from '../components/Layout.vue'
 import { trpc } from '../trpc'
 
 type Domain = Awaited<ReturnType<typeof trpc.domains.get.query>>
-type AppRepo = Awaited<ReturnType<typeof trpc.github.listAppRepos.query>>['repos'][number]
 
 const route = useRoute()
 const router = useRouter()
@@ -181,17 +124,7 @@ const loading = ref(true)
 const error = ref('')
 
 const showAddProject = ref(false)
-const adding = ref(false)
-const addError = ref('')
-const branches = ref<string[]>([])
-const appRepos = ref<AppRepo[]>([])
-const reposLoading = ref(false)
-const reposConfigured = ref(false)
-const repoLoadError = ref('')
-const repoInstallations = ref(0)
-const repoInstallUrl = ref('')
 
-// ── Inline domain edit ────────────────────────────────────────────────────────
 const editSiteySubdomains = ref(false)
 const editSaving = ref(false)
 const editError = ref('')
@@ -221,7 +154,9 @@ async function saveEdit() {
       ...(isWildcard.value ? { siteySubdomainsEnabled: editSiteySubdomains.value } : {}),
     })
     saveSucceeded.value = true
-    setTimeout(() => { saveSucceeded.value = false }, 3000)
+    setTimeout(() => {
+      saveSucceeded.value = false
+    }, 3000)
     await fetchDomain()
   } catch (e: unknown) {
     editError.value = (e as { message?: string })?.message ?? 'Failed to save'
@@ -285,27 +220,8 @@ async function deleteDomain() {
 }
 
 const domainProjects = computed(() =>
-  (domain.value?.routes ?? [])
-    .map(r => r.project)
-    .filter(p => !p.protected),
+  (domain.value?.routes ?? []).map((r) => r.project).filter((p) => !p.protected),
 )
-
-const emptyForm = () => ({
-  name: '',
-  githubUrl: '',
-  repoOwner: '',
-  repoName: '',
-  branch: 'main',
-  buildCommand: '',
-  outputDir: '',
-  serverRunCommand: '',
-  containerPort: 3000,
-})
-
-const np = ref(emptyForm())
-const repoByFullName = computed(() => {
-  return new Map(appRepos.value.map(repo => [repo.fullName.toLowerCase(), repo]))
-})
 
 async function fetchDomain() {
   loading.value = true
@@ -326,85 +242,13 @@ async function fetchDomain() {
   }
 }
 
-function parseGithubUrl() {
-  const val = np.value.githubUrl.trim()
-  const match = val.match(/(?:github\.com\/)([^/]+)\/([^/]+?)(?:\.git)?$/) ?? val.match(/^([^/]+)\/([^/]+)$/)
-  if (match) {
-    np.value.repoOwner = match[1]
-    np.value.repoName = match[2]
-    const selected = repoByFullName.value.get(`${match[1]}/${match[2]}`.toLowerCase())
-    if (selected?.defaultBranch && (!np.value.branch.trim() || np.value.branch === 'main')) {
-      np.value.branch = selected.defaultBranch
-    }
-    fetchBranches()
-  }
-}
-
-async function fetchBranches() {
-  const { repoOwner, repoName } = np.value
-  if (!repoOwner || !repoName) return
-  try {
-    const res = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/branches?per_page=50`)
-    if (res.ok) {
-      const data = await res.json() as { name: string }[]
-      branches.value = data.map(b => b.name)
-    }
-  } catch { /* ignore */ }
-}
-
-async function loadRepoSuggestions() {
-  reposLoading.value = true
-  repoLoadError.value = ''
-  try {
-    const res = await trpc.github.listAppRepos.query()
-    appRepos.value = res.repos
-    reposConfigured.value = res.configured
-    repoInstallations.value = res.installations
-    repoInstallUrl.value = res.app.installUrl ?? ''
-  } catch {
-    appRepos.value = []
-    reposConfigured.value = false
-    repoInstallations.value = 0
-    repoInstallUrl.value = ''
-    repoLoadError.value = 'Could not load GitHub App repositories.'
-  } finally {
-    reposLoading.value = false
-  }
-}
-
-async function addProject() {
-  addError.value = ''
-  adding.value = true
-  parseGithubUrl()
-  try {
-    const isStatic = !np.value.serverRunCommand.trim()
-    const project = await trpc.projects.create.mutate({
-      name: np.value.name.trim(),
-      repoOwner: np.value.repoOwner.trim(),
-      repoName: np.value.repoName.trim(),
-      branch: np.value.branch.trim() || 'main',
-      deployMode: isStatic ? 'static' : 'server',
-      buildCommand: np.value.buildCommand.trim(),
-      outputDir: np.value.outputDir.trim(),
-      serverRunCommand: np.value.serverRunCommand.trim(),
-      buildMode: 'auto',
-      containerPort: np.value.containerPort,
-    })
-    await trpc.projects.addRoute.mutate({ projectId: project.id, domainId })
-    showAddProject.value = false
-    np.value = emptyForm()
-    branches.value = []
-    await fetchDomain()
-  } catch (e: unknown) {
-    addError.value = (e as { message?: string })?.message ?? 'Failed to create project'
-  } finally {
-    adding.value = false
-  }
+async function handleProjectCreated() {
+  await fetchDomain()
 }
 
 function tlsLabel(status: string) {
   const labels: Record<string, string> = {
-    pending: 'Obtaining certificate…',
+    pending: 'Obtaining certificate...',
     active: 'HTTPS active',
     error: 'Certificate error',
   }
@@ -420,15 +264,6 @@ function relativeTime(ts: string | Date) {
   if (h < 24) return `${h}h ago`
   return `${Math.floor(h / 24)}d ago`
 }
-
-watch(showAddProject, async (v) => {
-  if (!v) {
-    np.value = emptyForm()
-    branches.value = []
-    return
-  }
-  await loadRepoSuggestions()
-})
 
 onMounted(async () => {
   await fetchDomain()
@@ -635,111 +470,6 @@ h1 {
   margin-bottom: 1rem;
 }
 
-.modal-backdrop {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-
-.modal {
-  background: var(--bg-card);
-  border: 1px solid var(--border-default);
-  border-radius: 12px;
-  padding: 2rem;
-  width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 1rem;
-}
-
-.modal h2 {
-  font-size: 1.1rem;
-  font-weight: 600;
-}
-
-label {
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
-  font-size: 0.85rem;
-  color: var(--text-secondary);
-}
-
-.hint {
-  color: var(--text-muted);
-  font-size: 0.78rem;
-}
-
-.hint a {
-  color: var(--brand);
-}
-
-input,
-select {
-  background: var(--bg-input);
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 0.6rem 0.75rem;
-  color: var(--text-primary);
-  font-size: 0.9rem;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-input:focus,
-select:focus {
-  border-color: var(--brand);
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: 0.75rem;
-  margin-top: 0.5rem;
-}
-
-.btn-primary {
-  background: var(--brand);
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 0.6rem 1.25rem;
-  font-size: 0.9rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.btn-primary:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.btn-primary:hover:not(:disabled) {
-  opacity: 0.85;
-}
-
-.btn-ghost {
-  background: none;
-  color: var(--text-secondary);
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 0.6rem 1.25rem;
-  font-size: 0.9rem;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-}
-
-.btn-ghost:hover {
-  border-color: var(--text-muted);
-  color: var(--text-primary);
-}
 
 .btn-danger {
   background: var(--status-err-bg);
@@ -925,3 +655,7 @@ select:focus {
   cursor: not-allowed;
 }
 </style>
+
+
+
+
