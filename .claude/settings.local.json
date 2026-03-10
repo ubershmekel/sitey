@@ -3,7 +3,10 @@
     "allow": [
       "Bash(npx prisma db push)",
       "Bash(npx prisma generate)",
-      "Bash(npm run db:push)"
+      "Bash(npm run db:push)",
+      "Bash(npm install)",
+      "Bash(npm run db:generate -w server)",
+      "Bash(npm run typecheck -w server)"
     ]
   }
 }

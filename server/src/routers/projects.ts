@@ -41,7 +41,7 @@ function buildSubdomainCandidate(seed: string): string {
 }
 
 async function generateUniqueSubdomain(
-  domainId: string,
+  domainId: number,
   projectName: string,
 ): Promise<string> {
   const seed = slugifySubdomainSeed(projectName);
@@ -216,7 +216,7 @@ export const projectsRouter = router({
           message: "Project not found",
         });
 
-      let domain: { id: string; hostname: string } | null = null;
+      let domain: { id: number; hostname: string } | null = null;
       if (input.domainId) {
         domain = await db.domain.findUnique({
           where: { id: input.domainId },
@@ -310,7 +310,7 @@ export const projectsRouter = router({
     }),
 
   getWebhookInfo: settledProcedure
-    .input(z.object({ id: z.number().int(), domainId: z.string().optional() }))
+    .input(z.object({ id: z.number().int(), domainId: z.number().int().optional() }))
     .query(async ({ input }) => {
       const project = await db.project.findUniqueOrThrow({
         where: { id: input.id },

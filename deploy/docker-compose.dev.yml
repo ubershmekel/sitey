@@ -1,6 +1,5 @@
 # Dev override — runs server AND web in Docker with source mounts for hot reload.
-# This means everything is on the same Docker network, so service names resolve
-# correctly (no host.docker.internal juggling).
+# Also supports running only Caddy in Docker while server/web run on host.
 #
 # Usage (from repo root):
 #   npm run dev:docker
@@ -17,7 +16,11 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      # Port 2019 is NOT exposed — sitey-api is in Docker and reaches caddy directly
+      # Expose admin API for host-run server mode (npm run dev).
+      - "2019:2019"
+    extra_hosts:
+      # Required on Linux so host.docker.internal resolves from containers.
+      - "host.docker.internal:host-gateway"
 
   sitey-api:
     build:
@@ -57,7 +60,13 @@ services:
       # instead of Vite's internal port 3000 which isn't exposed
       VITE_HMR_CLIENT_PORT: 80
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://localhost:3000').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
       interval: 5s
       timeout: 3s
       retries: 20

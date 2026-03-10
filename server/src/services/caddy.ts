@@ -21,10 +21,11 @@ const CADDY_TLS_HOST = process.env.CADDY_TLS_HOST ?? getHostFromUrl(CADDY_ADMIN_
 const CADDY_TLS_PORT = Number(process.env.CADDY_TLS_PORT ?? '443')
 // Host:port that Caddy (inside Docker) uses to reach the sitey-api.
 // In production this is "sitey-api:3001" (Docker service name).
-// In dev (API running on host) set SITEY_API_INTERNAL=host.docker.internal:3001.
-const SITEY_API_INTERNAL = process.env.SITEY_API_INTERNAL ?? 'sitey-api:3001'
+// In host-run dev, default to host.docker.internal.
+const IS_HOST_RUN_DEV = isLocalAdminUrl(CADDY_ADMIN_URL)
+const SITEY_API_INTERNAL = process.env.SITEY_API_INTERNAL ?? (IS_HOST_RUN_DEV ? 'host.docker.internal:3001' : 'sitey-api:3001')
 // When set, Caddy proxies the web SPA to this host instead of serving /srv/web.
-// Use in dev: SITEY_WEB_INTERNAL=host.docker.internal:3000
+// Keep this opt-in so Caddy can fall back to baked /srv/web when Vite isn't running.
 const SITEY_WEB_INTERNAL = process.env.SITEY_WEB_INTERNAL ?? ''
 const WILDCARD_STATUS_PROBE_LABEL = 'sitey-dns-check'
 
@@ -43,6 +44,15 @@ function getOriginFromUrl(rawUrl: string): string {
     return new URL(rawUrl).origin
   } catch {
     return 'http://caddy:2019'
+  }
+}
+
+function isLocalAdminUrl(rawUrl: string): boolean {
+  try {
+    const host = new URL(rawUrl).hostname.toLowerCase()
+    return host === 'localhost' || host === '127.0.0.1' || host === '::1'
+  } catch {
+    return false
   }
 }
 
@@ -151,7 +161,7 @@ type ActiveRoute = {
   subdomain: string
   pathPrefix: string
   project: {
-    id: string
+    id: number
     deployMode: string
     outputDir: string
     containerName: string | null
@@ -301,14 +311,14 @@ export async function buildCaddyfile(): Promise<string> {
 // ---------------------------------------------------------------------------
 
 const STALE_TTL_MS = 5 * 60 * 1000 // 5 minutes
-const inFlightRefreshes = new Set<string>() // domain IDs currently being probed
+const inFlightRefreshes = new Set<number>() // domain IDs currently being probed
 
 export function isDomainStatusStale(statusCheckedAt: Date | null): boolean {
   if (!statusCheckedAt) return true
   return Date.now() - statusCheckedAt.getTime() > STALE_TTL_MS
 }
 
-export function scheduleDomainStatusRefresh(domain: { id: string; hostname: string }): void {
+export function scheduleDomainStatusRefresh(domain: { id: number; hostname: string }): void {
   if (inFlightRefreshes.has(domain.id)) return // already in-flight
 
   inFlightRefreshes.add(domain.id)

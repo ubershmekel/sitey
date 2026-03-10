@@ -6,7 +6,7 @@
 import fs from 'node:fs'
 import path from 'node:path'
 import { spawn } from 'node:child_process'
-import type { Deployment, Project } from '@prisma/client'
+import type { Deployment, Project } from '../generated/prisma/client.js'
 import { db } from '../lib/db.js'
 import { deployQueue } from '../lib/queue.js'
 import {

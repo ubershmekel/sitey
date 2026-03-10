@@ -291,7 +291,7 @@ export const githubRouter = router({
 
   /** Returns webhook info for manual GitHub webhook setup */
   getWebhookInfo: settledProcedure
-    .input(z.object({ projectId: z.number().int(), domainId: z.string().optional() }))
+    .input(z.object({ projectId: z.number().int(), domainId: z.number().int().optional() }))
     .query(async ({ input }) => {
       const project = await db.project.findUniqueOrThrow({
         where: { id: input.projectId },

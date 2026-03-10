@@ -1,4 +1,4 @@
-FROM node:25-alpine AS web-builder
+FROM node:22-bookworm-slim AS web-builder
 WORKDIR /app
 COPY web/package*.json ./
 RUN npm install
