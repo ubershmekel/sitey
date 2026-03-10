@@ -24,6 +24,23 @@
           <span class="field-label">HTTPS</span>
           <span :class="`status status-${domain.status}`">{{ tlsLabel(domain.status) }}</span>
         </div>
+        <p v-if="domain.status === 'error'" class="tls-hint">
+          Caddy could not load TLS config. Look at the Caddy logs below and review the generated Caddyfile in
+          Settings.
+        </p>
+        <div v-if="domain.status === 'error'" class="caddy-logs">
+          <div class="caddy-logs-header">
+            <span>Caddy logs</span>
+            <button type="button" class="btn-ghost-sm" :disabled="caddyLogsLoading" @click="loadCaddyLogs">
+              {{ caddyLogsLoading ? 'Loading...' : 'Refresh' }}
+            </button>
+          </div>
+          <div v-if="caddyLogsError" class="alert error caddy-logs-error">{{ caddyLogsError }}</div>
+          <div class="log-box">
+            <div v-if="caddyLogLines.length === 0" class="log-empty">No logs yet.</div>
+            <pre v-else class="log-content">{{ caddyLogLines.join('\n') }}</pre>
+          </div>
+        </div>
 
         <div v-if="isWildcard" class="field-row sitey-subdomain-row">
           <label class="checkbox-label">
@@ -180,6 +197,9 @@ const editSaving = ref(false)
 const editError = ref('')
 const saveSucceeded = ref(false)
 const deletingDomain = ref(false)
+const caddyLogLines = ref<string[]>([])
+const caddyLogsLoading = ref(false)
+const caddyLogsError = ref('')
 
 const isWildcard = computed(() => domain.value?.hostname.startsWith('*.') ?? false)
 type DnsResult = { resolves: boolean; addresses: string[] } | null
@@ -207,6 +227,20 @@ async function saveEdit() {
     editError.value = (e as { message?: string })?.message ?? 'Failed to save'
   } finally {
     editSaving.value = false
+  }
+}
+
+async function loadCaddyLogs() {
+  if (!domain.value || domain.value.status !== 'error') return
+  caddyLogsLoading.value = true
+  caddyLogsError.value = ''
+  try {
+    const res = await trpc.domains.getCaddyLogs.query({ tail: 200 })
+    caddyLogLines.value = res.lines
+  } catch (e: unknown) {
+    caddyLogsError.value = (e as { message?: string })?.message ?? 'Failed to load Caddy logs'
+  } finally {
+    caddyLogsLoading.value = false
   }
 }
 
@@ -279,6 +313,12 @@ async function fetchDomain() {
   try {
     domain.value = await trpc.domains.get.query({ id: domainId })
     editSiteySubdomains.value = (domain.value as any).siteySubdomainsEnabled ?? false
+    if (domain.value.status === 'error') {
+      await loadCaddyLogs()
+    } else {
+      caddyLogLines.value = []
+      caddyLogsError.value = ''
+    }
   } catch (e: unknown) {
     error.value = (e as { message?: string })?.message ?? 'Failed to load domain'
   } finally {
@@ -816,5 +856,72 @@ select:focus {
   font-size: 0.78rem;
   color: var(--text-dim);
   margin-top: 0.4rem;
+}
+
+.tls-hint {
+  margin: -0.35rem 0 0;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.45;
+}
+
+.caddy-logs {
+  margin-top: -0.45rem;
+}
+
+.caddy-logs-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.45rem;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+
+.caddy-logs-error {
+  margin-bottom: 0.5rem;
+}
+
+.log-box {
+  background: var(--bg-code);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 0.75rem;
+  max-height: 260px;
+  overflow-y: auto;
+  font-family: monospace;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.log-content {
+  color: #b0e0b0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-empty {
+  color: var(--text-dim);
+}
+
+.btn-ghost-sm {
+  background: none;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  padding: 0.25rem 0.55rem;
+  font-size: 0.78rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.btn-ghost-sm:hover:not(:disabled) {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
+
+.btn-ghost-sm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 </style>
