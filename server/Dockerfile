@@ -1,12 +1,15 @@
 FROM node:22-bookworm-slim AS base
 WORKDIR /app
 
-# git + openssl needed at build time (git for simple-git; openssl for argon2/TLS)
-RUN apt-get update && apt-get install -y --no-install-recommends git openssl python3 make g++ && rm -rf /var/lib/apt/lists/*
+# git + CA roots needed for HTTPS clone/pull; openssl/python/build tools for native deps
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git openssl python3 make g++ && rm -rf /var/lib/apt/lists/*
 
 FROM base AS deps
 COPY package*.json ./
-RUN --mount=type=cache,target=/root/.npm npm install
+# BuildKit cache mount keeps npm's package tarball cache across builds (does NOT cache node_modules),
+# and these flags reduce registry/audit chatter to speed up rebuilds when dependencies are unchanged.
+RUN --mount=type=cache,id=sitey-server-npm,target=/root/.npm,sharing=locked \
+  npm install --prefer-offline --no-audit --progress=false
 
 # Development stage — src is mounted as a volume at runtime
 FROM deps AS dev
@@ -32,7 +35,7 @@ RUN npx prisma generate
 FROM node:22-bookworm-slim AS runner
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends git openssl && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git openssl && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
