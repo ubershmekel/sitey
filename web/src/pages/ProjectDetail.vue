@@ -90,13 +90,20 @@
           </div>
         </div>
 
-        <form class="route-form" @submit.prevent="addRoute">
+        <form class="route-form" :style="isWildcardSelected ? 'grid-template-columns: 1fr 1fr 1fr auto' : ''" @submit.prevent="addRoute">
           <label>
             Domain
-            <select v-model="newRoute.domainId" required>
+            <select v-model="newRoute.domainId" required @change="onDomainChange">
               <option value="">Select domain</option>
               <option v-for="d in domains" :key="d.id" :value="d.id">{{ d.hostname }}</option>
             </select>
+          </label>
+          <label v-if="isWildcardSelected">
+            Subdomain <span class="hint">(e.g. myapp)</span>
+            <div class="subdomain-input-wrap">
+              <input v-model="newRoute.subdomain" type="text" placeholder="auto" class="subdomain-input" />
+              <span class="subdomain-suffix">.{{ selectedDomainBase }}</span>
+            </div>
           </label>
           <label>
             Path prefix <span class="hint">(optional, e.g. /blog)</span>
@@ -206,7 +213,24 @@ const logBox = ref<HTMLElement | null>(null)
 const newRoute = ref({
   domainId: null as number | null,
   pathPrefix: '',
+  subdomain: '',
 })
+
+const isWildcardSelected = computed(() => {
+  if (!newRoute.value.domainId) return false
+  const d = domains.value.find((x) => x.id === newRoute.value.domainId)
+  return d?.hostname.startsWith('*.') ?? false
+})
+
+const selectedDomainBase = computed(() => {
+  const d = domains.value.find((x) => x.id === newRoute.value.domainId)
+  if (!d?.hostname.startsWith('*.')) return ''
+  return d.hostname.slice(2)
+})
+
+function onDomainChange() {
+  newRoute.value.subdomain = ''
+}
 
 const primaryDomainRoute = computed(() =>
   project.value?.routes.find((r) => !!r.domain) ?? null,
@@ -290,8 +314,10 @@ async function addRoute() {
       projectId,
       domainId: newRoute.value.domainId ?? undefined,
       pathPrefix: normalizePathPrefix(newRoute.value.pathPrefix),
+      subdomain: newRoute.value.subdomain.trim().toLowerCase(),
     })
     newRoute.value.pathPrefix = ''
+    newRoute.value.subdomain = ''
     await fetchProject()
   } catch (e: unknown) {
     routeError.value = (e as { message?: string })?.message ?? 'Failed to add route'
@@ -577,6 +603,41 @@ h1 {
   grid-template-columns: 1fr 1fr auto;
   gap: 0.75rem;
   align-items: end;
+}
+
+.subdomain-input-wrap {
+  display: flex;
+  align-items: center;
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  overflow: hidden;
+  transition: border-color 0.15s;
+}
+
+.subdomain-input-wrap:focus-within {
+  border-color: var(--brand);
+}
+
+.subdomain-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0.6rem 0.4rem 0.6rem 0.75rem;
+}
+
+.subdomain-input:focus {
+  border-color: transparent;
+}
+
+.subdomain-suffix {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  padding: 0 0.6rem 0 0;
+  white-space: nowrap;
+  font-family: monospace;
 }
 
 .webhook-card {
