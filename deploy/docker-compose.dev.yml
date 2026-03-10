@@ -1,22 +1,66 @@
-# Dev override — runs only Caddy in Docker.
-# Server and web run natively on the host (npm run dev from repo root).
+# Dev override — runs server AND web in Docker with source mounts for hot reload.
+# This means everything is on the same Docker network, so service names resolve
+# correctly (no host.docker.internal juggling).
 #
-# Usage:
-#   docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d caddy
+# Usage (from repo root):
+#   npm run dev:docker
 #
-# This overrides the caddy service to:
-#   - Mount the dev Caddyfile (proxies to host.docker.internal instead of containers)
-#   - Expose port 2019 so the native sitey-api can push Caddy config updates
-#   - Add host.docker.internal on Linux (Docker Desktop on Windows/Mac handles this automatically)
+# To rebuild after adding dependencies:
+#   npm run dev:docker -- --build
 
 services:
   caddy:
     volumes:
       - ./caddy/Caddyfile.dev:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
+      - ${DATA_ROOT:-./data}/projects:/srv/projects:ro
     ports:
       - "80:80"
       - "443:443"
-      - "2019:2019"   # expose admin API to host so native server can reload Caddy
-    extra_hosts:
-      - "host.docker.internal:host-gateway"   # Linux only; no-op on Docker Desktop
+      # Port 2019 is NOT exposed — sitey-api is in Docker and reaches caddy directly
+
+  sitey-api:
+    build:
+      context: ../server
+      dockerfile: Dockerfile
+      target: dev
+    environment:
+      PORT: 3001
+      DATABASE_URL: file:/data/sitey.db
+      DATA_ROOT: /data
+      LOG_LEVEL: debug
+      JWT_SECRET: dev-insecure-change-me-in-production
+      CADDY_ADMIN_URL: http://caddy:2019
+      SITEY_WEB_INTERNAL: sitey-web:3000
+    volumes:
+      - ../server/src:/app/src:ro
+      - ../server/prisma:/app/prisma:ro
+      - ${DATA_ROOT:-./data}:/data
+      - /var/run/docker.sock:/var/run/docker.sock
+    depends_on:
+      caddy:
+        condition: service_started
+      sitey-web:
+        condition: service_healthy
+
+  sitey-web:
+    build:
+      context: ../web
+      dockerfile: Dockerfile.dev
+    volumes:
+      - ../web/src:/app/src:ro
+      - ../web/public:/app/public:ro
+      - ../web/index.html:/app/index.html:ro
+      - ../web/vite.config.ts:/app/vite.config.ts:ro
+    environment:
+      # Tells the browser to connect HMR WebSocket to port 80 (through Caddy)
+      # instead of Vite's internal port 3000 which isn't exposed
+      VITE_HMR_CLIENT_PORT: 80
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 120s  # npm install on first run can be slow
+    networks:
+      - sitey-public

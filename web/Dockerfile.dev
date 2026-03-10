@@ -1,0 +1,11 @@
+FROM node:25-alpine
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm install
+
+# src/, public/, index.html are mounted as volumes at runtime
+EXPOSE 3000
+# CHOKIDAR_USEPOLLING ensures Vite HMR detects changes on Docker Desktop for Windows/Mac
+ENV CHOKIDAR_USEPOLLING=true
+CMD ["npx", "vite", "--host"]

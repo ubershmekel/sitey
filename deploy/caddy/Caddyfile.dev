@@ -1,8 +1,7 @@
-# Dev Caddyfile — used when running server/web natively on the host.
-# Caddy runs in Docker but proxies to the host machine via host.docker.internal.
-# This file is loaded at startup; sitey-api will push a full config via the
-# admin API (POST localhost:2019/load) which replaces this, so HTTPS domains
-# will work too once the server is running.
+# Dev Caddyfile — used with docker-compose.dev.yml.
+# Both sitey-api and sitey-web run as Docker services on the same network,
+# so they resolve by service name (no host.docker.internal needed).
+# sitey-api pushes a full config via POST :2019/load on startup, replacing this.
 {
     admin 0.0.0.0:2019
 }
@@ -10,9 +9,9 @@
 :80 {
     @api path /trpc/* /webhook/* /health/*
     handle @api {
-        reverse_proxy host.docker.internal:3001
+        reverse_proxy sitey-api:3001
     }
     handle {
-        reverse_proxy host.docker.internal:3000
+        reverse_proxy sitey-web:3000
     }
 }

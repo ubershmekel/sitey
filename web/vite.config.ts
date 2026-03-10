@@ -6,6 +6,11 @@ export default defineConfig({
   server: {
     port: 3000,
     host: true,
+    // When running behind a reverse proxy (Caddy in Docker dev), tell the browser
+    // to connect the HMR WebSocket to the proxy's port instead of Vite's port 3000.
+    hmr: process.env.VITE_HMR_CLIENT_PORT
+      ? { clientPort: Number(process.env.VITE_HMR_CLIENT_PORT) }
+      : {},
     proxy: {
       '/trpc': {
         target: 'http://127.0.0.1:3001',

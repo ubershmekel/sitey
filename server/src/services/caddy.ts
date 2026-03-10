@@ -23,6 +23,9 @@ const CADDY_TLS_PORT = Number(process.env.CADDY_TLS_PORT ?? '443')
 // In production this is "sitey-api:3001" (Docker service name).
 // In dev (API running on host) set SITEY_API_INTERNAL=host.docker.internal:3001.
 const SITEY_API_INTERNAL = process.env.SITEY_API_INTERNAL ?? 'sitey-api:3001'
+// When set, Caddy proxies the web SPA to this host instead of serving /srv/web.
+// Use in dev: SITEY_WEB_INTERNAL=host.docker.internal:3000
+const SITEY_WEB_INTERNAL = process.env.SITEY_WEB_INTERNAL ?? ''
 const WILDCARD_STATUS_PROBE_LABEL = 'sitey-dns-check'
 
 export type LetsEncryptStatus = 'pending' | 'active' | 'error'
@@ -134,9 +137,13 @@ function appendAdminHandlers(lines: string[]): void {
   lines.push(`        reverse_proxy ${SITEY_API_INTERNAL}`)
   lines.push('    }')
   lines.push('    handle {')
-  lines.push('        root * /srv/web')
-  lines.push('        try_files {path} /index.html')
-  lines.push('        file_server')
+  if (SITEY_WEB_INTERNAL) {
+    lines.push(`        reverse_proxy ${SITEY_WEB_INTERNAL}`)
+  } else {
+    lines.push('        root * /srv/web')
+    lines.push('        try_files {path} /index.html')
+    lines.push('        file_server')
+  }
   lines.push('    }')
 }
 
@@ -266,18 +273,22 @@ export async function buildCaddyfile(): Promise<string> {
     }
 
     const probeHostname = getWildcardStatusProbeHostname(domain.hostname)
-    if (probeHostname && !routesByHostname.has(probeHostname)) {
+    const mgmtHostname = siteyDomain ? sanitizeDnsName(siteyDomain) : null
+    if (probeHostname && !routesByHostname.has(probeHostname) && probeHostname !== mgmtHostname) {
       appendProbeSiteBlock(lines, probeHostname, domain.letsEncryptEmail)
     }
 
     if ((domain as any).siteySubdomainsEnabled) {
       const siteySubdomain = `sitey.${domain.hostname.slice(2)}`
-      if (!routesByHostname.has(siteySubdomain)) {
+      // Skip if the management site already owns this hostname (avoids duplicate block)
+      const mgmtOwnsIt = siteyDomain && sanitizeDnsName(siteyDomain) === sanitizeDnsName(siteySubdomain)
+      if (!mgmtOwnsIt && !routesByHostname.has(siteySubdomain)) {
         appendSiteBlock(lines, siteySubdomain, domain.letsEncryptEmail, [])
       }
     }
 
     for (const [hostname, hostRoutes] of routesByHostname.entries()) {
+      if (hostname === mgmtHostname) continue // management block already owns this hostname
       appendSiteBlock(lines, hostname, domain.letsEncryptEmail, hostRoutes)
     }
   }

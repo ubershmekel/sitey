@@ -10,6 +10,15 @@ COPY package*.json ./
 COPY prisma ./prisma/
 RUN npm install
 
+# Development stage — src is mounted as a volume at runtime
+FROM deps AS dev
+RUN npx prisma generate
+ENV NODE_ENV=development
+EXPOSE 3001
+# CHOKIDAR_USEPOLLING ensures tsx watch detects changes on Docker Desktop for Windows/Mac
+ENV CHOKIDAR_USEPOLLING=true
+CMD ["npx", "tsx", "watch", "src/index.ts"]
+
 # Build
 FROM deps AS builder
 COPY src ./src

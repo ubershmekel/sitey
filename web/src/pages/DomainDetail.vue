@@ -4,7 +4,7 @@
     <div v-else-if="error" class="alert error">{{ error }}</div>
     <template v-else-if="domain">
       <div class="breadcrumb">
-        <RouterLink to="/">Domains</RouterLink> / {{ domain.hostname }}
+        <RouterLink to="/domains">Domains</RouterLink> / {{ domain.hostname }}
       </div>
 
       <h1>{{ domain.hostname }}</h1>
@@ -35,8 +35,8 @@
             <input v-model="editSiteySubdomains" type="checkbox" />
             Enable Sitey subdomains
           </label>
-          <a v-if="editSiteySubdomains" :href="`https://sitey.${domain.hostname.slice(2)}`"
-            target="_blank" rel="noopener" class="sitey-subdomain-link">
+          <a v-if="editSiteySubdomains" :href="`https://sitey.${domain.hostname.slice(2)}`" target="_blank"
+            rel="noopener" class="sitey-subdomain-link">
             sitey.{{ domain.hostname.slice(2) }} ↗
           </a>
         </div>
