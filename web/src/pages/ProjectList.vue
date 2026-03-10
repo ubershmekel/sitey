@@ -26,6 +26,10 @@
           <div class="project-repo">{{ p.repoOwner }}/{{ p.repoName }}</div>
         </RouterLink>
       </div>
+      <div v-else class="empty-state">
+        <p>No projects yet. Create one to deploy your first app.</p>
+        <button class="btn-primary mt-1" @click="showAdd = true">Add project</button>
+      </div>
     </template>
 
     <!-- Add project modal -->
@@ -394,6 +398,15 @@ h1 {
 
 .state-msg {
   color: var(--text-muted);
+}
+
+.empty-state {
+  color: var(--text-muted);
+  padding: 2rem 0;
+}
+
+.mt-1 {
+  margin-top: 1rem;
 }
 
 .alert.error {

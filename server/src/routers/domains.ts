@@ -15,6 +15,27 @@ import { docker } from "../services/docker.js";
 const HOSTNAME_REGEX =
   /^(?:\*\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/;
 
+function decodeDockerLogPayload(logs: unknown): string {
+  if (!Buffer.isBuffer(logs)) return String(logs ?? "");
+
+  let cursor = 0;
+  const chunks: Buffer[] = [];
+
+  // Docker multiplexed log format (stdout/stderr) uses 8-byte frame headers:
+  // [stream:1][reserved:3][size:4 big-endian][payload:size]
+  while (cursor + 8 <= logs.length) {
+    const size = logs.readUInt32BE(cursor + 4);
+    const start = cursor + 8;
+    const end = start + size;
+    if (end > logs.length) break;
+    chunks.push(logs.subarray(start, end));
+    cursor = end;
+  }
+
+  // If parsing produced nothing, fall back to plain UTF-8 decode.
+  return (chunks.length ? Buffer.concat(chunks) : logs).toString("utf8");
+}
+
 function normalizeHostnameInput(hostname: string): string {
   return hostname.trim().toLowerCase().replace(/\.$/, "");
 }
@@ -177,9 +198,7 @@ export const domainsRouter = router({
           timestamps: false,
           tail: input.tail,
         });
-        const raw = Buffer.isBuffer(logs)
-          ? logs.toString("utf8")
-          : String(logs ?? "");
+        const raw = decodeDockerLogPayload(logs);
         const lines = raw
           .split(/\r?\n/)
           .map((line) =>
