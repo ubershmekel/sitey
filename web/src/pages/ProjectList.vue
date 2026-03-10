@@ -11,12 +11,7 @@
     <template v-else>
       <!-- Project grid -->
       <div v-if="userProjects.length > 0" class="project-grid">
-        <RouterLink
-          v-for="p in userProjects"
-          :key="p.id"
-          :to="`/projects/${p.id}`"
-          class="project-card"
-        >
+        <RouterLink v-for="p in userProjects" :key="p.id" :to="`/projects/${p.id}`" class="project-card">
           <div class="project-name">{{ p.name }}</div>
           <div class="project-meta">
             <span :class="`status status-${p.status}`">{{ p.status }}</span>
@@ -46,15 +41,8 @@
         </label>
         <label>
           GitHub repository
-          <input
-            v-model="form.githubUrl"
-            type="text"
-            required
-            list="repo-list"
-            placeholder="owner/repo or https://github.com/owner/repo"
-            @input="parseGithubUrl"
-            @blur="parseGithubUrl"
-          />
+          <input v-model="form.githubUrl" type="text" required list="repo-list"
+            placeholder="owner/repo or https://github.com/owner/repo" @input="parseGithubUrl" @blur="parseGithubUrl" />
           <datalist id="repo-list">
             <option v-for="repo in appRepos" :key="repo.id" :value="repo.fullName" />
           </datalist>
@@ -233,7 +221,7 @@ async function loadRepoSuggestions() {
 }
 
 const emptyForm = () => ({
-  name: '', githubUrl: '', repoOwner: '', repoName: '', domainId: '',
+  name: '', githubUrl: '', repoOwner: '', repoName: '', domainId: 0,
   branch: 'main', buildCommand: '', outputDir: '', serverRunCommand: '', containerPort: 3000,
 })
 
@@ -248,6 +236,7 @@ async function addProject() {
       repoOwner: form.value.repoOwner.trim(),
       repoName: form.value.repoName.trim(),
       branch: form.value.branch.trim() || 'main',
+      githubMode: hasGitHubApp.value ? 'app' : 'webhook',
       deployMode: isStatic ? 'static' : 'server',
       buildCommand: form.value.buildCommand.trim(),
       outputDir: form.value.outputDir.trim(),
@@ -288,10 +277,16 @@ onMounted(fetchAll)
 
 <style scoped>
 .page-header {
-  display: flex; align-items: center; justify-content: space-between;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin-bottom: 2rem;
 }
-h1 { font-size: 1.4rem; font-weight: 600; }
+
+h1 {
+  font-size: 1.4rem;
+  font-weight: 600;
+}
 
 /* ── Project grid ── */
 .project-grid {
@@ -301,65 +296,220 @@ h1 { font-size: 1.4rem; font-weight: 600; }
 }
 
 .project-card {
-  background: var(--bg-card); border: 1px solid var(--border-default); border-radius: 10px;
-  padding: 1.25rem 1.5rem; text-decoration: none; color: inherit;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: 10px;
+  padding: 1.25rem 1.5rem;
+  text-decoration: none;
+  color: inherit;
   transition: border-color 0.15s, background 0.15s;
-  display: flex; flex-direction: column; gap: 0.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
 }
-.project-card:hover { border-color: var(--brand); background: var(--bg-hover); }
 
-.project-name { font-size: 1rem; font-weight: 600; color: var(--text-primary); }
-.project-meta { display: flex; align-items: center; gap: 0.6rem; }
-.deploy-mode { font-size: 0.75rem; color: var(--text-muted); background: var(--bg-input); border: 1px solid var(--border-strong); padding: 0.15rem 0.4rem; border-radius: 4px; }
-.project-routes { display: flex; flex-wrap: wrap; gap: 0.35rem; }
-.route-tag { font-size: 0.75rem; color: var(--brand); background: var(--brand-active-bg); border: 1px solid #3a3060; padding: 0.15rem 0.45rem; border-radius: 4px; }
-.no-routes { font-size: 0.75rem; color: var(--text-dim); }
-.project-repo { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.15rem; }
+.project-card:hover {
+  border-color: var(--brand);
+  background: var(--bg-hover);
+}
 
-.status { font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 4px; font-weight: 500; }
-.status-idle     { background: var(--status-idle-bg);    color: var(--status-idle-text); }
-.status-building { background: var(--status-queued-bg);  color: var(--brand); }
-.status-running  { background: var(--status-ok-bg);      color: var(--status-ok-text); }
-.status-failed   { background: var(--status-err-bg);     color: var(--status-err-text); }
-.status-stopped  { background: var(--status-warn-bg);    color: var(--status-warn-text); }
+.project-name {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
 
-.state-msg { color: var(--text-muted); }
-.alert.error { background: var(--status-err-bg); border: 1px solid var(--status-err-border); color: var(--status-err-text); border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.85rem; margin-bottom: 1rem; }
+.project-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+}
+
+.deploy-mode {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  padding: 0.15rem 0.4rem;
+  border-radius: 4px;
+}
+
+.project-routes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.route-tag {
+  font-size: 0.75rem;
+  color: var(--brand);
+  background: var(--brand-active-bg);
+  border: 1px solid #3a3060;
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+}
+
+.no-routes {
+  font-size: 0.75rem;
+  color: var(--text-dim);
+}
+
+.project-repo {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 0.15rem;
+}
+
+.status {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.status-idle {
+  background: var(--status-idle-bg);
+  color: var(--status-idle-text);
+}
+
+.status-building {
+  background: var(--status-queued-bg);
+  color: var(--brand);
+}
+
+.status-running {
+  background: var(--status-ok-bg);
+  color: var(--status-ok-text);
+}
+
+.status-failed {
+  background: var(--status-err-bg);
+  color: var(--status-err-text);
+}
+
+.status-stopped {
+  background: var(--status-warn-bg);
+  color: var(--status-warn-text);
+}
+
+.state-msg {
+  color: var(--text-muted);
+}
+
+.alert.error {
+  background: var(--status-err-bg);
+  border: 1px solid var(--status-err-border);
+  color: var(--status-err-text);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
+  margin-bottom: 1rem;
+}
 
 /* ── Modal ── */
 .modal-backdrop {
-  position: fixed; inset: 0; background: rgba(0,0,0,0.7);
-  display: flex; align-items: center; justify-content: center; z-index: 100;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
 }
+
 .modal {
-  background: var(--bg-card); border: 1px solid var(--border-default); border-radius: 12px;
-  padding: 2rem; width: 440px; display: flex; flex-direction: column; gap: 1.25rem;
-  max-height: 90vh; overflow-y: auto;
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  padding: 2rem;
+  width: 440px;
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  max-height: 90vh;
+  overflow-y: auto;
 }
-.modal h2 { font-size: 1.1rem; font-weight: 600; }
-label { display: flex; flex-direction: column; gap: 0.4rem; font-size: 0.85rem; color: var(--text-secondary); }
-.hint { color: var(--text-muted); font-size: 0.78rem; }
-.hint a { color: var(--brand); }
-input, select {
-  background: var(--bg-input); border: 1px solid var(--border-strong); border-radius: 6px;
-  padding: 0.6rem 0.75rem; color: var(--text-primary); font-size: 0.95rem; outline: none;
+
+.modal h2 {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.hint {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+}
+
+.hint a {
+  color: var(--brand);
+}
+
+input,
+select {
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  outline: none;
   transition: border-color 0.15s;
 }
-input:focus, select:focus { border-color: var(--brand); }
-.modal-actions { display: flex; justify-content: flex-end; gap: 0.75rem; margin-top: 0.5rem; }
+
+input:focus,
+select:focus {
+  border-color: var(--brand);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
 
 .btn-primary {
-  background: var(--brand); color: #fff; border: none; border-radius: 6px;
-  padding: 0.6rem 1.25rem; font-size: 0.9rem; font-weight: 600; cursor: pointer;
+  background: var(--brand);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
   transition: opacity 0.15s;
 }
-.btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
-.btn-primary:hover:not(:disabled) { opacity: 0.85; }
+
+.btn-primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary:hover:not(:disabled) {
+  opacity: 0.85;
+}
 
 .btn-ghost {
-  background: none; color: var(--text-secondary); border: 1px solid var(--border-strong); border-radius: 6px;
-  padding: 0.6rem 1.25rem; font-size: 0.9rem; cursor: pointer;
+  background: none;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 0.6rem 1.25rem;
+  font-size: 0.9rem;
+  cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
-.btn-ghost:hover { border-color: var(--text-muted); color: var(--text-primary); }
+
+.btn-ghost:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
 </style>
