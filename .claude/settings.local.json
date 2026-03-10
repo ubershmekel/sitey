@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npx prisma db push)",
-      "Bash(npx prisma generate)"
+      "Bash(npx prisma generate)",
+      "Bash(npm run db:push)"
     ]
   }
 }

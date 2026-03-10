@@ -19,6 +19,10 @@ const CADDY_ADMIN_URL = process.env.CADDY_ADMIN_URL ?? 'http://caddy:2019'
 const CADDY_ADMIN_ORIGIN = process.env.CADDY_ADMIN_ORIGIN ?? getOriginFromUrl(CADDY_ADMIN_URL)
 const CADDY_TLS_HOST = process.env.CADDY_TLS_HOST ?? getHostFromUrl(CADDY_ADMIN_URL)
 const CADDY_TLS_PORT = Number(process.env.CADDY_TLS_PORT ?? '443')
+// Host:port that Caddy (inside Docker) uses to reach the sitey-api.
+// In production this is "sitey-api:3001" (Docker service name).
+// In dev (API running on host) set SITEY_API_INTERNAL=host.docker.internal:3001.
+const SITEY_API_INTERNAL = process.env.SITEY_API_INTERNAL ?? 'sitey-api:3001'
 const WILDCARD_STATUS_PROBE_LABEL = 'sitey-dns-check'
 
 export type LetsEncryptStatus = 'pending' | 'active' | 'error'
@@ -127,7 +131,7 @@ export async function getLetsEncryptStatusesFromCaddy(hostnames: string[]): Prom
 function appendAdminHandlers(lines: string[]): void {
   lines.push('    @api path /trpc/* /webhook/* /health/*')
   lines.push('    handle @api {')
-  lines.push('        reverse_proxy sitey-api:3001')
+  lines.push(`        reverse_proxy ${SITEY_API_INTERNAL}`)
   lines.push('    }')
   lines.push('    handle {')
   lines.push('        root * /srv/web')
@@ -264,6 +268,13 @@ export async function buildCaddyfile(): Promise<string> {
     const probeHostname = getWildcardStatusProbeHostname(domain.hostname)
     if (probeHostname && !routesByHostname.has(probeHostname)) {
       appendProbeSiteBlock(lines, probeHostname, domain.letsEncryptEmail)
+    }
+
+    if ((domain as any).siteySubdomainsEnabled) {
+      const siteySubdomain = `sitey.${domain.hostname.slice(2)}`
+      if (!routesByHostname.has(siteySubdomain)) {
+        appendSiteBlock(lines, siteySubdomain, domain.letsEncryptEmail, [])
+      }
     }
 
     for (const [hostname, hostRoutes] of routesByHostname.entries()) {

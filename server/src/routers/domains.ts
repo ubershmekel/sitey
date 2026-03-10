@@ -80,10 +80,15 @@ export const domainsRouter = router({
       id: z.string(),
       letsEncryptEmail: z.string().email().optional(),
       status: z.enum(['pending', 'active', 'error']).optional(),
+      siteySubdomainsEnabled: z.boolean().optional(),
     }))
     .mutation(async ({ input }) => {
       const { id, ...data } = input
-      return db.domain.update({ where: { id }, data })
+      const domain = await db.domain.update({ where: { id }, data })
+      if ('siteySubdomainsEnabled' in data) {
+        reloadCaddy().catch(err => console.error('[domains] Caddy reload failed after update:', err))
+      }
+      return domain
     }),
 
   delete: settledProcedure

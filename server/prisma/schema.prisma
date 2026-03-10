@@ -17,14 +17,16 @@ model User {
 }
 
 model Domain {
-  id               String         @id @default(cuid())
-  hostname         String         @unique
-  letsEncryptEmail String
-  status           String         @default("pending") // pending | active | error
-  statusCheckedAt  DateTime?
-  createdAt        DateTime       @default(now())
-  updatedAt        DateTime       @updatedAt
-  routes           ProjectRoute[]
+  id                     String         @id @default(cuid())
+  hostname               String         @unique
+  letsEncryptEmail       String
+  status                 String         @default("pending") // pending | active | error
+  statusCheckedAt        DateTime?
+   // wildcard only: serve sitey panel at sitey.<base>
+  siteySubdomainsEnabled Boolean        @default(true)
+  createdAt              DateTime       @default(now())
+  updatedAt              DateTime       @updatedAt
+  routes                 ProjectRoute[]
 }
 
 model Project {

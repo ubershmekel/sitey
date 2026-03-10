@@ -21,7 +21,7 @@
 
       <div class="domain-section">
         <div class="field-row">
-          <span class="field-label">TLS</span>
+          <span class="field-label">HTTPS</span>
           <span :class="`status status-${domain.status}`">{{ tlsLabel(domain.status) }}</span>
         </div>
 
@@ -29,6 +29,17 @@
           Let's Encrypt email
           <input v-model="editEmail" type="email" />
         </label>
+
+        <div v-if="isWildcard" class="field-row sitey-subdomain-row">
+          <label class="checkbox-label">
+            <input v-model="editSiteySubdomains" type="checkbox" />
+            Enable Sitey subdomains
+          </label>
+          <a v-if="editSiteySubdomains" :href="`https://sitey.${domain.hostname.slice(2)}`"
+            target="_blank" rel="noopener" class="sitey-subdomain-link">
+            sitey.{{ domain.hostname.slice(2) }} ↗
+          </a>
+        </div>
 
         <div class="dns-check">
           <div class="dns-row">
@@ -170,10 +181,13 @@ const repoInstallUrl = ref('')
 
 // ── Inline domain edit ────────────────────────────────────────────────────────
 const editEmail = ref('')
+const editSiteySubdomains = ref(false)
 const editSaving = ref(false)
 const editError = ref('')
 const saveSucceeded = ref(false)
 const deletingDomain = ref(false)
+
+const isWildcard = computed(() => domain.value?.hostname.startsWith('*.') ?? false)
 type DnsResult = { resolves: boolean; addresses: string[] } | null
 const dnsResult = ref<DnsResult>(null)
 
@@ -188,7 +202,11 @@ async function saveEdit() {
   saveSucceeded.value = false
   editSaving.value = true
   try {
-    await trpc.domains.update.mutate({ id: domainId, letsEncryptEmail: editEmail.value })
+    await trpc.domains.update.mutate({
+      id: domainId,
+      letsEncryptEmail: editEmail.value,
+      ...(isWildcard.value ? { siteySubdomainsEnabled: editSiteySubdomains.value } : {}),
+    })
     saveSucceeded.value = true
     setTimeout(() => { saveSucceeded.value = false }, 3000)
     await fetchDomain()
@@ -268,6 +286,7 @@ async function fetchDomain() {
   try {
     domain.value = await trpc.domains.get.query({ id: domainId })
     editEmail.value = domain.value.letsEncryptEmail ?? ''
+    editSiteySubdomains.value = (domain.value as any).siteySubdomainsEnabled ?? false
   } catch (e: unknown) {
     error.value = (e as { message?: string })?.message ?? 'Failed to load domain'
   } finally {
@@ -354,8 +373,8 @@ async function addProject() {
 function tlsLabel(status: string) {
   const labels: Record<string, string> = {
     pending: 'Obtaining certificate…',
-    active:  'HTTPS active',
-    error:   'Certificate error',
+    active: 'HTTPS active',
+    error: 'Certificate error',
   }
   return labels[status] ?? status
 }
@@ -511,14 +530,45 @@ h1 {
   font-weight: 500;
 }
 
-.status-idle     { background: var(--status-idle-bg);    color: var(--status-idle-text); }
-.status-pending  { background: var(--status-warn-bg);    color: var(--status-warn-text); }
-.status-building { background: var(--status-info-bg);    color: var(--status-info-text); }
-.status-running  { background: var(--status-ok-bg);      color: var(--status-ok-text); }
-.status-active   { background: var(--status-ok-bg);      color: var(--status-ok-text); }
-.status-failed   { background: var(--status-err-bg);     color: var(--status-err-text); }
-.status-stopped  { background: var(--status-idle-bg);    color: var(--status-idle-text); }
-.status-error    { background: var(--status-err-bg);     color: var(--status-err-text); }
+.status-idle {
+  background: var(--status-idle-bg);
+  color: var(--status-idle-text);
+}
+
+.status-pending {
+  background: var(--status-warn-bg);
+  color: var(--status-warn-text);
+}
+
+.status-building {
+  background: var(--status-info-bg);
+  color: var(--status-info-text);
+}
+
+.status-running {
+  background: var(--status-ok-bg);
+  color: var(--status-ok-text);
+}
+
+.status-active {
+  background: var(--status-ok-bg);
+  color: var(--status-ok-text);
+}
+
+.status-failed {
+  background: var(--status-err-bg);
+  color: var(--status-err-text);
+}
+
+.status-stopped {
+  background: var(--status-idle-bg);
+  color: var(--status-idle-text);
+}
+
+.status-error {
+  background: var(--status-err-bg);
+  color: var(--status-err-text);
+}
 
 .empty-state {
   color: var(--text-muted);
@@ -679,6 +729,41 @@ select:focus {
 .btn-danger:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.sitey-subdomain-row {
+  align-items: center;
+  gap: 1rem;
+}
+
+.checkbox-label {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+
+.checkbox-label input[type="checkbox"] {
+  width: 1rem;
+  height: 1rem;
+  accent-color: var(--brand);
+  cursor: pointer;
+  padding: 0;
+  border: none;
+}
+
+.sitey-subdomain-link {
+  font-size: 0.8rem;
+  color: var(--brand);
+  text-decoration: none;
+  font-family: monospace;
+}
+
+.sitey-subdomain-link:hover {
+  text-decoration: underline;
 }
 
 .dns-check {
