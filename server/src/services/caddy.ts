@@ -65,6 +65,14 @@ function sanitizeDnsName(name: string): string {
   return name.trim().toLowerCase().replace(/\.$/, "");
 }
 
+function isIpAddress(host: string): boolean {
+  // IPv4
+  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true;
+  // IPv6 (with or without brackets)
+  if (/^\[?[0-9a-fA-F:]+\]?$/.test(host) && host.includes(":")) return true;
+  return false;
+}
+
 function wildcardMatches(pattern: string, hostname: string): boolean {
   if (!pattern.startsWith("*.")) return false;
   const suffix = pattern.slice(2);
@@ -323,20 +331,23 @@ export async function buildCaddyfile(): Promise<string> {
   lines.push("");
 
   // Management site (sitey control panel + API).
-  // Prefer SITEY_DOMAIN env var; fall back to PublicSiteUrl (DB/wildcard/env).
+  // :80 always serves admin — works on first install with no domain configured.
+  // If SITEY_DOMAIN is a real hostname (not an IP), also serve it over HTTPS.
   const siteyDomain =
     process.env.SITEY_DOMAIN ||
     (siteUrlResolution.effectiveUrl
       ? new URL(siteUrlResolution.effectiveUrl).hostname
       : null);
   const siteyEmail = process.env.SITEY_EMAIL;
-  const mgmtHost = siteyDomain || ":80";
-  const mgmtHostname = siteyDomain ? sanitizeDnsName(siteyDomain) : null;
+  const siteyNamedDomain =
+    siteyDomain && !isIpAddress(siteyDomain)
+      ? sanitizeDnsName(siteyDomain)
+      : null;
 
   // Collect path-prefix routes on wildcard domains that resolve to the mgmt hostname.
   // These are embedded in the management block so the sitey app still handles everything else.
   const mgmtRoutes: ActiveRoute[] = [];
-  if (mgmtHostname) {
+  if (siteyNamedDomain) {
     for (const domain of domains) {
       if (!domain.hostname.startsWith("*.")) continue;
       const activeRoutes = domain.routes.filter((r) => {
@@ -346,24 +357,23 @@ export async function buildCaddyfile(): Promise<string> {
       }) as ActiveRoute[];
       for (const route of activeRoutes) {
         const rh = resolveRouteHostname(domain.hostname, route.subdomain);
-        if (rh === mgmtHostname && route.pathPrefix) mgmtRoutes.push(route);
+        if (rh === siteyNamedDomain && route.pathPrefix) mgmtRoutes.push(route);
       }
     }
   }
 
-  lines.push(`${mgmtHost} {`);
-  if (siteyDomain && siteyEmail) {
-    lines.push(`    tls ${siteyEmail}`);
-  }
+  // Always emit a plain :80 block — works on fresh installs before DNS/TLS is set up.
+  lines.push(":80 {");
   for (const route of mgmtRoutes) appendRouteHandler(lines, route);
   appendAdminHandlers(lines);
   lines.push("}");
   lines.push("");
 
-  // Always keep a plain HTTP fallback so local/dev access works without TLS.
-  // When mgmtHost is already :80 this would be a duplicate, so skip it.
-  if (mgmtHost !== ":80") {
-    lines.push(":80 {");
+  // If a real domain is configured, also serve HTTPS on that domain.
+  if (siteyNamedDomain) {
+    lines.push(`${siteyNamedDomain} {`);
+    if (siteyEmail) lines.push(`    tls ${siteyEmail}`);
+    for (const route of mgmtRoutes) appendRouteHandler(lines, route);
     appendAdminHandlers(lines);
     lines.push("}");
     lines.push("");
@@ -405,7 +415,7 @@ export async function buildCaddyfile(): Promise<string> {
     if (
       probeHostname &&
       !routesByHostname.has(probeHostname) &&
-      probeHostname !== mgmtHostname
+      probeHostname !== siteyNamedDomain
     ) {
       appendProbeSiteBlock(lines, probeHostname, domain.letsEncryptEmail);
     }
@@ -422,7 +432,7 @@ export async function buildCaddyfile(): Promise<string> {
     }
 
     for (const [hostname, hostRoutes] of routesByHostname.entries()) {
-      if (hostname === mgmtHostname) continue; // management block already owns this hostname
+      if (hostname === siteyNamedDomain) continue; // management block already owns this hostname
       appendSiteBlock(lines, hostname, domain.letsEncryptEmail, hostRoutes);
     }
   }
