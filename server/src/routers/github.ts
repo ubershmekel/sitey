@@ -116,7 +116,7 @@ export const githubRouter = router({
         redirect_url: `${siteUrl}/github/app/callback`,
         default_permissions: { contents: 'read' },
         default_events: ['push'],
-        public: false,
+        public: true,
       }
       return {
         actionUrl: 'https://github.com/settings/apps/new',
@@ -225,7 +225,7 @@ export const githubRouter = router({
       // best-effort metadata; keep going
     }
 
-    const installations: { id: number }[] = []
+    const rawInstallations: { id: number; accountLogin: string; accountType: string }[] = []
     for (let page = 1; ; page++) {
       const res = await githubFetch(`/app/installations?per_page=100&page=${page}`, {
         headers: { Authorization: `Bearer ${appJwt}` },
@@ -234,8 +234,15 @@ export const githubRouter = router({
         const text = await res.text()
         throw new TRPCError({ code: 'BAD_REQUEST', message: `GitHub API error: ${text}` })
       }
-      const rows = await res.json() as Array<{ id: number }>
-      installations.push(...rows)
+      const rows = await res.json() as Array<{
+        id: number
+        account: { login: string; type: string } | null
+      }>
+      rawInstallations.push(...rows.map(r => ({
+        id: r.id,
+        accountLogin: r.account?.login ?? 'unknown',
+        accountType: r.account?.type ?? 'User',
+      })))
       if (rows.length < 100) break
     }
 
@@ -249,7 +256,9 @@ export const githubRouter = router({
       installationId: string
     }>()
 
-    for (const installation of installations) {
+    const installationsWithCounts: { id: number; accountLogin: string; accountType: string; repoCount: number }[] = []
+
+    for (const installation of rawInstallations) {
       const tokenRes = await githubFetch(`/app/installations/${installation.id}/access_tokens`, {
         method: 'POST',
         headers: { Authorization: `Bearer ${appJwt}` },
@@ -261,6 +270,7 @@ export const githubRouter = router({
       const tokenData = await tokenRes.json() as { token: string }
       const accessToken = tokenData.token
 
+      let repoCount = 0
       for (let page = 1; ; page++) {
         const reposRes = await githubFetch(`/installation/repositories?per_page=100&page=${page}`, {
           headers: { Authorization: `Bearer ${accessToken}` },
@@ -290,14 +300,17 @@ export const githubRouter = router({
             installationId: String(installation.id),
           })
         }
+        repoCount += payload.repositories.length
         if (payload.repositories.length < 100) break
       }
+
+      installationsWithCounts.push({ ...installation, repoCount })
     }
 
     const repos = Array.from(deduped.values()).sort((a, b) => a.fullName.localeCompare(b.fullName))
     return {
       configured: true,
-      installations: installations.length,
+      installations: installationsWithCounts,
       app: {
         slug: appSlug,
         name: appName,

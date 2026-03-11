@@ -111,7 +111,7 @@ const appRepos = ref<AppRepo[]>([])
 const reposLoading = ref(false)
 const repoLoadError = ref('')
 const reposConfigured = ref(false)
-const repoInstallations = ref(0)
+const repoInstallations = ref<number>(0)
 const repoInstallUrl = ref('')
 const inferredProjectName = ref('')
 
@@ -193,7 +193,7 @@ async function loadRepoSuggestions() {
     const res = await trpc.github.listAppRepos.query()
     appRepos.value = res.repos
     reposConfigured.value = res.configured
-    repoInstallations.value = res.installations
+    repoInstallations.value = Array.isArray(res.installations) ? res.installations.length : 0
     repoInstallUrl.value = res.app.installUrl ?? ''
   } catch {
     appRepos.value = []

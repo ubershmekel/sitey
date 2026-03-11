@@ -30,26 +30,44 @@
 
         <div v-if="repoStatusLoading" class="section-hint">Checking installations…</div>
         <template v-else-if="!repoStatusError">
-          <div class="meta-row">
-            <span class="meta-label">Installations</span>
-            <span class="meta-value">{{ repoInstallations }}</span>
+          <!-- Installation list -->
+          <div class="installations-section">
+            <div class="installations-header">
+              <span class="meta-label">Installed on</span>
+              <span class="meta-value" v-if="installations.length === 0">—</span>
+            </div>
+
+            <div v-if="installations.length === 0" class="warn-box">
+              App is created but not installed on any account or organization yet —
+              project autocomplete won't see any repositories.
+            </div>
+
+            <ul v-else class="installation-list">
+              <li v-for="inst in installations" :key="inst.id" class="installation-item">
+                <span class="install-avatar">{{ inst.accountType === 'Organization' ? '⊞' : '○' }}</span>
+                <span class="install-login">{{ inst.accountLogin }}</span>
+                <span class="install-type">{{ inst.accountType === 'Organization' ? 'org' : 'user' }}</span>
+                <span class="install-repos">{{ inst.repoCount }} repo{{ inst.repoCount !== 1 ? 's' : '' }}</span>
+              </li>
+            </ul>
           </div>
-          <div class="meta-row">
-            <span class="meta-label">Repositories visible</span>
-            <span class="meta-value">{{ repoCount }}</span>
+
+          <!-- Install link — shareable -->
+          <div v-if="installUrl" class="install-link-section">
+            <p class="section-hint install-link-label">
+              Install on another personal account or organization — share this link or open it yourself.
+              On the GitHub page, use the <strong>account switcher</strong> at the top to select a personal account or org.
+            </p>
+            <div class="install-link-row">
+              <code class="install-link-url">{{ installUrl }}</code>
+              <button class="btn-ghost btn-sm" @click="copyInstallUrl">{{ copied ? 'Copied!' : 'Copy' }}</button>
+              <a :href="installUrl" target="_blank" rel="noopener" class="btn-ghost btn-sm">Open →</a>
+            </div>
           </div>
-          <p v-if="repoInstallations === 0" class="section-hint warn">
-            App is created but not installed on any account or org yet —
-            project autocomplete won't see any repositories.
-            <a v-if="appConfig?.installUrl" :href="appConfig.installUrl" target="_blank" rel="noopener">Install app on GitHub →</a>
-          </p>
         </template>
         <p v-else class="section-hint warn">{{ repoStatusError }}</p>
 
         <div class="action-row">
-          <a v-if="appConfig?.installUrl" :href="appConfig.installUrl" target="_blank" rel="noopener" class="btn-ghost">
-            Manage on GitHub
-          </a>
           <button class="btn-danger btn-sm" @click="clearAppConfig">Disconnect</button>
         </div>
       </div>
@@ -115,6 +133,7 @@ import { trpc } from '../trpc'
 type AppConfig = Awaited<ReturnType<typeof trpc.github.getAppConfig.query>>
 type Manifest = Awaited<ReturnType<typeof trpc.github.getManifest.query>>
 type AppRepoInfo = Awaited<ReturnType<typeof trpc.github.listAppRepos.query>>
+type Installation = Extract<AppRepoInfo, { configured: true }>['installations'][number]
 
 const route = useRoute()
 const appConfig = ref<AppConfig | null>(null)
@@ -127,9 +146,17 @@ const appError = ref('')
 const appSuccess = ref(false)
 const repoStatusLoading = ref(false)
 const repoStatusError = ref('')
-const repoInstallations = ref(0)
-const repoCount = ref(0)
+const installations = ref<Installation[]>([])
+const installUrl = ref<string | null>(null)
+const copied = ref(false)
 const appCreated = computed(() => route.query.app_created === '1')
+
+async function copyInstallUrl() {
+  if (!installUrl.value) return
+  await navigator.clipboard.writeText(installUrl.value)
+  copied.value = true
+  setTimeout(() => { copied.value = false }, 2000)
+}
 
 async function fetchManifest() {
   manifestError.value = ''
@@ -153,12 +180,28 @@ async function fetchRepoInfo() {
   repoStatusError.value = ''
   try {
     const info: AppRepoInfo = await trpc.github.listAppRepos.query()
-    repoInstallations.value = info.installations
-    repoCount.value = info.repos.length
+    if (info.configured) {
+      installations.value = info.installations
+      installUrl.value = info.app.installUrl
+    } else {
+      installations.value = []
+      installUrl.value = null
+    }
   } catch (e: unknown) {
-    repoInstallations.value = 0
-    repoCount.value = 0
-    repoStatusError.value = (e as { message?: string })?.message ?? 'Could not read GitHub App installation status.'
+    const msg = (e as { message?: string })?.message ?? ''
+    // If the app no longer exists on GitHub, clear the stale credentials automatically
+    if (msg.includes('Integration not found') || msg.includes('"status":"404"') || msg.includes('404')) {
+      await trpc.github.clearAppConfig.mutate()
+      appConfig.value = null
+      app.appId = ''; app.privateKey = ''; app.webhookSecret = ''
+      installations.value = []
+      installUrl.value = null
+      repoStatusError.value = ''
+      await fetchManifest()
+      return
+    }
+    installations.value = []
+    repoStatusError.value = msg || 'Could not read GitHub App installation status.'
   } finally {
     repoStatusLoading.value = false
   }
@@ -172,8 +215,8 @@ async function fetchAppConfig() {
     if (config.configured) {
       await fetchRepoInfo()
     } else {
-      repoInstallations.value = 0
-      repoCount.value = 0
+      installations.value = []
+      installUrl.value = null
       repoStatusError.value = ''
     }
   } catch { /* ignore */ }
@@ -204,8 +247,8 @@ async function clearAppConfig() {
   await trpc.github.clearAppConfig.mutate()
   appConfig.value = null
   app.appId = ''; app.privateKey = ''; app.webhookSecret = ''
-  repoInstallations.value = 0
-  repoCount.value = 0
+  installations.value = []
+  installUrl.value = null
   repoStatusError.value = ''
 }
 
@@ -299,7 +342,7 @@ h1 {
 .connected-body {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.75rem;
 }
 
 .meta-row {
@@ -311,16 +354,121 @@ h1 {
 .meta-label {
   color: var(--text-muted);
   min-width: 140px;
+  font-size: 0.85rem;
 }
 
 .meta-value {
   color: var(--text-secondary);
+  font-size: 0.85rem;
+}
+
+.installations-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.installations-header {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+.warn-box {
+  font-size: 0.83rem;
+  color: var(--status-warn-text);
+  background: var(--status-warn-bg);
+  border: 1px solid var(--status-warn-border);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+}
+
+.installation-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.installation-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.85rem;
+  padding: 0.4rem 0.6rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+}
+
+.install-avatar {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  flex-shrink: 0;
+}
+
+.install-login {
+  font-weight: 500;
+  color: var(--text-primary);
+  flex: 1;
+}
+
+.install-type {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: 3px;
+  padding: 0.1rem 0.35rem;
+}
+
+.install-repos {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.install-link-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  background: var(--bg-input);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+}
+
+.install-link-label {
+  margin: 0;
+}
+
+.install-link-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.install-link-url {
+  font-size: 0.78rem;
+  color: var(--text-secondary);
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  padding: 0.3rem 0.5rem;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .action-row {
   display: flex;
   gap: 0.75rem;
-  margin-top: 1rem;
+  margin-top: 0.5rem;
 }
 
 .domain-select-row {
