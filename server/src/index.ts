@@ -77,7 +77,77 @@ async function main() {
   // ── Health ─────────────────────────────────────────────────────────────────
   app.get('/health', async () => ({ ok: true, version: '0.1.0' }))
 
-  // ── GitHub Webhook ─────────────────────────────────────────────────────────
+  // ── GitHub App Webhook (no project ID — matched by repo + installation) ────
+  app.post('/webhook/github', async (req, reply) => {
+    const signature = (req.headers['x-hub-signature-256'] ?? '') as string
+    const event = (req.headers['x-github-event'] ?? '') as string
+    const rawBodyStr = (req as unknown as { rawBody: string }).rawBody ?? ''
+
+    if (event !== 'push') {
+      return reply.send({ ok: true, skipped: true, reason: `event=${event}` })
+    }
+
+    // Verify signature using the App-level webhook secret
+    const secretRow = await db.systemConfig.findUnique({ where: { key: 'github_app_webhook_secret' } })
+    const appSecret = secretRow?.value
+    if (appSecret) {
+      if (!signature || !verifyWebhookSignature(rawBodyStr, appSecret, signature)) {
+        req.log.warn('GitHub App webhook signature verification failed')
+        return reply.code(401).send({ error: 'Invalid signature' })
+      }
+    }
+
+    let payload: {
+      ref?: string
+      installation?: { id?: number }
+      repository?: { name?: string; owner?: { login?: string } }
+      head_commit?: { id?: string; message?: string }
+    }
+    try {
+      payload = JSON.parse(rawBodyStr)
+    } catch {
+      return reply.code(400).send({ error: 'Invalid JSON payload' })
+    }
+
+    const installationId = String(payload.installation?.id ?? '')
+    const repoOwner = payload.repository?.owner?.login ?? ''
+    const repoName = payload.repository?.name ?? ''
+    const pushedRef = payload.ref ?? ''
+
+    if (!repoOwner || !repoName) {
+      return reply.send({ ok: true, skipped: true, reason: 'no repo info' })
+    }
+
+    // Find all app-mode projects matching this repo + installation
+    // SQLite has no case-insensitive mode; lower() the stored values at query time
+    const allAppProjects = await db.project.findMany({
+      where: { githubMode: 'app', githubInstallationId: installationId },
+    })
+    const projects = allAppProjects.filter(
+      p => p.repoOwner.toLowerCase() === repoOwner.toLowerCase()
+        && p.repoName.toLowerCase() === repoName.toLowerCase(),
+    )
+
+    const commitSha = payload.head_commit?.id ?? undefined
+    const commitMessage = payload.head_commit?.message ?? undefined
+    const deploymentIds: string[] = []
+
+    for (const project of projects) {
+      const expectedRef = `refs/heads/${project.branch}`
+      if (pushedRef !== expectedRef) continue
+
+      const deployment = await db.deployment.create({
+        data: { projectId: project.id, status: 'queued', commitSha, commitMessage, triggeredBy: 'webhook' },
+      })
+      enqueueDeployment(project, deployment)
+      deploymentIds.push(deployment.id)
+      req.log.info({ projectId: project.id, deploymentId: deployment.id }, 'GitHub App webhook deployment queued')
+    }
+
+    return reply.send({ ok: true, deploymentIds })
+  })
+
+  // ── GitHub Per-project Webhook ──────────────────────────────────────────────
   app.post<{ Params: { projectId: string } }>(
     '/webhook/github/:projectId',
     async (req, reply) => {
