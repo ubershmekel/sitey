@@ -87,19 +87,20 @@ async function main() {
       return reply.send({ ok: true, skipped: true, reason: `event=${event}` })
     }
 
-    // Verify signature using the App-level webhook secret
+    // Verify signature using the App-level webhook secret (required — no secret = reject)
     const secretRow = await db.systemConfig.findUnique({ where: { key: 'github_app_webhook_secret' } })
     const appSecret = secretRow?.value
-    if (appSecret) {
-      if (!signature || !verifyWebhookSignature(rawBodyStr, appSecret, signature)) {
-        req.log.warn('GitHub App webhook signature verification failed')
-        return reply.code(401).send({ error: 'Invalid signature' })
-      }
+    if (!appSecret) {
+      req.log.warn('GitHub App webhook received but no webhook secret configured — rejecting')
+      return reply.code(500).send({ error: 'Webhook secret not configured' })
+    }
+    if (!signature || !verifyWebhookSignature(rawBodyStr, appSecret, signature)) {
+      req.log.warn('GitHub App webhook signature verification failed')
+      return reply.code(401).send({ error: 'Invalid signature' })
     }
 
     let payload: {
       ref?: string
-      installation?: { id?: number }
       repository?: { name?: string; owner?: { login?: string } }
       head_commit?: { id?: string; message?: string }
     }
@@ -109,7 +110,6 @@ async function main() {
       return reply.code(400).send({ error: 'Invalid JSON payload' })
     }
 
-    const installationId = String(payload.installation?.id ?? '')
     const repoOwner = payload.repository?.owner?.login ?? ''
     const repoName = payload.repository?.name ?? ''
     const pushedRef = payload.ref ?? ''
@@ -118,17 +118,17 @@ async function main() {
       return reply.send({ ok: true, skipped: true, reason: 'no repo info' })
     }
 
-    // Find all app-mode projects matching this repo + installation
-    // SQLite has no case-insensitive mode; lower() the stored values at query time
+    // Find all app-mode projects matching this repo.
+    // Security comes from the webhook signature above; installationId is not used as a filter
+    // because it changes on reinstall and would silently break deploys.
     const allAppProjects = await db.project.findMany({
-      where: { githubMode: 'app', githubInstallationId: installationId },
+      where: { githubMode: 'app' },
     })
-    req.log.info({ installationId, repoOwner, repoName, pushedRef, allAppProjectCount: allAppProjects.length }, 'GitHub App webhook: app projects found for installation')
     const projects = allAppProjects.filter(
       p => p.repoOwner.toLowerCase() === repoOwner.toLowerCase()
         && p.repoName.toLowerCase() === repoName.toLowerCase(),
     )
-    req.log.info({ matchedProjectCount: projects.length }, 'GitHub App webhook: projects matched after repo filter')
+    req.log.info({ repoOwner, repoName, pushedRef, matchedProjectCount: projects.length }, 'GitHub App webhook: matched projects')
 
     const commitSha = payload.head_commit?.id ?? undefined
     const commitMessage = payload.head_commit?.message ?? undefined

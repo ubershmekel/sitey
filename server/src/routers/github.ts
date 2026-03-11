@@ -320,19 +320,6 @@ export const githubRouter = router({
     }
   }),
 
-  /** Set per-project GitHub App installation ID */
-  setInstallation: settledProcedure
-    .input(z.object({
-      projectId: z.number().int(),
-      installationId: z.string(),
-    }))
-    .mutation(({ input }) =>
-      db.project.update({
-        where: { id: input.projectId },
-        data: { githubInstallationId: input.installationId, githubMode: 'app' },
-      }),
-    ),
-
   /** Returns webhook info for manual GitHub webhook setup */
   getWebhookInfo: settledProcedure
     .input(z.object({ projectId: z.number().int(), domainId: z.number().int().optional() }))

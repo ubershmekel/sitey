@@ -132,7 +132,7 @@ fi
 ADMIN_PASSWORD="$(printf "%s\n" "${PASS_OUTPUT}" | sed -n 's/.*Password: \([^[:space:]]\+\).*/\1/p' | head -n1)"
 
 echo
-echo "Sitey installed."
+echo "Sitey installed at ${INSTALL_DIR}."
 echo "URL: ${SITEY_URL}"
 if [[ -n "${ADMIN_PASSWORD}" ]]; then
   echo "Admin password: ${ADMIN_PASSWORD}"
@@ -142,6 +142,6 @@ else
 fi
 echo
 echo "Next steps:"
-echo "1) Open ${SITEY_URL} in your browser and sign in with the admin password."
-echo "2) Go to your DNS provider and add a wildcard A record (*.yourdomain.com → your server IP)."
-echo "3) In Sitey, setup a domain with '*.yourdomain.com'"
+echo "1) Open ${SITEY_URL} in your browser, sign in with the admin password, and follow the setup instructions there."
+echo "2) ..."
+echo "3) Profit!"
