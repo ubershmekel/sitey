@@ -123,10 +123,12 @@ async function main() {
     const allAppProjects = await db.project.findMany({
       where: { githubMode: 'app', githubInstallationId: installationId },
     })
+    req.log.info({ installationId, repoOwner, repoName, pushedRef, allAppProjectCount: allAppProjects.length }, 'GitHub App webhook: app projects found for installation')
     const projects = allAppProjects.filter(
       p => p.repoOwner.toLowerCase() === repoOwner.toLowerCase()
         && p.repoName.toLowerCase() === repoName.toLowerCase(),
     )
+    req.log.info({ matchedProjectCount: projects.length }, 'GitHub App webhook: projects matched after repo filter')
 
     const commitSha = payload.head_commit?.id ?? undefined
     const commitMessage = payload.head_commit?.message ?? undefined

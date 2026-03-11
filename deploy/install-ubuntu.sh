@@ -144,4 +144,4 @@ echo
 echo "Next steps:"
 echo "1) Open ${SITEY_URL} in your browser and sign in with the admin password."
 echo "2) Go to your DNS provider and add a wildcard A record (*.yourdomain.com → your server IP)."
-echo "3) In Sitey, set your custom domain and point DNS (A/AAAA) to this server."
+echo "3) In Sitey, setup a domain with '*.yourdomain.com'"
