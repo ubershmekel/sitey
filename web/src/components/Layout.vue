@@ -33,9 +33,34 @@
       </div>
     </nav>
 
-    <main class="content">
-      <slot />
-    </main>
+    <div class="main-area">
+      <main class="content">
+        <slot />
+      </main>
+    </div>
+
+    <nav class="bottom-nav">
+      <RouterLink to="/projects" class="bottom-nav-item" active-class="active">
+        <span class="icon">▦</span>
+        <span class="label">Projects</span>
+      </RouterLink>
+      <RouterLink to="/domains" class="bottom-nav-item" active-class="active">
+        <span class="icon">◈</span>
+        <span class="label">Domains</span>
+      </RouterLink>
+      <RouterLink to="/integrations" class="bottom-nav-item" active-class="active">
+        <span class="icon">⑂</span>
+        <span class="label">Integrations</span>
+      </RouterLink>
+      <RouterLink to="/logs" class="bottom-nav-item" active-class="active">
+        <span class="icon">≡</span>
+        <span class="label">Logs</span>
+      </RouterLink>
+      <RouterLink to="/settings" class="bottom-nav-item" active-class="active">
+        <span class="icon">⚙</span>
+        <span class="label">Settings</span>
+      </RouterLink>
+    </nav>
   </div>
 </template>
 
@@ -48,7 +73,6 @@ import SiteyLogo from './SiteyLogo.vue'
 const auth = useAuthStore()
 const router = useRouter()
 
-// Enforce password change once user data is hydrated (handles page-reload case)
 watch(() => auth.needsPasswordChange, (needs) => {
   if (needs) router.push('/change-password')
 })
@@ -60,6 +84,7 @@ watch(() => auth.needsPasswordChange, (needs) => {
   min-height: 100vh;
 }
 
+/* ── Sidebar ── */
 .sidebar {
   width: 220px;
   min-width: 220px;
@@ -135,9 +160,67 @@ watch(() => auth.needsPasswordChange, (needs) => {
 }
 .logout-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
 
+/* ── Main area ── */
+.main-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
 .content {
   flex: 1;
-  overflow-y: auto;
   padding: 2rem;
+}
+
+/* ── Bottom nav (mobile only) ── */
+.bottom-nav {
+  display: none;
+}
+
+/* ── Mobile ── */
+@media (max-width: 640px) {
+  .layout {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    display: none;
+  }
+
+  .bottom-nav {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border-default);
+  }
+
+  .bottom-nav-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.85rem 1.25rem;
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: var(--font-tiny);
+    border-bottom: 1px solid var(--border-default);
+    transition: background 0.15s, color 0.15s;
+  }
+
+  .bottom-nav-item:last-child {
+    border-bottom: none;
+  }
+
+  .bottom-nav-item .icon {
+    font-size: 1rem;
+    line-height: 1;
+  }
+
+  .bottom-nav-item:hover { background: var(--bg-input); color: var(--text-primary); }
+  .bottom-nav-item.active { background: var(--brand-active-bg); color: var(--brand-active-text); }
+
+  .content {
+    padding: 1rem;
+  }
 }
 </style>

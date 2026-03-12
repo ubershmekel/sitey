@@ -23,19 +23,18 @@
         </span>
       </label>
 
-      <div class="form-row">
-        <label style="flex:1">
-          Project name <span class="hint">(lowercase, hyphens only)</span>
-          <input v-model="form.name" type="text" required placeholder="my-app" pattern="[a-z0-9-]+" />
-        </label>
-        <label style="flex:0 0 120px">
-          Branch
-          <input v-model="form.branch" type="text" placeholder="main" list="branch-list" />
-          <datalist id="branch-list">
-            <option v-for="b in branches" :key="b" :value="b" />
-          </datalist>
-        </label>
-      </div>
+      <label>
+        Project name <span class="hint">(lowercase, hyphens only)</span>
+        <input v-model="form.name" type="text" required placeholder="my-app" pattern="[a-z0-9-]+" />
+      </label>
+
+      <label>
+        Branch
+        <input v-model="form.branch" type="text" placeholder="main" list="branch-list" />
+        <datalist id="branch-list">
+          <option v-for="b in branches" :key="b" :value="b" />
+        </datalist>
+      </label>
 
       <!-- Deploy type -->
       <div class="field-group">
@@ -310,6 +309,7 @@ watch(() => props.modelValue, async (visible) => {
   border-radius: 12px;
   padding: 2rem;
   width: 520px;
+  max-width: calc(100vw - 2rem);
   max-height: 90vh;
   overflow-y: auto;
   display: flex;
@@ -326,12 +326,6 @@ label {
   flex-direction: column;
   gap: 0.4rem;
   color: var(--text-secondary);
-}
-
-.form-row {
-  display: flex;
-  gap: 0.75rem;
-  align-items: flex-start;
 }
 
 .hint {

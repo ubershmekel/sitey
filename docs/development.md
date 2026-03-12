@@ -88,11 +88,15 @@ If the last command exits non-zero, the migration SQL needs updating.
 
 ## UI linearity style
 
-Detail pages (domain, project) follow a single linear column — no split headers
-with content on the left and buttons on the right. The goal is clarity and
-mobile-friendliness.
+All UI — pages, modals, and navigation — follows a single top-to-bottom linear
+column. The goal is clarity, predictability, and mobile-friendliness.
 
-**Rules:**
+**Core rule: one thing per row, top to bottom.**
+
+Every element the user reads or interacts with gets its own full-width row in the
+vertical flow. Side-by-side layouts must be justified — not the default.
+
+### Pages
 
 - **No split headers.** Don't use `justify-content: space-between` to push
   actions to the far right. Status badges, primary action buttons (Deploy, Save),
@@ -110,6 +114,23 @@ mobile-friendliness.
   primary identity, status, and actions.
 - **DNS and other status checks show inline.** Don't hide status information
   behind a modal. Show it on the page so the user sees it without clicking.
+
+### Forms and modals
+
+- **Every field gets its own row.** Do not place two form inputs side-by-side
+  (e.g. `display: flex` with multiple `<label>` children). Each `<label>` +
+  `<input>` pair is a full-width row in the vertical stack. Side-by-side fields
+  look broken on narrow screens and create visual alignment problems.
+- **Labels stack above inputs.** Use `flex-direction: column` on every label.
+  Never float a label to the left of its input.
+
+### Mobile navigation
+
+- On mobile, the sidebar collapses and is revealed via a hamburger button in a
+  sticky header. The nav items remain a vertical column in the drawer — they are
+  never rearranged into a horizontal tab bar or grid.
+- Do not duplicate nav links. The sidebar is the single source of truth for
+  navigation; it is reused as the mobile drawer.
 
 ## Shared component styles
 
