@@ -71,7 +71,6 @@ async function handleSetup() {
   border-radius: 12px;
   padding: 2.5rem;
   --btn-primary-padding: 0.7rem;
-  --btn-primary-font-size: var(--font-medium);
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -104,7 +103,6 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  font-size: var(--font-tiny);
   color: #9a9a9a;
 }
 
@@ -114,7 +112,6 @@ input {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   color: #e2e2e2;
-  font-size: var(--font-medium);
   outline: none;
   transition: border-color 0.15s;
 }
@@ -126,6 +123,5 @@ input:focus { border-color: #7c6cfc; }
   color: #ff7070;
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: var(--font-tiny);
 }
 </style>

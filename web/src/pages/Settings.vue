@@ -196,7 +196,6 @@ onMounted(loadPublicSiteUrl)
 }
 
 h1 {
-  font-size: var(--font-huge);
   font-weight: 600;
 }
 
@@ -257,13 +256,11 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  font-size: var(--font-tiny);
   color: var(--text-secondary);
 }
 
 .hint {
   color: var(--text-muted);
-  font-size: var(--font-tiny);
 }
 
 input,
@@ -273,7 +270,6 @@ textarea {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   color: var(--text-primary);
-  font-size: var(--font-medium);
   outline: none;
   transition: border-color 0.15s;
   font-family: inherit;
@@ -310,7 +306,6 @@ textarea {
 }
 
 .badge {
-  font-size: var(--font-tiny);
   padding: 0.2rem 0.6rem;
   border-radius: 4px;
 }
@@ -331,7 +326,6 @@ textarea {
   border: none;
   border-radius: 6px;
   padding: 0.6rem 1.25rem;
-  font-size: var(--font-medium);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -343,7 +337,6 @@ textarea {
 .alert {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: var(--font-tiny);
 }
 
 .alert.error {
@@ -384,7 +377,6 @@ textarea {
 }
 
 .domain-label {
-  font-size: var(--font-tiny);
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -395,7 +387,6 @@ textarea {
   border-radius: 6px;
   padding: 0.45rem 0.6rem;
   color: var(--text-primary);
-  font-size: var(--font-medium);
   flex: 1;
 }
 
@@ -452,7 +443,6 @@ textarea {
   border-radius: 6px;
   padding: 0.75rem 1rem;
   font-family: monospace;
-  font-size: var(--font-tiny);
   color: #a0d0a0;
   margin-top: 0.5rem;
   word-break: break-all;

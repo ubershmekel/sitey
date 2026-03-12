@@ -140,7 +140,6 @@ onMounted(fetchContainers)
 }
 
 h1 {
-  font-size: var(--font-huge);
   font-weight: 600;
 }
 
@@ -243,7 +242,6 @@ h1 {
   justify-content: center;
   height: 100%;
   color: var(--text-muted);
-  font-size: var(--font-medium);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: 8px;
@@ -282,7 +280,6 @@ h1 {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: var(--font-tiny);
   color: var(--text-muted);
 }
 
@@ -335,7 +332,6 @@ h1 {
   color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: var(--font-tiny);
 }
 
 .btn-ghost {

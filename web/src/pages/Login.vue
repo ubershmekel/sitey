@@ -65,7 +65,6 @@ async function handleLogin() {
   border-radius: 12px;
   padding: 2.5rem;
   --btn-primary-padding: 0.7rem;
-  --btn-primary-font-size: var(--font-medium);
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -90,7 +89,6 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  font-size: var(--font-tiny);
   color: var(--text-secondary);
 }
 
@@ -100,7 +98,6 @@ input {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   color: var(--text-primary);
-  font-size: var(--font-medium);
   outline: none;
   transition: border-color 0.15s;
 }
@@ -112,6 +109,5 @@ input:focus { border-color: var(--brand); }
   color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: var(--font-tiny);
 }
 </style>

@@ -72,7 +72,6 @@ onMounted(fetchDomains)
 }
 
 h1 {
-  font-size: var(--font-huge);
   font-weight: 600;
 }
 
@@ -99,7 +98,6 @@ h1 {
 }
 
 .domain-name {
-  font-size: var(--font-medium);
   font-weight: 600;
   margin-bottom: 0.75rem;
   color: var(--text-primary);
@@ -162,7 +160,6 @@ h1 {
 }
 
 .hint {
-  font-size: var(--font-tiny);
   margin: 0.25rem 0 1.5rem;
 }
 
@@ -176,7 +173,6 @@ h1 {
   color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: var(--font-tiny);
   margin-bottom: 1rem;
 }
 

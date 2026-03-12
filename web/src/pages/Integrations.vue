@@ -261,7 +261,6 @@ onMounted(fetchAppConfig)
 }
 
 h1 {
-  font-size: var(--font-huge);
   font-weight: 600;
 }
 
@@ -321,7 +320,6 @@ h1 {
 }
 
 .badge {
-  font-size: var(--font-tiny);
   padding: 0.2rem 0.6rem;
   border-radius: 4px;
   white-space: nowrap;
@@ -405,7 +403,6 @@ h1 {
 
 .install-avatar {
   color: var(--text-muted);
-  font-size: var(--font-medium);
   flex-shrink: 0;
 }
 
@@ -452,7 +449,6 @@ h1 {
 }
 
 .install-link-url {
-  font-size: var(--font-tiny);
   color: var(--text-secondary);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
@@ -479,7 +475,6 @@ h1 {
 }
 
 .domain-label {
-  font-size: var(--font-tiny);
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -490,7 +485,6 @@ h1 {
   border-radius: 6px;
   padding: 0.45rem 0.6rem;
   color: var(--text-primary);
-  font-size: var(--font-medium);
   flex: 1;
 }
 
@@ -524,7 +518,6 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  font-size: var(--font-tiny);
   color: var(--text-secondary);
 }
 
@@ -536,7 +529,6 @@ select {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   color: var(--text-primary);
-  font-size: var(--font-medium);
   outline: none;
   transition: border-color 0.15s;
   font-family: inherit;
@@ -595,7 +587,6 @@ textarea {
 .alert {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: var(--font-tiny);
 }
 
 .alert.error {

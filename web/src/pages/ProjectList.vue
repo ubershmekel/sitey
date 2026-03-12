@@ -101,7 +101,6 @@ onMounted(fetchAll)
 }
 
 h1 {
-  font-size: var(--font-huge);
   font-weight: 600;
 }
 
@@ -130,7 +129,6 @@ h1 {
 }
 
 .project-name {
-  font-size: var(--font-medium);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -227,7 +225,6 @@ h1 {
   color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: var(--font-tiny);
   margin-bottom: 1rem;
 }
 </style>

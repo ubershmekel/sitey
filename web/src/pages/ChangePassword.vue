@@ -80,7 +80,6 @@ async function handleSubmit() {
   border-radius: 12px;
   padding: 2.5rem;
   --btn-primary-padding: 0.7rem;
-  --btn-primary-font-size: var(--font-medium);
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
@@ -90,16 +89,16 @@ h1 { font-size: var(--font-large); font-weight: 600; text-align: center; color: 
 .subtitle { font-size: var(--font-tiny); color: var(--text-muted); text-align: center; margin-top: -0.75rem; }
 label {
   display: flex; flex-direction: column; gap: 0.4rem;
-  font-size: var(--font-tiny); color: var(--text-secondary);
+  color: var(--text-secondary);
 }
-.hint { color: var(--text-muted); font-size: var(--font-tiny); }
+.hint { color: var(--text-muted); }
 input {
   background: var(--bg-input); border: 1px solid var(--border-strong); border-radius: 6px;
-  padding: 0.6rem 0.75rem; color: var(--text-primary); font-size: var(--font-medium); outline: none;
+  padding: 0.6rem 0.75rem; color: var(--text-primary); outline: none;
   transition: border-color 0.15s;
 }
 input:focus { border-color: var(--brand); }
-.alert { border-radius: 6px; padding: 0.6rem 0.75rem; font-size: var(--font-tiny); }
+.alert { border-radius: 6px; padding: 0.6rem 0.75rem; }
 .alert.error { background: var(--status-err-bg); border: 1px solid var(--status-err-border); color: var(--status-err-text); }
 .alert.success { background: var(--status-ok-bg); border: 1px solid var(--status-ok-border); color: var(--status-ok-text); }
 </style>

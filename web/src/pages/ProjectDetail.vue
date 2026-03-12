@@ -516,12 +516,10 @@ onMounted(fetchProject)
 }
 
 h1 {
-  font-size: var(--font-huge);
   font-weight: 600;
 }
 
 .hero-url {
-  font-size: var(--font-medium);
   margin-bottom: 0.25rem;
 }
 
@@ -592,7 +590,6 @@ h1 {
 }
 
 .info-value {
-  font-size: var(--font-medium);
   color: var(--text-primary);
 }
 
@@ -757,7 +754,6 @@ h1 {
 }
 
 .hint {
-  font-size: var(--font-tiny);
   color: var(--text-muted);
   margin-bottom: 1rem;
 }
@@ -785,7 +781,6 @@ code {
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   font-family: monospace;
-  font-size: var(--font-tiny);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -933,7 +928,6 @@ code {
   color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: var(--font-tiny);
   margin-bottom: 1rem;
 }
 
@@ -943,7 +937,6 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  font-size: var(--font-tiny);
   color: var(--text-secondary);
 }
 
@@ -953,7 +946,6 @@ input, select {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   color: var(--text-primary);
-  font-size: var(--font-medium);
   outline: none;
   transition: border-color 0.15s;
 }
@@ -968,7 +960,6 @@ input:focus, select:focus {
   border: 1px solid var(--status-err-border);
   border-radius: 6px;
   padding: 0.6rem 1.25rem;
-  font-size: var(--font-medium);
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s;

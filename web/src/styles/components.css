@@ -1,3 +1,126 @@
+
+/* --------------------------------------------------
+   Text defaults
+-------------------------------------------------- */
+
+p,
+span,
+a,
+li,
+option,
+summary {
+  font-size: var(--font-medium);
+}
+
+small,
+label,
+.hint,
+.badge,
+.alert,
+.help-text {
+  font-size: var(--font-tiny);
+}
+
+strong {
+  font-weight: 600;
+}
+
+
+/* --------------------------------------------------
+   Headings
+-------------------------------------------------- */
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.25;
+}
+
+h1 {
+  font-size: var(--font-huge);
+  font-weight: 700;
+}
+
+h2 {
+  font-size: var(--font-large);
+  font-weight: 600;
+}
+
+/* often used as card / section titles */
+h3 {
+  font-size: var(--font-medium);
+  font-weight: 600;
+}
+
+
+/* --------------------------------------------------
+   Code
+-------------------------------------------------- */
+
+code,
+pre {
+  font-family:
+    ui-monospace,
+    SFMono-Regular,
+    Menlo,
+    Consolas,
+    monospace;
+
+  font-size: var(--font-tiny);
+}
+
+pre {
+  overflow-x: auto;
+}
+
+
+/* --------------------------------------------------
+   Lists
+-------------------------------------------------- */
+
+ul {
+  padding-left: 1.25rem;
+}
+
+li {
+  line-height: 1.5;
+}
+
+
+/* --------------------------------------------------
+   Forms
+-------------------------------------------------- */
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  font-size: var(--font-medium);
+}
+
+button {
+  cursor: pointer;
+}
+
+label {
+  display: block;
+}
+
+
+/* --------------------------------------------------
+   Media
+-------------------------------------------------- */
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+/* --------------------------------------------------
+   Classes
+-------------------------------------------------- */
 .btn-primary {
   background: var(--btn-primary-bg, var(--brand));
   color: var(--btn-primary-color, #fff);

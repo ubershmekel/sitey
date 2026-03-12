@@ -318,7 +318,6 @@ watch(() => props.modelValue, async (visible) => {
 }
 
 .modal h2 {
-  font-size: var(--font-large);
   font-weight: 600;
 }
 
@@ -326,7 +325,6 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  font-size: var(--font-tiny);
   color: var(--text-secondary);
 }
 
@@ -338,7 +336,6 @@ label {
 
 .hint {
   color: var(--text-muted);
-  font-size: var(--font-tiny);
 }
 
 .hint a {
@@ -411,7 +408,6 @@ select {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   color: var(--text-primary);
-  font-size: var(--font-medium);
   outline: none;
   transition: border-color 0.15s;
 }
@@ -434,7 +430,6 @@ select:focus {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 1.25rem;
-  font-size: var(--font-medium);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
@@ -450,6 +445,5 @@ select:focus {
   color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: var(--font-tiny);
 }
 </style>

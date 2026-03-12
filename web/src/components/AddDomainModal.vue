@@ -116,7 +116,6 @@ async function addDomain() {
 }
 
 .modal h2 {
-  font-size: var(--font-large);
   font-weight: 600;
 }
 
@@ -124,13 +123,11 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  font-size: var(--font-tiny);
   color: var(--text-secondary);
 }
 
 .hint {
   color: var(--text-muted);
-  font-size: var(--font-tiny);
 }
 
 input {
@@ -139,7 +136,6 @@ input {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   color: var(--text-primary);
-  font-size: var(--font-medium);
   outline: none;
   transition: border-color 0.15s;
 }
@@ -161,7 +157,6 @@ input:focus {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 1.25rem;
-  font-size: var(--font-medium);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
@@ -211,6 +206,5 @@ input:focus {
   color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: var(--font-tiny);
 }
 </style>

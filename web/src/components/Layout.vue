@@ -100,7 +100,6 @@ watch(() => auth.needsPasswordChange, (needs) => {
   border-radius: 6px;
   color: var(--text-secondary);
   text-decoration: none;
-  font-size: var(--font-medium);
   transition: background 0.15s, color 0.15s;
 }
 .nav-item:hover { background: var(--bg-input); color: var(--text-primary); }

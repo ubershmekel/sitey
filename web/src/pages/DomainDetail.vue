@@ -288,7 +288,6 @@ onMounted(async () => {
 }
 
 h1 {
-  font-size: var(--font-huge);
   font-weight: 600;
   margin-bottom: 1.25rem;
 }
@@ -456,7 +455,6 @@ h1 {
   color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: var(--font-tiny);
   margin-bottom: 1rem;
 }
 
@@ -466,7 +464,6 @@ h1 {
   color: var(--status-ok-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: var(--font-tiny);
   margin-bottom: 1rem;
 }
 
@@ -477,7 +474,6 @@ h1 {
   border: 1px solid var(--status-err-border);
   border-radius: 6px;
   padding: 0.6rem 1.25rem;
-  font-size: var(--font-medium);
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s, border-color 0.15s;
@@ -503,7 +499,6 @@ h1 {
   flex-direction: row;
   align-items: center;
   gap: 0.5rem;
-  font-size: var(--font-tiny);
   color: var(--text-secondary);
   cursor: pointer;
 }
