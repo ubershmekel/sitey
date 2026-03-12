@@ -25,50 +25,86 @@
           Autocomplete powered by your GitHub App repositories.
         </span>
         <span v-else-if="reposConfigured && repoInstallations === 0" class="hint">
-          GitHub App is configured but not installed on any account or org yet.
+          GitHub App configured but not installed yet.
           <a v-if="repoInstallUrl" :href="repoInstallUrl" target="_blank" rel="noopener">Install app</a>.
         </span>
-        <span v-else-if="reposConfigured" class="hint">
-          No repositories available from your GitHub App installation yet.
-        </span>
       </label>
 
-      <label>
-        Project name <span class="hint">(auto-filled from repository, lowercase and hyphens only)</span>
-        <input v-model="form.name" type="text" required placeholder="my-app" pattern="[a-z0-9-]+" />
-      </label>
+      <div class="form-row">
+        <label style="flex:1">
+          Project name <span class="hint">(lowercase, hyphens only)</span>
+          <input v-model="form.name" type="text" required placeholder="my-app" pattern="[a-z0-9-]+" />
+        </label>
+        <label style="flex:0 0 120px">
+          Branch
+          <input v-model="form.branch" type="text" placeholder="main" list="branch-list" />
+          <datalist id="branch-list">
+            <option v-for="b in branches" :key="b" :value="b" />
+          </datalist>
+        </label>
+      </div>
 
-      <label>
-        Branch
-        <input v-model="form.branch" type="text" placeholder="main" list="branch-list" />
-        <datalist id="branch-list">
-          <option v-for="b in branches" :key="b" :value="b" />
-        </datalist>
-      </label>
+      <!-- Deploy type -->
+      <div class="field-group">
+        <div class="field-group-label">Deploy type</div>
+        <div class="type-selector">
+          <button type="button" :class="{ active: deployType === 'static' }" @click="deployType = 'static'">
+            Static site
+          </button>
+          <button type="button" :class="{ active: deployType === 'server' }" @click="deployType = 'server'">
+            Server app
+          </button>
+          <button type="button" :class="{ active: deployType === 'dockerfile' }" @click="deployType = 'dockerfile'">
+            Dockerfile
+          </button>
+        </div>
+        <div class="type-desc">
+          <span v-if="deployType === 'static'">Build your site and serve the output as static files via Caddy.</span>
+          <span v-else-if="deployType === 'server'">Sitey generates a Dockerfile from your run command and runs it in a container.</span>
+          <span v-else>Use your own <code>Dockerfile</code> in the repository root.</span>
+        </div>
+      </div>
+
+      <template v-if="deployType === 'static'">
+        <label>
+          Build command <span class="hint">(optional)</span>
+          <input v-model="form.buildCommand" type="text" placeholder="npm run build" />
+        </label>
+        <label>
+          Output directory <span class="hint">(relative to repo root)</span>
+          <input v-model="form.outputDir" type="text" placeholder="dist" />
+        </label>
+      </template>
+
+      <template v-else-if="deployType === 'server'">
+        <label>
+          Build command <span class="hint">(optional, e.g. npm run build)</span>
+          <input v-model="form.buildCommand" type="text" placeholder="npm run build" />
+        </label>
+        <label>
+          Start command <span class="hint">(e.g. node server.js)</span>
+          <input v-model="form.serverRunCommand" type="text" required placeholder="node server.js" />
+        </label>
+        <label>
+          Container port <span class="hint">(port your server listens on)</span>
+          <input v-model.number="form.containerPort" type="number" min="1" max="65535" required />
+        </label>
+      </template>
+
+      <template v-else>
+        <!-- dockerfile -->
+        <label>
+          Container port <span class="hint">(port exposed by your Dockerfile)</span>
+          <input v-model.number="form.containerPort" type="number" min="1" max="65535" required />
+        </label>
+      </template>
 
       <label v-if="allowDomainSelection">
-        Domain <span class="hint">(optional)</span>
+        Domain <span class="hint">(optional — can add routes after creation)</span>
         <select v-model="form.domainId">
           <option value="">No domain yet</option>
           <option v-for="d in domains" :key="d.id" :value="d.id">{{ d.hostname }}</option>
         </select>
-      </label>
-
-      <label>
-        Build command <span class="hint">(optional)</span>
-        <input v-model="form.buildCommand" type="text" placeholder="npm run build" />
-      </label>
-      <label>
-        Output directory <span class="hint">(for static sites)</span>
-        <input v-model="form.outputDir" type="text" placeholder="dist (leave empty for repo root)" />
-      </label>
-      <label>
-        Server run command <span class="hint">(leave blank for a static site)</span>
-        <input v-model="form.serverRunCommand" type="text" placeholder="node server.js" />
-      </label>
-      <label v-if="form.serverRunCommand">
-        Container port
-        <input v-model.number="form.containerPort" type="number" min="1" max="65535" required />
       </label>
 
       <div class="modal-actions">
@@ -114,6 +150,7 @@ const reposConfigured = ref(false)
 const repoInstallations = ref<number>(0)
 const repoInstallUrl = ref('')
 const inferredProjectName = ref('')
+const deployType = ref<'static' | 'server' | 'dockerfile'>('server')
 
 const form = ref(emptyForm())
 
@@ -132,7 +169,7 @@ function emptyForm() {
     domainId: null as number | null,
     branch: 'main',
     buildCommand: '',
-    outputDir: '',
+    outputDir: 'dist',
     serverRunCommand: '',
     containerPort: 3000,
   }
@@ -182,7 +219,7 @@ async function fetchBranches() {
     const data = await res.json() as { name: string }[]
     branches.value = data.map(b => b.name)
   } catch {
-    // ignore: branch autocomplete is optional
+    // branch autocomplete is optional
   }
 }
 
@@ -212,7 +249,8 @@ async function addProject() {
   parseGithubUrl()
 
   try {
-    const isStatic = !form.value.serverRunCommand.trim()
+    const isStatic = deployType.value === 'static'
+    const isDockerfile = deployType.value === 'dockerfile'
     const created = await trpc.projects.create.mutate({
       name: form.value.name.trim(),
       repoOwner: form.value.repoOwner.trim(),
@@ -221,9 +259,9 @@ async function addProject() {
       githubMode: reposConfigured.value ? 'app' : 'webhook',
       deployMode: isStatic ? 'static' : 'server',
       buildCommand: form.value.buildCommand.trim(),
-      outputDir: form.value.outputDir.trim(),
-      serverRunCommand: form.value.serverRunCommand.trim(),
-      buildMode: 'auto',
+      outputDir: isStatic ? (form.value.outputDir.trim() || 'dist') : '',
+      serverRunCommand: isStatic || isDockerfile ? '' : form.value.serverRunCommand.trim(),
+      buildMode: isDockerfile ? 'dockerfile' : 'auto',
       containerPort: form.value.containerPort,
     })
 
@@ -250,6 +288,7 @@ watch(() => props.modelValue, async (visible) => {
     branches.value = []
     inferredProjectName.value = ''
     addError.value = ''
+    deployType.value = 'server'
     return
   }
 
@@ -276,7 +315,7 @@ watch(() => props.modelValue, async (visible) => {
   border: 1px solid var(--border-default);
   border-radius: 12px;
   padding: 2rem;
-  width: 500px;
+  width: 520px;
   max-height: 90vh;
   overflow-y: auto;
   display: flex;
@@ -297,6 +336,12 @@ label {
   color: var(--text-secondary);
 }
 
+.form-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
 .hint {
   color: var(--text-muted);
   font-size: 0.78rem;
@@ -304,6 +349,66 @@ label {
 
 .hint a {
   color: var(--brand);
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.field-group-label {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+}
+
+.type-selector {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.type-selector button {
+  flex: 1;
+  background: var(--bg-input);
+  border: none;
+  border-right: 1px solid var(--border-strong);
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  padding: 0.5rem 0.25rem;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.type-selector button:last-child {
+  border-right: none;
+}
+
+.type-selector button.active {
+  background: var(--brand-active-bg);
+  color: var(--brand-active-text);
+  font-weight: 600;
+}
+
+.type-selector button:hover:not(.active) {
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+}
+
+.type-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+
+.type-desc code {
+  background: var(--bg-input);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+  font-size: 0.9em;
+  color: #9dcfff;
 }
 
 input,

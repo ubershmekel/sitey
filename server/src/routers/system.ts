@@ -8,6 +8,7 @@ import {
   resolvePublicSiteUrl,
   setConfiguredPublicSiteUrl,
 } from '../services/siteUrl.js'
+import { docker, decodeDockerLogPayload } from '../services/docker.js'
 
 export const systemRouter = router({
   getPublicSiteUrl: settledProcedure.query(async () => resolvePublicSiteUrl()),
@@ -36,5 +37,41 @@ export const systemRouter = router({
     await clearConfiguredPublicSiteUrl()
     return { ok: true }
   }),
+
+  listContainers: settledProcedure.query(async () => {
+    const containers = await docker.listContainers({ all: true })
+    return containers.map((c) => ({
+      id: c.Id.slice(0, 12),
+      fullId: c.Id,
+      name: (c.Names[0] ?? c.Id.slice(0, 12)).replace(/^\//, ''),
+      image: c.Image,
+      state: c.State,   // running | exited | paused | ...
+      status: c.Status, // human-readable, e.g. "Up 2 hours"
+    }))
+  }),
+
+  getContainerLogs: settledProcedure
+    .input(z.object({
+      containerId: z.string().min(1),
+      tail: z.number().int().min(1).max(2000).default(300),
+    }))
+    .query(async ({ input }) => {
+      try {
+        const logs = await docker.getContainer(input.containerId).logs({
+          stdout: true,
+          stderr: true,
+          timestamps: false,
+          tail: input.tail,
+        })
+        const raw = decodeDockerLogPayload(logs)
+        const lines = raw
+          .split(/\r?\n/)
+          .map((l) => l.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, '').trimEnd())
+          .filter(Boolean)
+        return { lines }
+      } catch {
+        return { lines: ['Could not fetch container logs.'] }
+      }
+    }),
 })
 

@@ -14,111 +14,119 @@
         / {{ project.name }}
       </div>
 
-      <h1>{{ project.name }}</h1>
+      <!-- ── Hero card ─────────────────────────────────────────────── -->
+      <div class="hero-card">
+        <div class="hero-top">
+          <div class="hero-name-row">
+            <h1>{{ project.name }}</h1>
+            <span :class="`status status-${project.status}`">{{ containerLabel(project.status, project.deployMode) }}</span>
+          </div>
+          <button class="btn-primary" :disabled="deploying" @click="triggerDeploy">
+            {{ deploying ? 'Deploying...' : 'Deploy now' }}
+          </button>
+        </div>
 
-      <div v-if="projectUrl" class="project-url">
-        <a :href="projectUrl" target="_blank" rel="noopener">{{ projectUrl }}</a>
-        <span class="project-url-sep">·</span>
-        <a :href="projectUrl.replace('https://', 'http://')" target="_blank" rel="noopener" class="url-http">http</a>
-      </div>
-      <div v-else-if="fallbackUrl" class="project-url hint">
-        No domain route yet. Fallback: {{ fallbackUrl }}
-      </div>
-      <div v-else class="project-url hint">
-        No route assigned yet.
+        <div v-if="projectUrl" class="hero-url">
+          <a :href="projectUrl" target="_blank" rel="noopener" class="url-https">{{ projectUrl }}</a>
+          <span class="url-sep">·</span>
+          <a :href="projectUrl.replace('https://', 'http://')" target="_blank" rel="noopener" class="url-http">http</a>
+        </div>
+        <div v-else-if="fallbackUrl" class="hero-url hint">
+          No domain route yet — fallback: <code>{{ fallbackUrl }}</code>
+        </div>
+        <div v-else class="hero-url hint">No route assigned yet.</div>
+
+        <div v-if="deployError" class="alert error" style="margin-top:0.75rem">{{ deployError }}</div>
+        <div v-if="project.status === 'failed'" class="deploy-notice deploy-notice-failed">
+          Last deploy failed — check build logs below.
+        </div>
+        <div v-else-if="project.status === 'building' || project.status === 'queued'"
+          class="deploy-notice deploy-notice-building">
+          Deploy in progress — site will update once it finishes.
+        </div>
       </div>
 
-      <div v-if="project.status === 'failed'" class="deploy-notice deploy-notice-failed">
-        Last deploy failed — site may be unavailable. Check logs below.
-      </div>
-      <div v-else-if="project.status === 'building' || project.status === 'queued'"
-        class="deploy-notice deploy-notice-building">
-        Deploy in progress — site will be available once it completes.
-      </div>
-
-      <div class="status-field">
-        <span class="field-label">{{ project.deployMode === 'static' ? 'Site' : 'Container' }}</span>
-        <span :class="`status status-${project.status}`">{{ containerLabel(project.status, project.deployMode) }}</span>
-      </div>
-
-      <div class="project-actions">
-        <button class="btn-primary" :disabled="deploying" @click="triggerDeploy">
-          {{ deploying ? 'Deploying...' : 'Deploy' }}
-        </button>
-      </div>
-
-      <div v-if="deployError" class="alert error">{{ deployError }}</div>
-
+      <!-- ── Info grid ─────────────────────────────────────────────── -->
       <div class="info-grid">
         <div class="info-card">
           <div class="info-label">Repository</div>
           <div class="info-value mono">{{ project.repoOwner }}/{{ project.repoName }}:{{ project.branch }}</div>
         </div>
         <div class="info-card">
-          <div class="info-label">Build mode</div>
-          <div class="info-value">{{ project.buildMode === 'auto' ? 'Auto' : 'Dockerfile' }}</div>
+          <div class="info-label">Deploy type</div>
+          <div class="info-value">{{ deployTypeLabel }}</div>
         </div>
-        <div class="info-card">
+        <div v-if="project.deployMode === 'server'" class="info-card">
           <div class="info-label">Container port</div>
           <div class="info-value mono">{{ project.containerPort }}</div>
         </div>
         <div class="info-card">
-          <div class="info-label">GitHub mode</div>
-          <div class="info-value">{{ project.githubMode }}</div>
-        </div>
-        <div class="info-card">
-          <div class="info-label">Routes</div>
-          <div class="info-value mono">{{ project.routes.length }}</div>
-        </div>
-        <div class="info-card">
-          <div class="info-label">Fallback port</div>
-          <div class="info-value mono">{{ project.hostPort ?? '-' }}</div>
+          <div class="info-label">GitHub</div>
+          <div class="info-value">{{ project.githubMode === 'app' ? 'GitHub App' : 'Webhook' }}</div>
         </div>
       </div>
 
+      <!-- ── Routes ────────────────────────────────────────────────── -->
       <div class="section">
         <h2>Routes</h2>
-        <div v-if="project.routes.length === 0" class="empty-msg">
-          This project has no domain/path routes yet.
-        </div>
+        <p class="section-hint">Each route maps a domain (or path prefix) to this project.</p>
+
+        <div v-if="project.routes.length === 0" class="empty-msg">No domain routes yet — add one below.</div>
         <div v-else class="route-list">
           <div v-for="r in project.routes" :key="r.id" class="route-row">
-            <span class="route-url mono">{{ routeLabel(r) }}</span>
+            <div class="route-url-wrap">
+              <a
+                v-if="routeIsHttps(r)"
+                :href="routeLabel(r)"
+                target="_blank"
+                rel="noopener"
+                class="route-url mono route-url-link"
+              >{{ routeLabel(r) }}</a>
+              <span v-else class="route-url mono">{{ routeLabel(r) }}</span>
+            </div>
+            <div class="route-meta">
+              <span v-if="r.domain?.hostname.startsWith('*.')" class="route-badge">wildcard</span>
+              <span v-if="r.pathPrefix" class="route-badge">path</span>
+            </div>
             <button class="btn-ghost-sm" :disabled="routeSaving || r.protected" @click="removeRoute(r.id)">
               {{ r.protected ? 'Protected' : 'Remove' }}
             </button>
           </div>
         </div>
 
-        <form class="route-form" :style="isWildcardSelected ? 'grid-template-columns: 1fr 1fr 1fr auto' : ''" @submit.prevent="addRoute">
-          <label>
-            Domain
-            <select v-model="newRoute.domainId" required @change="onDomainChange">
-              <option value="">Select domain</option>
-              <option v-for="d in domains" :key="d.id" :value="d.id">{{ d.hostname }}</option>
-            </select>
-          </label>
-          <label v-if="isWildcardSelected">
-            Subdomain <span class="hint">(e.g. myapp)</span>
-            <div class="subdomain-input-wrap">
-              <input v-model="newRoute.subdomain" type="text" placeholder="auto" class="subdomain-input" />
-              <span class="subdomain-suffix">.{{ selectedDomainBase }}</span>
-            </div>
-          </label>
-          <label>
-            Path prefix <span class="hint">(optional, e.g. /blog)</span>
-            <input v-model="newRoute.pathPrefix" type="text" placeholder="/" />
-          </label>
-          <button class="btn-primary" type="submit" :disabled="routeSaving || !newRoute.domainId">
-            {{ routeSaving ? 'Saving...' : 'Add route' }}
-          </button>
-        </form>
-        <div v-if="routeError" class="alert error mt-1">{{ routeError }}</div>
+        <div class="add-route-box">
+          <div class="add-route-title">Add route</div>
+          <form class="route-form" :style="isWildcardSelected ? 'grid-template-columns: 1fr 1fr 1fr auto' : ''" @submit.prevent="addRoute">
+            <label>
+              Domain
+              <select v-model="newRoute.domainId" required @change="onDomainChange">
+                <option value="">Select domain</option>
+                <option v-for="d in domains" :key="d.id" :value="d.id">{{ d.hostname }}</option>
+              </select>
+            </label>
+            <label v-if="isWildcardSelected">
+              Subdomain <span class="hint">(e.g. myapp)</span>
+              <div class="subdomain-input-wrap">
+                <input v-model="newRoute.subdomain" type="text" placeholder="auto" class="subdomain-input" />
+                <span class="subdomain-suffix">.{{ selectedDomainBase }}</span>
+              </div>
+            </label>
+            <label>
+              Path prefix <span class="hint">(optional)</span>
+              <input v-model="newRoute.pathPrefix" type="text" placeholder="/" />
+            </label>
+            <button class="btn-primary" type="submit" :disabled="routeSaving || !newRoute.domainId">
+              {{ routeSaving ? 'Saving...' : 'Add route' }}
+            </button>
+          </form>
+          <div v-if="routeError" class="alert error mt-1">{{ routeError }}</div>
+        </div>
       </div>
 
+      <!-- ── GitHub Webhook setup ───────────────────────────────────── -->
       <div v-if="project.githubMode === 'webhook'" class="webhook-card">
         <h2>GitHub Webhook Setup</h2>
-        <p class="hint">Add this webhook in GitHub repo settings.</p>
+        <p class="hint">Add this webhook in your GitHub repo settings to auto-deploy on push.</p>
         <p v-if="webhookError" class="hint webhook-error">{{ webhookError }}</p>
         <template v-if="webhookInfo">
           <div v-if="webhookInfo.domains.length > 1" class="webhook-row">
@@ -141,6 +149,7 @@
         </template>
       </div>
 
+      <!-- ── Build deployments ─────────────────────────────────────── -->
       <div class="section">
         <h2>Deployments</h2>
         <div v-if="project.deployments.length === 0" class="empty-msg">No deployments yet.</div>
@@ -154,23 +163,32 @@
             <span class="deploy-trigger">{{ d.triggeredBy }}</span>
           </div>
         </div>
+
+        <div v-if="selectedDeployId" class="log-section">
+          <div class="log-header">
+            <h3>Build logs</h3>
+            <button class="btn-ghost-sm" @click="refreshLogs">Refresh</button>
+          </div>
+          <div class="log-box" ref="logBox">
+            <div v-if="logLines.length === 0" class="log-empty">No logs yet.</div>
+            <pre v-else class="log-content">{{ logLines.join('\n') }}</pre>
+          </div>
+        </div>
       </div>
 
-      <div v-if="selectedDeployId" class="log-section">
-        <div class="log-header">
-          <h3>Logs</h3>
-          <button class="btn-ghost-sm" @click="refreshLogs">Refresh</button>
-        </div>
-        <div class="log-box" ref="logBox">
-          <div v-if="logLines.length === 0" class="log-empty">No logs yet.</div>
-          <pre v-else class="log-content">{{ logLines.join('\n') }}</pre>
-        </div>
+      <!-- ── Docker container logs ─────────────────────────────────── -->
+      <div v-if="project.deployMode === 'server'" class="section">
+        <h2>Docker logs</h2>
+        <p class="section-hint">
+          View live container output in the
+          <RouterLink :to="`/logs?container=sitey-${project.id}`" class="logs-link">Logs tab</RouterLink>.
+        </p>
       </div>
 
+      <!-- ── Danger zone ───────────────────────────────────────────── -->
       <div class="danger-zone">
         <h2>Danger zone</h2>
-        <p class="danger-desc">Deleting this project stops the container and removes all files. This cannot be undone.
-        </p>
+        <p class="danger-desc">Deleting this project stops the container and removes all files. This cannot be undone.</p>
         <button class="btn-danger" :disabled="deleting" @click="deleteProject">
           {{ deleting ? 'Deleting...' : 'Delete project' }}
         </button>
@@ -255,6 +273,13 @@ const fallbackUrl = computed(() => {
   return `http://<server-ip>:${project.value.hostPort}`
 })
 
+const deployTypeLabel = computed(() => {
+  if (!project.value) return ''
+  if (project.value.deployMode === 'static') return 'Static site'
+  if (project.value.buildMode === 'dockerfile') return 'Dockerfile'
+  return 'Server app'
+})
+
 function normalizePathPrefix(input: string): string {
   const raw = input.trim()
   if (!raw || raw === '/') return ''
@@ -268,6 +293,10 @@ function routeLabel(r: ProjectRoute): string {
     return `https://${hostname}${pathPrefix}`
   }
   return pathPrefix ? `<server>${pathPrefix}` : '<server>'
+}
+
+function routeIsHttps(r: ProjectRoute): boolean {
+  return !!r.domain?.hostname
 }
 
 async function fetchProject() {
@@ -372,6 +401,7 @@ async function refreshLogs() {
   await fetchLogs()
 }
 
+
 async function refetchWebhookInfo() {
   webhookError.value = ''
   try {
@@ -414,18 +444,20 @@ function copy(text: string) {
 function containerLabel(status: string, deployMode: string) {
   if (deployMode === 'static') {
     const labels: Record<string, string> = {
-      idle: 'Deployed (file server)',
+      idle: 'Deployed',
       building: 'Building…',
+      queued: 'Queued',
       failed: 'Deploy failed',
     }
     return labels[status] ?? status
   }
   const labels: Record<string, string> = {
-    idle: 'Not running',
+    idle: 'Not started',
     building: 'Building…',
-    running: 'Container running',
-    failed: 'Deploy failed',
-    stopped: 'Container stopped',
+    queued: 'Queued',
+    running: 'Running',
+    failed: 'Failed',
+    stopped: 'Stopped',
   }
   return labels[status] ?? status
 }
@@ -447,7 +479,7 @@ onMounted(fetchProject)
 .breadcrumb {
   font-size: 0.8rem;
   color: var(--text-muted);
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.75rem;
 }
 
 .breadcrumb a {
@@ -459,40 +491,51 @@ onMounted(fetchProject)
   text-decoration: underline;
 }
 
+/* ── Hero card ────────────────────────────────────────────────── */
+.hero-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-default);
+  border-radius: 12px;
+  padding: 1.5rem;
+  margin-bottom: 1.5rem;
+}
+
+.hero-top {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+
+.hero-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 h1 {
   font-size: 1.4rem;
   font-weight: 600;
+}
+
+.hero-url {
+  font-size: 0.88rem;
   margin-bottom: 0.25rem;
 }
 
-.status-field {
-  display: flex;
-  align-items: center;
-  gap: 0.6rem;
-  margin-top: 0.75rem;
-}
-
-.field-label {
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  min-width: 4rem;
-}
-
-.project-url {
-  font-size: 0.85rem;
-  margin-bottom: 0.5rem;
-}
-
-.project-url a {
+.url-https {
   color: var(--brand);
   text-decoration: none;
+  font-weight: 500;
 }
 
-.project-url a:hover {
+.url-https:hover {
   text-decoration: underline;
 }
 
-.project-url-sep {
+.url-sep {
   color: var(--text-dim);
   margin: 0 0.35rem;
 }
@@ -500,12 +543,17 @@ h1 {
 .url-http {
   color: var(--text-muted);
   font-size: 0.8rem;
+  text-decoration: none;
+}
+
+.url-http:hover {
+  text-decoration: underline;
 }
 
 .deploy-notice {
   font-size: 0.78rem;
-  margin-bottom: 0.75rem;
-  padding: 0.2rem 0.5rem;
+  margin-top: 0.5rem;
+  padding: 0.25rem 0.6rem;
   border-radius: 4px;
   display: inline-block;
 }
@@ -520,18 +568,11 @@ h1 {
   color: var(--status-info-text);
 }
 
-.project-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-top: 0.75rem;
-  margin-bottom: 2rem;
-}
-
+/* ── Info grid ───────────────────────────────────────────────── */
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1rem;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 0.75rem;
   margin-bottom: 2rem;
 }
 
@@ -539,17 +580,19 @@ h1 {
   background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: 8px;
-  padding: 1rem;
+  padding: 0.85rem 1rem;
 }
 
 .info-label {
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
   margin-bottom: 0.3rem;
 }
 
 .info-value {
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   color: var(--text-primary);
 }
 
@@ -557,6 +600,7 @@ h1 {
   font-family: monospace;
 }
 
+/* ── Sections ───────────────────────────────────────────────── */
 .section {
   margin-bottom: 2rem;
 }
@@ -564,30 +608,45 @@ h1 {
 .section h2 {
   font-size: 1rem;
   font-weight: 600;
+  margin-bottom: 0.35rem;
+}
+
+.section-hint {
+  font-size: 0.82rem;
+  color: var(--text-muted);
   margin-bottom: 1rem;
 }
 
 .empty-msg {
   color: var(--text-muted);
   font-size: 0.85rem;
+  margin-bottom: 1rem;
 }
 
+/* ── Route list ─────────────────────────────────────────────── */
 .route-list {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
+  gap: 0.4rem;
+  margin-bottom: 1.25rem;
 }
 
 .route-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 0.75rem;
   background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: 6px;
-  padding: 0.6rem 0.75rem;
+  padding: 0.55rem 0.75rem;
+}
+
+.route-url-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-width: 0;
 }
 
 .route-url {
@@ -596,6 +655,48 @@ h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.route-url-link {
+  color: #b5d0ff;
+  text-decoration: none;
+}
+
+.route-url-link:hover {
+  text-decoration: underline;
+  color: var(--brand);
+}
+
+.route-meta {
+  display: flex;
+  gap: 0.35rem;
+  flex-shrink: 0;
+}
+
+.route-badge {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: 3px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border: 1px solid var(--border-subtle);
+}
+
+/* ── Add route box ──────────────────────────────────────────── */
+.add-route-box {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  padding: 1rem;
+}
+
+.add-route-title {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 0.75rem;
 }
 
 .route-form {
@@ -640,6 +741,7 @@ h1 {
   font-family: monospace;
 }
 
+/* ── Webhook ────────────────────────────────────────────────── */
 .webhook-card {
   background: var(--bg-card);
   border: 1px solid var(--border-default);
@@ -706,10 +808,12 @@ code {
   color: var(--text-primary);
 }
 
+/* ── Deployments ───────────────────────────────────────────── */
 .deploy-list {
   display: flex;
   flex-direction: column;
   gap: 2px;
+  margin-bottom: 1rem;
 }
 
 .deploy-row {
@@ -763,63 +867,22 @@ code {
   border-radius: 4px;
 }
 
-.status {
-  font-size: 0.75rem;
-  padding: 0.2rem 0.5rem;
-  border-radius: 4px;
-  font-weight: 500;
-  white-space: nowrap;
-}
-
-.status-queued {
-  background: var(--status-queued-bg);
-  color: var(--status-queued-text);
-}
-
-.status-building {
-  background: var(--status-info-bg);
-  color: var(--status-info-text);
-}
-
-.status-running {
-  background: var(--status-ok-bg);
-  color: var(--status-ok-text);
-}
-
-.status-success {
-  background: var(--status-ok-bg);
-  color: var(--status-ok-text);
-}
-
-.status-failed {
-  background: var(--status-err-bg);
-  color: var(--status-err-text);
-}
-
-.status-idle {
-  background: var(--status-idle-bg);
-  color: var(--status-idle-text);
-}
-
-.status-stopped {
-  background: var(--status-idle-bg);
-  color: var(--status-idle-text);
-}
-
+/* ── Log box ────────────────────────────────────────────────── */
 .log-section {
-  margin-top: 1.5rem;
+  margin-top: 1rem;
 }
 
 .log-header {
   display: flex;
   align-items: center;
-  gap: 1rem;
-  margin-bottom: 0.75rem;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
 }
 
 .log-header h3 {
-  font-size: 0.95rem;
+  font-size: 0.88rem;
   font-weight: 600;
+  color: var(--text-secondary);
 }
 
 .log-box {
@@ -844,9 +907,25 @@ code {
   color: var(--text-dim);
 }
 
-.state-msg {
-  color: var(--text-muted);
+/* ── Status badges ──────────────────────────────────────────── */
+.status {
+  font-size: 0.75rem;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+  font-weight: 500;
+  white-space: nowrap;
 }
+
+.status-queued { background: var(--status-queued-bg); color: var(--status-queued-text); }
+.status-building { background: var(--status-info-bg); color: var(--status-info-text); }
+.status-running { background: var(--status-ok-bg); color: var(--status-ok-text); }
+.status-success { background: var(--status-ok-bg); color: var(--status-ok-text); }
+.status-failed { background: var(--status-err-bg); color: var(--status-err-text); }
+.status-idle { background: var(--status-idle-bg); color: var(--status-idle-text); }
+.status-stopped { background: var(--status-idle-bg); color: var(--status-idle-text); }
+
+/* ── Misc ───────────────────────────────────────────────────── */
+.state-msg { color: var(--text-muted); }
 
 .alert.error {
   background: var(--status-err-bg);
@@ -858,9 +937,7 @@ code {
   margin-bottom: 1rem;
 }
 
-.mt-1 {
-  margin-top: 1rem;
-}
+.mt-1 { margin-top: 1rem; }
 
 label {
   display: flex;
@@ -870,8 +947,7 @@ label {
   color: var(--text-secondary);
 }
 
-input,
-select {
+input, select {
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
@@ -882,8 +958,7 @@ select {
   transition: border-color 0.15s;
 }
 
-input:focus,
-select:focus {
+input:focus, select:focus {
   border-color: var(--brand);
 }
 
@@ -899,10 +974,7 @@ select:focus {
   transition: opacity 0.15s;
 }
 
-.btn-danger:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
+.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
 
 .btn-danger:hover:not(:disabled) {
   background: #4a1a1a;
@@ -934,6 +1006,7 @@ select:focus {
   font-size: 0.8rem;
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
+  white-space: nowrap;
 }
 
 .danger-zone {
@@ -954,6 +1027,15 @@ select:focus {
   font-size: 0.85rem;
   color: var(--text-muted);
   margin-bottom: 1rem;
+}
+
+.logs-link {
+  color: var(--brand);
+  text-decoration: none;
+}
+
+.logs-link:hover {
+  text-decoration: underline;
 }
 
 .domain-select {

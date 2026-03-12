@@ -178,6 +178,59 @@ export async function pruneProjectImages(
   }
 }
 
+// ── Container log helpers ─────────────────────────────────────────────────────
+
+/** Decode Docker's multiplexed stdout/stderr log payload (8-byte frame header). */
+export function decodeDockerLogPayload(logs: unknown): string {
+  if (!Buffer.isBuffer(logs)) return String(logs ?? "");
+  let cursor = 0;
+  const chunks: Buffer[] = [];
+  while (cursor + 8 <= logs.length) {
+    const size = logs.readUInt32BE(cursor + 4);
+    const start = cursor + 8;
+    const end = start + size;
+    if (end > logs.length) break;
+    chunks.push(logs.subarray(start, end));
+    cursor = end;
+  }
+  return (chunks.length ? Buffer.concat(chunks) : logs).toString("utf8");
+}
+
+export async function getProjectContainerLogs(
+  projectId: number,
+  tail = 200,
+): Promise<{ lines: string[]; container: string | null }> {
+  const containerName = `sitey-${projectId}`;
+  try {
+    const containers = await docker.listContainers({
+      all: true,
+      filters: { name: [containerName] },
+    });
+    const found = containers.find((c) =>
+      c.Names.some((n) => n === `/${containerName}` || n === containerName),
+    );
+    if (!found) return { lines: ["Container not running."], container: null };
+    const logs = await docker.getContainer(found.Id).logs({
+      stdout: true,
+      stderr: true,
+      timestamps: false,
+      tail,
+    });
+    const raw = decodeDockerLogPayload(logs);
+    const lines = raw
+      .split(/\r?\n/)
+      .map((l) =>
+        l
+          .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+          .trimEnd(),
+      )
+      .filter(Boolean);
+    return { lines, container: containerName };
+  } catch {
+    return { lines: ["Could not fetch container logs."], container: null };
+  }
+}
+
 // ── Dockerfile generators ─────────────────────────────────────────────────────
 
 /** Server Dockerfile with optional build step and custom run command */

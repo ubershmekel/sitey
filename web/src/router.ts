@@ -13,6 +13,7 @@ const routes = [
   { path: '/domains/:id', component: () => import('./pages/DomainDetail.vue') },
   { path: '/projects/:id', component: () => import('./pages/ProjectDetail.vue') },
   { path: '/integrations', component: () => import('./pages/Integrations.vue') },
+  { path: '/logs', component: () => import('./pages/Logs.vue') },
   { path: '/settings', component: () => import('./pages/Settings.vue') },
 ]
 

@@ -19,22 +19,61 @@
           </button>
         </div>
 
+        <!-- Sitey URL banner when setup is done -->
+        <div v-if="allDone && siteyUrl" class="sitey-url-banner">
+          Your Sitey is live at
+          <a :href="siteyUrl" target="_blank" rel="noopener">{{ siteyUrl }}</a>
+        </div>
+
         <div v-if="!allDone || expanded" class="onboarding-steps">
+
           <!-- Step 1: Domain -->
           <div class="step" :class="{ done: hasDomain }">
             <div class="step-check">{{ hasDomain ? '✓' : '1' }}</div>
             <div class="step-body">
               <div class="step-heading">Set up a wildcard domain</div>
               <div class="step-desc">
-                Go to your DNS provider and add a wildcard A record (<code>*.example.com</code> or
-                <code>*.s.example.com</code>) and point it to this server's IP address.
-                That way Sitey can issue HTTPS certificates
-                for all your project subdomains automatically. Then add this domain to Sitey.
+                Add a wildcard DNS A record (<code>*.example.com</code> or <code>*.s.example.com</code>)
+                pointing to this server's IP. Sitey will automatically issue HTTPS certificates for all your projects.
+              </div>
+
+              <div v-if="!hasDomain" class="inline-action">
+                <template v-if="!domainFormOpen">
+                  <button class="step-inline-btn" @click="domainFormOpen = true">Add domain now →</button>
+                </template>
+                <template v-else>
+                  <form class="inline-form" @submit.prevent="addDomain">
+                    <div v-if="domainError" class="inline-alert">{{ domainError }}</div>
+                    <div class="inline-row">
+                      <input
+                        v-model="domainHostname"
+                        type="text"
+                        placeholder="*.example.com"
+                        required
+                        class="inline-input"
+                        autofocus
+                      />
+                      <input
+                        v-model="domainEmail"
+                        type="email"
+                        placeholder="email@example.com (for Let's Encrypt)"
+                        class="inline-input"
+                      />
+                      <button type="submit" class="btn-primary btn-sm" :disabled="domainSaving">
+                        {{ domainSaving ? 'Adding...' : 'Add' }}
+                      </button>
+                      <button type="button" class="btn-ghost btn-sm" @click="domainFormOpen = false">Cancel</button>
+                    </div>
+                    <div class="inline-hint">
+                      Make sure the DNS record is in place first. You can also <RouterLink to="/domains">manage domains</RouterLink>.
+                    </div>
+                  </form>
+                </template>
+              </div>
+              <div v-else>
+                <RouterLink to="/domains" class="step-link">Manage domains →</RouterLink>
               </div>
             </div>
-            <RouterLink to="/domains" class="step-action">
-              {{ hasDomain ? 'Manage domains' : 'Add domain ->' }}
-            </RouterLink>
           </div>
 
           <!-- Step 2: GitHub App -->
@@ -43,49 +82,75 @@
             <div class="step-body">
               <div class="step-heading">Connect GitHub App</div>
               <div class="step-desc">
-                Connect GitHub so Sitey can clone your repos and auto-deploy new versions
-                whenever you push commits.
-                In Integrations, click <strong>Create GitHub App automatically</strong> and
-                Sitey will pre-fill and create the app in one flow.
+                Connect GitHub so Sitey can clone your repos and auto-deploy on push.
+                Click <strong>Create GitHub App automatically</strong> in Integrations — Sitey pre-fills everything.
+              </div>
+              <div class="inline-action">
+                <RouterLink to="/integrations" class="step-inline-btn">
+                  {{ hasGitHubApp ? 'Manage integrations →' : 'Connect GitHub →' }}
+                </RouterLink>
               </div>
             </div>
-            <RouterLink to="/integrations" class="step-action">
-              {{ hasGitHubApp ? 'Manage in Integrations' : 'Connect GitHub ->' }}
-            </RouterLink>
           </div>
 
           <!-- Step 3: Project -->
           <div class="step" :class="{ done: hasProject }">
-            <div class="step-check">{{ hasProject ? 'OK' : '3' }}</div>
+            <div class="step-check">{{ hasProject ? '✓' : '3' }}</div>
             <div class="step-body">
               <div class="step-heading">Add your first project</div>
               <div class="step-desc">
-                Create a project to connect a GitHub repository to a domain and launch
-                your first live deployment.
+                Connect a GitHub repository to a domain and launch your first live deployment.
+              </div>
+              <div class="inline-action">
+                <template v-if="!hasProject">
+                  <button class="step-inline-btn" @click="showAddProject = true">Add project now →</button>
+                </template>
+                <template v-else>
+                  <RouterLink to="/projects" class="step-link">View projects →</RouterLink>
+                </template>
               </div>
             </div>
-            <RouterLink to="/projects" class="step-action">
-              {{ hasProject ? 'View projects' : 'Add project ->' }}
-            </RouterLink>
           </div>
+
         </div>
       </div>
     </template>
+
+    <AddProjectModal
+      v-model="showAddProject"
+      title="New project"
+      :domains="domains"
+      @created="onProjectCreated"
+    />
   </Layout>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { RouterLink } from 'vue-router'
+import { RouterLink, useRouter } from 'vue-router'
 import Layout from '../components/Layout.vue'
+import AddProjectModal from '../components/AddProjectModal.vue'
 import { trpc } from '../trpc'
 
+type Domain = Awaited<ReturnType<typeof trpc.domains.list.query>>[number]
+
+const router = useRouter()
 const loading = ref(true)
 const error = ref('')
 const hasDomain = ref(false)
 const hasGitHubApp = ref(false)
 const hasProject = ref(false)
 const expanded = ref(false)
+const siteyUrl = ref('')
+const domains = ref<Pick<Domain, 'id' | 'hostname'>[]>([])
+
+const domainFormOpen = ref(false)
+const domainHostname = ref('')
+const domainEmail = ref('')
+const domainSaving = ref(false)
+const domainError = ref('')
+
+const showAddProject = ref(false)
 
 const allDone = computed(() => hasDomain.value && hasGitHubApp.value && hasProject.value)
 
@@ -93,19 +158,45 @@ async function fetchAll() {
   loading.value = true
   error.value = ''
   try {
-    const [projectList, domainList, appConfig] = await Promise.all([
+    const [projectList, domainList, appConfig, siteUrlInfo] = await Promise.all([
       trpc.projects.list.query(),
       trpc.domains.list.query(),
       trpc.github.getAppConfig.query(),
+      trpc.system.getPublicSiteUrl.query().catch(() => null),
     ])
     hasDomain.value = domainList.length > 0
     hasGitHubApp.value = appConfig.configured
     hasProject.value = projectList.filter(p => !p.protected).length > 0
+    domains.value = domainList.map(d => ({ id: d.id, hostname: d.hostname }))
+    siteyUrl.value = siteUrlInfo?.effectiveUrl ?? ''
   } catch (e: unknown) {
     error.value = (e as { message?: string })?.message ?? 'Failed to load'
   } finally {
     loading.value = false
   }
+}
+
+async function addDomain() {
+  domainError.value = ''
+  domainSaving.value = true
+  try {
+    await trpc.domains.create.mutate({
+      hostname: domainHostname.value.trim(),
+      letsEncryptEmail: domainEmail.value.trim(),
+    })
+    domainFormOpen.value = false
+    domainHostname.value = ''
+    domainEmail.value = ''
+    await fetchAll()
+  } catch (e: unknown) {
+    domainError.value = (e as { message?: string })?.message ?? 'Failed to add domain'
+  } finally {
+    domainSaving.value = false
+  }
+}
+
+async function onProjectCreated(projectId: number) {
+  await router.push(`/projects/${projectId}`)
 }
 
 onMounted(fetchAll)
@@ -198,6 +289,23 @@ h1 {
   color: var(--brand-active-text);
 }
 
+/* Sitey URL banner */
+.sitey-url-banner {
+  margin-top: 0.75rem;
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+}
+
+.sitey-url-banner a {
+  color: var(--brand);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.sitey-url-banner a:hover {
+  text-decoration: underline;
+}
+
 .onboarding-steps {
   margin-top: 1rem;
 }
@@ -216,7 +324,7 @@ h1 {
 }
 
 .step.done {
-  opacity: 0.65;
+  opacity: 0.6;
 }
 
 .step-check {
@@ -256,6 +364,7 @@ h1 {
   font-size: 0.82rem;
   color: var(--text-muted);
   line-height: 1.55;
+  margin-bottom: 0.75rem;
 }
 
 .step-desc code {
@@ -266,19 +375,110 @@ h1 {
   color: #9dcfff;
 }
 
-.step-action {
-  font-size: 0.82rem;
-  color: var(--brand);
-  text-decoration: none;
-  white-space: nowrap;
-  padding: 0.35rem 0;
-  flex-shrink: 0;
-  align-self: flex-start;
-  margin-top: 2px;
+.inline-action {
+  margin-top: 0;
 }
 
-.step-action:hover {
+.step-inline-btn {
+  background: none;
+  border: none;
+  color: var(--brand);
+  font-size: 0.85rem;
+  cursor: pointer;
+  padding: 0;
+  text-decoration: none;
+  display: inline;
+}
+
+.step-inline-btn:hover {
   text-decoration: underline;
+}
+
+.step-link {
+  color: var(--brand);
+  text-decoration: none;
+  font-size: 0.85rem;
+}
+
+.step-link:hover {
+  text-decoration: underline;
+}
+
+/* Inline domain form */
+.inline-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.35rem;
+}
+
+.inline-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.inline-input {
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 0.45rem 0.7rem;
+  color: var(--text-primary);
+  font-size: 0.88rem;
+  outline: none;
+  transition: border-color 0.15s;
+  flex: 1;
+  min-width: 160px;
+}
+
+.inline-input:focus {
+  border-color: var(--brand);
+}
+
+.inline-hint {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.inline-hint a {
+  color: var(--brand);
+  text-decoration: none;
+}
+
+.inline-hint a:hover {
+  text-decoration: underline;
+}
+
+.inline-alert {
+  font-size: 0.82rem;
+  color: var(--status-err-text);
+  background: var(--status-err-bg);
+  border: 1px solid var(--status-err-border);
+  border-radius: 5px;
+  padding: 0.4rem 0.6rem;
+}
+
+.btn-sm {
+  padding: 0.45rem 0.85rem;
+  font-size: 0.85rem;
+  white-space: nowrap;
+}
+
+.btn-ghost {
+  background: none;
+  color: var(--text-secondary);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.btn-ghost:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
 }
 
 .state-msg {

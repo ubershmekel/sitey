@@ -17,6 +17,9 @@
         <RouterLink to="/integrations" class="nav-item" active-class="active">
           <span class="icon">⑂</span> Integrations
         </RouterLink>
+        <RouterLink to="/logs" class="nav-item" active-class="active">
+          <span class="icon">≡</span> Logs
+        </RouterLink>
         <RouterLink to="/settings" class="nav-item" active-class="active">
           <span class="icon">⚙</span> Settings
         </RouterLink>
