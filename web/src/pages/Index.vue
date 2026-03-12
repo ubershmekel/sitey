@@ -36,49 +36,42 @@
                 Add a wildcard DNS A record (<code>*.example.com</code> or <code>*.s.example.com</code>)
                 pointing to this server's IP. Sitey will automatically issue HTTPS certificates for all your projects.
               </div>
-
-              <div v-if="!hasDomain" class="inline-action">
-                <template v-if="!domainFormOpen">
-                  <button class="step-inline-btn" @click="domainFormOpen = true">Add domain now →</button>
+              <div class="inline-action">
+                <template v-if="!hasDomain">
+                  <button class="step-inline-btn" @click="showAddDomain = true">Add domain now →</button>
                 </template>
                 <template v-else>
-                  <form class="inline-form" @submit.prevent="addDomain">
-                    <div v-if="domainError" class="inline-alert">{{ domainError }}</div>
-                    <div class="inline-row">
-                      <input
-                        v-model="domainHostname"
-                        type="text"
-                        placeholder="*.example.com"
-                        required
-                        class="inline-input"
-                        autofocus
-                      />
-                      <input
-                        v-model="domainEmail"
-                        type="email"
-                        placeholder="email@example.com (for Let's Encrypt)"
-                        class="inline-input"
-                      />
-                      <button type="submit" class="btn-primary btn-sm" :disabled="domainSaving">
-                        {{ domainSaving ? 'Adding...' : 'Add' }}
-                      </button>
-                      <button type="button" class="btn-ghost btn-sm" @click="domainFormOpen = false">Cancel</button>
-                    </div>
-                    <div class="inline-hint">
-                      Make sure the DNS record is in place first. You can also <RouterLink to="/domains">manage domains</RouterLink>.
-                    </div>
-                  </form>
+                  <RouterLink to="/domains" class="step-link">Manage domains →</RouterLink>
                 </template>
-              </div>
-              <div v-else>
-                <RouterLink to="/domains" class="step-link">Manage domains →</RouterLink>
               </div>
             </div>
           </div>
 
-          <!-- Step 2: GitHub App -->
+          <!-- Step 2: Switch to HTTPS URL -->
+          <div class="step" :class="{ done: !!siteyUrl }">
+            <div class="step-check">{{ siteyUrl ? '✓' : '2' }}</div>
+            <div class="step-body">
+              <div class="step-heading">Open Sitey at its HTTPS address</div>
+              <div class="step-desc">
+                GitHub requires HTTPS for OAuth and webhooks. Once your domain is set up and the
+                certificate is issued, continue setup from your HTTPS Sitey URL.
+              </div>
+              <div class="inline-action">
+                <template v-if="siteyUrl">
+                  <a :href="siteyUrl" class="step-inline-btn" target="_blank" rel="noopener">
+                    Open {{ siteyUrl }} →
+                  </a>
+                </template>
+                <template v-else>
+                  <span class="step-hint">Complete step 1 first — Sitey will generate your HTTPS URL automatically.</span>
+                </template>
+              </div>
+            </div>
+          </div>
+
+          <!-- Step 3: GitHub App -->
           <div class="step" :class="{ done: hasGitHubApp }">
-            <div class="step-check">{{ hasGitHubApp ? '✓' : '2' }}</div>
+            <div class="step-check">{{ hasGitHubApp ? '✓' : '3' }}</div>
             <div class="step-body">
               <div class="step-heading">Connect GitHub App</div>
               <div class="step-desc">
@@ -93,9 +86,9 @@
             </div>
           </div>
 
-          <!-- Step 3: Project -->
+          <!-- Step 4: Project -->
           <div class="step" :class="{ done: hasProject }">
-            <div class="step-check">{{ hasProject ? '✓' : '3' }}</div>
+            <div class="step-check">{{ hasProject ? '✓' : '4' }}</div>
             <div class="step-body">
               <div class="step-heading">Add your first project</div>
               <div class="step-desc">
@@ -116,6 +109,7 @@
       </div>
     </template>
 
+    <AddDomainModal v-model="showAddDomain" @created="fetchAll" />
     <AddProjectModal
       v-model="showAddProject"
       title="New project"
@@ -130,6 +124,7 @@ import { ref, computed, onMounted } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
 import Layout from '../components/Layout.vue'
 import AddProjectModal from '../components/AddProjectModal.vue'
+import AddDomainModal from '../components/AddDomainModal.vue'
 import { trpc } from '../trpc'
 
 type Domain = Awaited<ReturnType<typeof trpc.domains.list.query>>[number]
@@ -144,15 +139,10 @@ const expanded = ref(false)
 const siteyUrl = ref('')
 const domains = ref<Pick<Domain, 'id' | 'hostname'>[]>([])
 
-const domainFormOpen = ref(false)
-const domainHostname = ref('')
-const domainEmail = ref('')
-const domainSaving = ref(false)
-const domainError = ref('')
-
+const showAddDomain = ref(false)
 const showAddProject = ref(false)
 
-const allDone = computed(() => hasDomain.value && hasGitHubApp.value && hasProject.value)
+const allDone = computed(() => hasDomain.value && !!siteyUrl.value && hasGitHubApp.value && hasProject.value)
 
 async function fetchAll() {
   loading.value = true
@@ -176,24 +166,6 @@ async function fetchAll() {
   }
 }
 
-async function addDomain() {
-  domainError.value = ''
-  domainSaving.value = true
-  try {
-    await trpc.domains.create.mutate({
-      hostname: domainHostname.value.trim(),
-      letsEncryptEmail: domainEmail.value.trim(),
-    })
-    domainFormOpen.value = false
-    domainHostname.value = ''
-    domainEmail.value = ''
-    await fetchAll()
-  } catch (e: unknown) {
-    domainError.value = (e as { message?: string })?.message ?? 'Failed to add domain'
-  } finally {
-    domainSaving.value = false
-  }
-}
 
 async function onProjectCreated(projectId: number) {
   await router.push(`/projects/${projectId}`)
@@ -404,81 +376,9 @@ h1 {
   text-decoration: underline;
 }
 
-/* Inline domain form */
-.inline-form {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-top: 0.35rem;
-}
-
-.inline-row {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-.inline-input {
-  background: var(--bg-input);
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 0.45rem 0.7rem;
-  color: var(--text-primary);
-  font-size: 0.88rem;
-  outline: none;
-  transition: border-color 0.15s;
-  flex: 1;
-  min-width: 160px;
-}
-
-.inline-input:focus {
-  border-color: var(--brand);
-}
-
-.inline-hint {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-}
-
-.inline-hint a {
-  color: var(--brand);
-  text-decoration: none;
-}
-
-.inline-hint a:hover {
-  text-decoration: underline;
-}
-
-.inline-alert {
+.step-hint {
   font-size: 0.82rem;
-  color: var(--status-err-text);
-  background: var(--status-err-bg);
-  border: 1px solid var(--status-err-border);
-  border-radius: 5px;
-  padding: 0.4rem 0.6rem;
-}
-
-.btn-sm {
-  padding: 0.45rem 0.85rem;
-  font-size: 0.85rem;
-  white-space: nowrap;
-}
-
-.btn-ghost {
-  background: none;
-  color: var(--text-secondary);
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 0.5rem 1rem;
-  font-size: 0.85rem;
-  cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
-}
-
-.btn-ghost:hover {
-  border-color: var(--text-muted);
-  color: var(--text-primary);
+  color: var(--text-muted);
 }
 
 .state-msg {
