@@ -71,14 +71,14 @@ async function handleSetup() {
   border-radius: 12px;
   padding: 2.5rem;
   --btn-primary-padding: 0.7rem;
-  --btn-primary-font-size: 0.95rem;
+  --btn-primary-font-size: var(--font-medium);
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
 }
 
 .brand {
-  font-size: 1.5rem;
+  font-size: var(--font-huge);
   font-weight: 700;
   color: #7c6cfc;
   justify-content: center;
@@ -86,7 +86,7 @@ async function handleSetup() {
 }
 
 h1 {
-  font-size: 1.15rem;
+  font-size: var(--font-large);
   font-weight: 600;
   text-align: center;
   color: #e2e2e2;
@@ -96,7 +96,7 @@ h1 {
 .subtitle {
   text-align: center;
   color: #666;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   margin: -0.5rem 0 0;
 }
 
@@ -104,7 +104,7 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   color: #9a9a9a;
 }
 
@@ -114,7 +114,7 @@ input {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   color: #e2e2e2;
-  font-size: 0.95rem;
+  font-size: var(--font-medium);
   outline: none;
   transition: border-color 0.15s;
 }
@@ -126,6 +126,6 @@ input:focus { border-color: #7c6cfc; }
   color: #ff7070;
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
 }
 </style>

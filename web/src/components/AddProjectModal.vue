@@ -7,15 +7,8 @@
 
       <label>
         GitHub repository
-        <input
-          v-model="form.githubUrl"
-          type="text"
-          required
-          list="repo-list"
-          placeholder="owner/repo or https://github.com/owner/repo"
-          @input="parseGithubUrl"
-          @blur="parseGithubUrl"
-        />
+        <input v-model="form.githubUrl" type="text" required list="repo-list"
+          placeholder="owner/repo or https://github.com/owner/repo" @input="parseGithubUrl" @blur="parseGithubUrl" />
         <datalist id="repo-list">
           <option v-for="repo in appRepos" :key="repo.id" :value="repo.fullName" />
         </datalist>
@@ -60,7 +53,8 @@
         </div>
         <div class="type-desc">
           <span v-if="deployType === 'static'">Build your site and serve the output as static files via Caddy.</span>
-          <span v-else-if="deployType === 'server'">Sitey generates a Dockerfile from your run command and runs it in a container.</span>
+          <span v-else-if="deployType === 'server'">Sitey generates a Dockerfile from your run command and runs it in a
+            container.</span>
           <span v-else>Use your own <code>Dockerfile</code> in the repository root.</span>
         </div>
       </div>
@@ -324,7 +318,7 @@ watch(() => props.modelValue, async (visible) => {
 }
 
 .modal h2 {
-  font-size: 1.1rem;
+  font-size: var(--font-large);
   font-weight: 600;
 }
 
@@ -332,7 +326,7 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   color: var(--text-secondary);
 }
 
@@ -344,7 +338,7 @@ label {
 
 .hint {
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--font-tiny);
 }
 
 .hint a {
@@ -358,7 +352,7 @@ label {
 }
 
 .field-group-label {
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   color: var(--text-secondary);
 }
 
@@ -376,7 +370,7 @@ label {
   border: none;
   border-right: 1px solid var(--border-strong);
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   padding: 0.5rem 0.25rem;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
@@ -398,7 +392,7 @@ label {
 }
 
 .type-desc {
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   line-height: 1.5;
 }
@@ -407,7 +401,6 @@ label {
   background: var(--bg-input);
   border-radius: 3px;
   padding: 0.1em 0.35em;
-  font-size: 0.9em;
   color: #9dcfff;
 }
 
@@ -418,7 +411,7 @@ select {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   color: var(--text-primary);
-  font-size: 0.95rem;
+  font-size: var(--font-medium);
   outline: none;
   transition: border-color 0.15s;
 }
@@ -441,7 +434,7 @@ select:focus {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 1.25rem;
-  font-size: 0.9rem;
+  font-size: var(--font-medium);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
@@ -457,6 +450,6 @@ select:focus {
   color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
 }
 </style>

@@ -101,7 +101,7 @@ onMounted(fetchAll)
 }
 
 h1 {
-  font-size: 1.4rem;
+  font-size: var(--font-huge);
   font-weight: 600;
 }
 
@@ -130,7 +130,7 @@ h1 {
 }
 
 .project-name {
-  font-size: 1rem;
+  font-size: var(--font-medium);
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -142,7 +142,7 @@ h1 {
 }
 
 .deploy-mode {
-  font-size: 0.75rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
@@ -157,7 +157,7 @@ h1 {
 }
 
 .route-tag {
-  font-size: 0.75rem;
+  font-size: var(--font-tiny);
   color: var(--brand);
   background: var(--brand-active-bg);
   border: 1px solid #3a3060;
@@ -166,18 +166,18 @@ h1 {
 }
 
 .no-routes {
-  font-size: 0.75rem;
+  font-size: var(--font-tiny);
   color: var(--text-dim);
 }
 
 .project-repo {
-  font-size: 0.78rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   margin-top: 0.15rem;
 }
 
 .status {
-  font-size: 0.75rem;
+  font-size: var(--font-tiny);
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
   font-weight: 500;
@@ -227,7 +227,7 @@ h1 {
   color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   margin-bottom: 1rem;
 }
 </style>

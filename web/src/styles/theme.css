@@ -59,4 +59,10 @@
   /* ── Status: idle / stopped ──────────────────────────────── */
   --status-idle-bg:   #1a1a1a;
   --status-idle-text: #888888;
+
+  /* ── Typography ──────────────────────────────────────────── */
+  --font-tiny:   14px;   /* hints, labels, badges, secondary text */
+  --font-medium: 16px;   /* body text, inputs, buttons */
+  --font-large:  18px;   /* sub-headings, modal titles */
+  --font-huge:   24px;   /* page headings, brand */
 }

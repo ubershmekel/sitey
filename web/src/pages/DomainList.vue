@@ -72,7 +72,7 @@ onMounted(fetchDomains)
 }
 
 h1 {
-  font-size: 1.4rem;
+  font-size: var(--font-huge);
   font-weight: 600;
 }
 
@@ -99,7 +99,7 @@ h1 {
 }
 
 .domain-name {
-  font-size: 1rem;
+  font-size: var(--font-medium);
   font-weight: 600;
   margin-bottom: 0.75rem;
   color: var(--text-primary);
@@ -119,17 +119,17 @@ h1 {
 }
 
 .meta-label {
-  font-size: 0.74rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
 }
 
 .projects-count {
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
 }
 
 .status {
-  font-size: 0.75rem;
+  font-size: var(--font-tiny);
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
   font-weight: 500;
@@ -162,7 +162,7 @@ h1 {
 }
 
 .hint {
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   margin: 0.25rem 0 1.5rem;
 }
 
@@ -176,7 +176,7 @@ h1 {
   color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   margin-bottom: 1rem;
 }
 

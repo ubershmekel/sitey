@@ -196,7 +196,7 @@ onMounted(loadPublicSiteUrl)
 }
 
 h1 {
-  font-size: 1.4rem;
+  font-size: var(--font-huge);
   font-weight: 600;
 }
 
@@ -209,13 +209,13 @@ h1 {
 }
 
 .settings-section h2 {
-  font-size: 1rem;
+  font-size: var(--font-medium);
   font-weight: 600;
   margin-bottom: 1rem;
 }
 
 .section-hint {
-  font-size: 0.83rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   margin-bottom: 1.25rem;
   margin-top: -0.5rem;
@@ -227,7 +227,7 @@ h1 {
   align-items: start;
   gap: 1rem;
   margin-bottom: 0.35rem;
-  font-size: 0.84rem;
+  font-size: var(--font-tiny);
 }
 
 .meta-label {
@@ -257,13 +257,13 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   color: var(--text-secondary);
 }
 
 .hint {
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--font-tiny);
 }
 
 input,
@@ -273,7 +273,7 @@ textarea {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   color: var(--text-primary);
-  font-size: 0.9rem;
+  font-size: var(--font-medium);
   outline: none;
   transition: border-color 0.15s;
   font-family: inherit;
@@ -287,7 +287,7 @@ textarea:focus {
 textarea {
   resize: vertical;
   font-family: monospace;
-  font-size: 0.82rem;
+  font-size: var(--font-tiny);
 }
 
 .form-row {
@@ -301,7 +301,7 @@ textarea {
   align-items: center;
 }
 
-.settings-form > .btn-primary {
+.settings-form>.btn-primary {
   align-self: flex-start;
 }
 
@@ -310,7 +310,7 @@ textarea {
 }
 
 .badge {
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   padding: 0.2rem 0.6rem;
   border-radius: 4px;
 }
@@ -331,7 +331,7 @@ textarea {
   border: none;
   border-radius: 6px;
   padding: 0.6rem 1.25rem;
-  font-size: 0.9rem;
+  font-size: var(--font-medium);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -343,7 +343,7 @@ textarea {
 .alert {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
 }
 
 .alert.error {
@@ -370,7 +370,6 @@ textarea {
   background: #2a2200;
   border-radius: 3px;
   padding: 0.1em 0.3em;
-  font-size: 0.9em;
 }
 
 .section-hint a {
@@ -385,7 +384,7 @@ textarea {
 }
 
 .domain-label {
-  font-size: 0.83rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -396,7 +395,7 @@ textarea {
   border-radius: 6px;
   padding: 0.45rem 0.6rem;
   color: var(--text-primary);
-  font-size: 0.88rem;
+  font-size: var(--font-medium);
   flex: 1;
 }
 
@@ -409,7 +408,7 @@ textarea {
 }
 
 .manual-details summary {
-  font-size: 0.83rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   cursor: pointer;
   user-select: none;
@@ -421,7 +420,7 @@ textarea {
 
 .btn-sm {
   padding: 0.25rem 0.6rem;
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
 }
 
 .btn-ghost {
@@ -430,7 +429,7 @@ textarea {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.5rem 1rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
@@ -441,7 +440,7 @@ textarea {
 }
 
 .about p {
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   margin-bottom: 0.5rem;
 }
@@ -453,7 +452,7 @@ textarea {
   border-radius: 6px;
   padding: 0.75rem 1rem;
   font-family: monospace;
-  font-size: 0.82rem;
+  font-size: var(--font-tiny);
   color: #a0d0a0;
   margin-top: 0.5rem;
   word-break: break-all;

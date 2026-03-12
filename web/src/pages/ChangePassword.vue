@@ -80,26 +80,26 @@ async function handleSubmit() {
   border-radius: 12px;
   padding: 2.5rem;
   --btn-primary-padding: 0.7rem;
-  --btn-primary-font-size: 0.95rem;
+  --btn-primary-font-size: var(--font-medium);
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
 }
-.brand { font-size: 1.5rem; font-weight: 700; color: var(--brand); justify-content: center; }
-h1 { font-size: 1.2rem; font-weight: 600; text-align: center; color: var(--text-primary); }
-.subtitle { font-size: 0.85rem; color: var(--text-muted); text-align: center; margin-top: -0.75rem; }
+.brand { font-size: var(--font-huge); font-weight: 700; color: var(--brand); justify-content: center; }
+h1 { font-size: var(--font-large); font-weight: 600; text-align: center; color: var(--text-primary); }
+.subtitle { font-size: var(--font-tiny); color: var(--text-muted); text-align: center; margin-top: -0.75rem; }
 label {
   display: flex; flex-direction: column; gap: 0.4rem;
-  font-size: 0.85rem; color: var(--text-secondary);
+  font-size: var(--font-tiny); color: var(--text-secondary);
 }
-.hint { color: var(--text-muted); font-size: 0.78rem; }
+.hint { color: var(--text-muted); font-size: var(--font-tiny); }
 input {
   background: var(--bg-input); border: 1px solid var(--border-strong); border-radius: 6px;
-  padding: 0.6rem 0.75rem; color: var(--text-primary); font-size: 0.95rem; outline: none;
+  padding: 0.6rem 0.75rem; color: var(--text-primary); font-size: var(--font-medium); outline: none;
   transition: border-color 0.15s;
 }
 input:focus { border-color: var(--brand); }
-.alert { border-radius: 6px; padding: 0.6rem 0.75rem; font-size: 0.85rem; }
+.alert { border-radius: 6px; padding: 0.6rem 0.75rem; font-size: var(--font-tiny); }
 .alert.error { background: var(--status-err-bg); border: 1px solid var(--status-err-border); color: var(--status-err-text); }
 .alert.success { background: var(--status-ok-bg); border: 1px solid var(--status-ok-border); color: var(--status-ok-text); }
 </style>

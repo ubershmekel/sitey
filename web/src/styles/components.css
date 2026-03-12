@@ -4,7 +4,7 @@
   border: var(--btn-primary-border, none);
   border-radius: var(--btn-primary-radius, 6px);
   padding: var(--btn-primary-padding, 0.6rem 1.25rem);
-  font-size: var(--btn-primary-font-size, 0.9rem);
+  font-size: var(--btn-primary-font-size, var(--font-medium));
   font-weight: var(--btn-primary-font-weight, 600);
   cursor: pointer;
   transition: opacity 0.15s;

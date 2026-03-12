@@ -116,7 +116,7 @@ async function addDomain() {
 }
 
 .modal h2 {
-  font-size: 1.1rem;
+  font-size: var(--font-large);
   font-weight: 600;
 }
 
@@ -124,13 +124,13 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   color: var(--text-secondary);
 }
 
 .hint {
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--font-tiny);
 }
 
 input {
@@ -139,7 +139,7 @@ input {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   color: var(--text-primary);
-  font-size: 0.95rem;
+  font-size: var(--font-medium);
   outline: none;
   transition: border-color 0.15s;
 }
@@ -161,7 +161,7 @@ input:focus {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 1.25rem;
-  font-size: 0.9rem;
+  font-size: var(--font-medium);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
@@ -172,7 +172,7 @@ input:focus {
 }
 
 .dns-check {
-  font-size: 0.82rem;
+  font-size: var(--font-tiny);
   padding: 0.1rem 0;
 }
 
@@ -189,7 +189,7 @@ input:focus {
   border: 1px solid var(--status-info-border);
   border-radius: 8px;
   padding: 0.75rem 1rem;
-  font-size: 0.82rem;
+  font-size: var(--font-tiny);
   color: var(--status-info-text);
   line-height: 1.55;
 }
@@ -202,7 +202,6 @@ input:focus {
   background: #1a2a40;
   border-radius: 3px;
   padding: 0.1em 0.35em;
-  font-size: 0.85em;
   color: #9dcfff;
 }
 
@@ -212,6 +211,6 @@ input:focus {
   color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
 }
 </style>

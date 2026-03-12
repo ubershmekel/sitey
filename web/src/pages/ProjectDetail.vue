@@ -477,7 +477,7 @@ onMounted(fetchProject)
 
 <style scoped>
 .breadcrumb {
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   margin-bottom: 0.75rem;
 }
@@ -516,12 +516,12 @@ onMounted(fetchProject)
 }
 
 h1 {
-  font-size: 1.4rem;
+  font-size: var(--font-huge);
   font-weight: 600;
 }
 
 .hero-url {
-  font-size: 0.88rem;
+  font-size: var(--font-medium);
   margin-bottom: 0.25rem;
 }
 
@@ -542,7 +542,7 @@ h1 {
 
 .url-http {
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   text-decoration: none;
 }
 
@@ -551,7 +551,7 @@ h1 {
 }
 
 .deploy-notice {
-  font-size: 0.78rem;
+  font-size: var(--font-tiny);
   margin-top: 0.5rem;
   padding: 0.25rem 0.6rem;
   border-radius: 4px;
@@ -584,7 +584,7 @@ h1 {
 }
 
 .info-label {
-  font-size: 0.72rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
@@ -592,7 +592,7 @@ h1 {
 }
 
 .info-value {
-  font-size: 0.88rem;
+  font-size: var(--font-medium);
   color: var(--text-primary);
 }
 
@@ -606,20 +606,20 @@ h1 {
 }
 
 .section h2 {
-  font-size: 1rem;
+  font-size: var(--font-medium);
   font-weight: 600;
   margin-bottom: 0.35rem;
 }
 
 .section-hint {
-  font-size: 0.82rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   margin-bottom: 1rem;
 }
 
 .empty-msg {
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   margin-bottom: 1rem;
 }
 
@@ -651,7 +651,7 @@ h1 {
 
 .route-url {
   color: #b5d0ff;
-  font-size: 0.82rem;
+  font-size: var(--font-tiny);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -674,7 +674,7 @@ h1 {
 }
 
 .route-badge {
-  font-size: 0.7rem;
+  font-size: var(--font-tiny);
   padding: 0.1rem 0.4rem;
   border-radius: 3px;
   background: var(--bg-elevated);
@@ -691,7 +691,7 @@ h1 {
 }
 
 .add-route-title {
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -734,7 +734,7 @@ h1 {
 }
 
 .subdomain-suffix {
-  font-size: 0.82rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   padding: 0 0.6rem 0 0;
   white-space: nowrap;
@@ -751,13 +751,13 @@ h1 {
 }
 
 .webhook-card h2 {
-  font-size: 1rem;
+  font-size: var(--font-medium);
   font-weight: 600;
   margin-bottom: 0.5rem;
 }
 
 .hint {
-  font-size: 0.82rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   margin-bottom: 1rem;
 }
@@ -775,7 +775,7 @@ h1 {
 }
 
 .wh-label {
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   min-width: 100px;
 }
@@ -785,7 +785,7 @@ code {
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
   font-family: monospace;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -798,7 +798,7 @@ code {
   color: var(--text-secondary);
   border-radius: 4px;
   padding: 0.2rem 0.5rem;
-  font-size: 0.78rem;
+  font-size: var(--font-tiny);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
@@ -839,14 +839,14 @@ code {
 
 .deploy-sha {
   font-family: monospace;
-  font-size: 0.82rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   min-width: 70px;
 }
 
 .deploy-msg {
   flex: 1;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -854,13 +854,13 @@ code {
 }
 
 .deploy-time {
-  font-size: 0.78rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   white-space: nowrap;
 }
 
 .deploy-trigger {
-  font-size: 0.75rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   background: var(--bg-elevated);
   padding: 0.15rem 0.4rem;
@@ -880,7 +880,7 @@ code {
 }
 
 .log-header h3 {
-  font-size: 0.88rem;
+  font-size: var(--font-huge);
   font-weight: 600;
   color: var(--text-secondary);
 }
@@ -893,7 +893,7 @@ code {
   max-height: 400px;
   overflow-y: auto;
   font-family: monospace;
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   line-height: 1.5;
 }
 
@@ -909,7 +909,7 @@ code {
 
 /* ── Status badges ──────────────────────────────────────────── */
 .status {
-  font-size: 0.75rem;
+  font-size: var(--font-tiny);
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
   font-weight: 500;
@@ -933,7 +933,7 @@ code {
   color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   margin-bottom: 1rem;
 }
 
@@ -943,7 +943,7 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   color: var(--text-secondary);
 }
 
@@ -953,7 +953,7 @@ input, select {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   color: var(--text-primary);
-  font-size: 0.9rem;
+  font-size: var(--font-medium);
   outline: none;
   transition: border-color 0.15s;
 }
@@ -968,7 +968,7 @@ input:focus, select:focus {
   border: 1px solid var(--status-err-border);
   border-radius: 6px;
   padding: 0.6rem 1.25rem;
-  font-size: 0.9rem;
+  font-size: var(--font-medium);
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s;
@@ -987,7 +987,7 @@ input:focus, select:focus {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.5rem 1rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
@@ -1003,7 +1003,7 @@ input:focus, select:focus {
   border: 1px solid var(--border-strong);
   border-radius: 5px;
   padding: 0.3rem 0.6rem;
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
   white-space: nowrap;
@@ -1017,14 +1017,14 @@ input:focus, select:focus {
 }
 
 .danger-zone h2 {
-  font-size: 1rem;
+  font-size: var(--font-medium);
   font-weight: 600;
   margin-bottom: 0.5rem;
   color: var(--status-err-text);
 }
 
 .danger-desc {
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   margin-bottom: 1rem;
 }
@@ -1044,7 +1044,7 @@ input:focus, select:focus {
   border-radius: 5px;
   padding: 0.3rem 0.5rem;
   color: var(--text-primary);
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   flex: 1;
 }
 </style>

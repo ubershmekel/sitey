@@ -78,7 +78,7 @@ watch(() => auth.needsPasswordChange, (needs) => {
 .logo-link { text-decoration: none; display: block; }
 
 .logo {
-  font-size: 1.2rem;
+  font-size: var(--font-large);
   font-weight: 700;
   color: var(--brand);
   letter-spacing: -0.03em;
@@ -100,13 +100,13 @@ watch(() => auth.needsPasswordChange, (needs) => {
   border-radius: 6px;
   color: var(--text-secondary);
   text-decoration: none;
-  font-size: 0.9rem;
+  font-size: var(--font-medium);
   transition: background 0.15s, color 0.15s;
 }
 .nav-item:hover { background: var(--bg-input); color: var(--text-primary); }
 .nav-item.active { background: var(--brand-active-bg); color: var(--brand-active-text); }
 
-.icon { font-size: 0.85rem; }
+.icon { font-size: var(--font-tiny); }
 
 .sidebar-footer {
   padding: 1rem 1.25rem;
@@ -117,7 +117,7 @@ watch(() => auth.needsPasswordChange, (needs) => {
 }
 
 .user-email {
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -131,7 +131,7 @@ watch(() => auth.needsPasswordChange, (needs) => {
   padding: 0.35rem 0.75rem;
   border-radius: 5px;
   cursor: pointer;
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   transition: border-color 0.15s, color 0.15s;
 }
 .logout-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }

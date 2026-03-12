@@ -63,7 +63,8 @@
                   </a>
                 </template>
                 <template v-else>
-                  <span class="step-hint">Complete step 1 first — Sitey will generate your HTTPS URL automatically.</span>
+                  <span class="step-hint">Complete step 1 first — Sitey will generate your HTTPS URL
+                    automatically.</span>
                 </template>
               </div>
             </div>
@@ -110,12 +111,7 @@
     </template>
 
     <AddDomainModal v-model="showAddDomain" @created="fetchAll" />
-    <AddProjectModal
-      v-model="showAddProject"
-      title="New project"
-      :domains="domains"
-      @created="onProjectCreated"
-    />
+    <AddProjectModal v-model="showAddProject" title="New project" :domains="domains" @created="onProjectCreated" />
   </Layout>
 </template>
 
@@ -183,7 +179,7 @@ onMounted(fetchAll)
 }
 
 h1 {
-  font-size: 1.4rem;
+  font-size: var(--font-huge);
   font-weight: 600;
 }
 
@@ -227,14 +223,14 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.72rem;
+  font-size: var(--font-tiny);
   font-weight: 700;
   color: var(--status-ok-text);
   flex-shrink: 0;
 }
 
 .onboarding-title {
-  font-size: 0.95rem;
+  font-size: var(--font-medium);
   font-weight: 600;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -250,7 +246,7 @@ h1 {
   border: 1px solid var(--border-default);
   border-radius: 5px;
   color: var(--text-muted);
-  font-size: 0.78rem;
+  font-size: var(--font-tiny);
   padding: 0.2rem 0.6rem;
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
@@ -264,7 +260,7 @@ h1 {
 /* Sitey URL banner */
 .sitey-url-banner {
   margin-top: 0.75rem;
-  font-size: 0.88rem;
+  font-size: var(--font-medium);
   color: var(--text-secondary);
 }
 
@@ -308,7 +304,7 @@ h1 {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.78rem;
+  font-size: var(--font-tiny);
   font-weight: 700;
   color: var(--text-dim);
   flex-shrink: 0;
@@ -326,14 +322,14 @@ h1 {
 }
 
 .step-heading {
-  font-size: 0.95rem;
+  font-size: var(--font-medium);
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 0.35rem;
 }
 
 .step-desc {
-  font-size: 0.82rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   line-height: 1.55;
   margin-bottom: 0.75rem;
@@ -343,7 +339,6 @@ h1 {
   background: var(--bg-input);
   border-radius: 3px;
   padding: 0.1em 0.35em;
-  font-size: 0.9em;
   color: #9dcfff;
 }
 
@@ -355,7 +350,7 @@ h1 {
   background: none;
   border: none;
   color: var(--brand);
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   cursor: pointer;
   padding: 0;
   text-decoration: none;
@@ -369,7 +364,7 @@ h1 {
 .step-link {
   color: var(--brand);
   text-decoration: none;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
 }
 
 .step-link:hover {
@@ -377,7 +372,7 @@ h1 {
 }
 
 .step-hint {
-  font-size: 0.82rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
 }
 
@@ -391,7 +386,7 @@ h1 {
   color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   margin-bottom: 1rem;
 }
 </style>

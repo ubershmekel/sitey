@@ -65,14 +65,14 @@ async function handleLogin() {
   border-radius: 12px;
   padding: 2.5rem;
   --btn-primary-padding: 0.7rem;
-  --btn-primary-font-size: 0.95rem;
+  --btn-primary-font-size: var(--font-medium);
   display: flex;
   flex-direction: column;
   gap: 1.25rem;
 }
 
 .brand {
-  font-size: 1.5rem;
+  font-size: var(--font-huge);
   font-weight: 700;
   color: var(--brand);
   justify-content: center;
@@ -80,7 +80,7 @@ async function handleLogin() {
 }
 
 h1 {
-  font-size: 1.2rem;
+  font-size: var(--font-large);
   font-weight: 600;
   text-align: center;
   color: var(--text-primary);
@@ -90,7 +90,7 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   color: var(--text-secondary);
 }
 
@@ -100,7 +100,7 @@ input {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   color: var(--text-primary);
-  font-size: 0.95rem;
+  font-size: var(--font-medium);
   outline: none;
   transition: border-color 0.15s;
 }
@@ -112,6 +112,6 @@ input:focus { border-color: var(--brand); }
   color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
 }
 </style>

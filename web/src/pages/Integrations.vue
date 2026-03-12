@@ -261,7 +261,7 @@ onMounted(fetchAppConfig)
 }
 
 h1 {
-  font-size: 1.4rem;
+  font-size: var(--font-huge);
   font-weight: 600;
 }
 
@@ -288,20 +288,20 @@ h1 {
 }
 
 .integration-icon {
-  font-size: 1.4rem;
+  font-size: var(--font-huge);
   line-height: 1;
   margin-top: 2px;
   color: var(--pink);
 }
 
 .section-header h2 {
-  font-size: 1rem;
+  font-size: var(--font-medium);
   font-weight: 600;
   margin-bottom: 0.25rem;
 }
 
 .section-hint {
-  font-size: 0.83rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   margin: 0;
   line-height: 1.5;
@@ -321,7 +321,7 @@ h1 {
 }
 
 .badge {
-  font-size: 0.78rem;
+  font-size: var(--font-tiny);
   padding: 0.2rem 0.6rem;
   border-radius: 4px;
   white-space: nowrap;
@@ -348,18 +348,18 @@ h1 {
 .meta-row {
   display: flex;
   gap: 0.75rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
 }
 
 .meta-label {
   color: var(--text-muted);
   min-width: 140px;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
 }
 
 .meta-value {
   color: var(--text-secondary);
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
 }
 
 .installations-section {
@@ -375,7 +375,7 @@ h1 {
 }
 
 .warn-box {
-  font-size: 0.83rem;
+  font-size: var(--font-tiny);
   color: var(--status-warn-text);
   background: var(--status-warn-bg);
   border: 1px solid var(--status-warn-border);
@@ -396,7 +396,7 @@ h1 {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   padding: 0.4rem 0.6rem;
   background: var(--bg-input);
   border: 1px solid var(--border-default);
@@ -405,7 +405,7 @@ h1 {
 
 .install-avatar {
   color: var(--text-muted);
-  font-size: 0.9rem;
+  font-size: var(--font-medium);
   flex-shrink: 0;
 }
 
@@ -416,7 +416,7 @@ h1 {
 }
 
 .install-type {
-  font-size: 0.75rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
@@ -425,7 +425,7 @@ h1 {
 }
 
 .install-repos {
-  font-size: 0.78rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   flex-shrink: 0;
 }
@@ -452,7 +452,7 @@ h1 {
 }
 
 .install-link-url {
-  font-size: 0.78rem;
+  font-size: var(--font-tiny);
   color: var(--text-secondary);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
@@ -479,7 +479,7 @@ h1 {
 }
 
 .domain-label {
-  font-size: 0.83rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   white-space: nowrap;
 }
@@ -490,7 +490,7 @@ h1 {
   border-radius: 6px;
   padding: 0.45rem 0.6rem;
   color: var(--text-primary);
-  font-size: 0.88rem;
+  font-size: var(--font-medium);
   flex: 1;
 }
 
@@ -503,7 +503,7 @@ h1 {
 }
 
 .manual-details summary {
-  font-size: 0.83rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   cursor: pointer;
   user-select: none;
@@ -524,7 +524,7 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   color: var(--text-secondary);
 }
 
@@ -536,7 +536,7 @@ select {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
   color: var(--text-primary);
-  font-size: 0.9rem;
+  font-size: var(--font-medium);
   outline: none;
   transition: border-color 0.15s;
   font-family: inherit;
@@ -550,7 +550,7 @@ textarea:focus {
 textarea {
   resize: vertical;
   font-family: monospace;
-  font-size: 0.82rem;
+  font-size: var(--font-tiny);
 }
 
 .btn-ghost {
@@ -559,7 +559,7 @@ textarea {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.5rem 1rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   cursor: pointer;
   text-decoration: none;
   display: inline-flex;
@@ -578,7 +578,7 @@ textarea {
   border: none;
   border-radius: 6px;
   padding: 0.5rem 1rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -589,13 +589,13 @@ textarea {
 
 .btn-sm {
   padding: 0.25rem 0.6rem;
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
 }
 
 .alert {
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
 }
 
 .alert.error {

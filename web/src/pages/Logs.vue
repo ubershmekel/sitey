@@ -140,7 +140,7 @@ onMounted(fetchContainers)
 }
 
 h1 {
-  font-size: 1.4rem;
+  font-size: var(--font-huge);
   font-weight: 600;
 }
 
@@ -184,7 +184,7 @@ h1 {
 }
 
 .container-name {
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   font-weight: 600;
   color: var(--text-primary);
   word-break: break-all;
@@ -213,7 +213,7 @@ h1 {
 .state-restarting { background: var(--status-info-text); }
 
 .container-status {
-  font-size: 0.75rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -221,7 +221,7 @@ h1 {
 }
 
 .container-image {
-  font-size: 0.72rem;
+  font-size: var(--font-tiny);
   color: var(--text-dim);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -243,7 +243,7 @@ h1 {
   justify-content: center;
   height: 100%;
   color: var(--text-muted);
-  font-size: 0.9rem;
+  font-size: var(--font-medium);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: 8px;
@@ -262,7 +262,7 @@ h1 {
 }
 
 .log-pane-title {
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   font-weight: 600;
   color: var(--text-secondary);
   font-family: monospace;
@@ -282,7 +282,7 @@ h1 {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  font-size: 0.78rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
 }
 
@@ -292,7 +292,7 @@ h1 {
   border-radius: 5px;
   padding: 0.2rem 0.4rem;
   color: var(--text-primary);
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   outline: none;
 }
 
@@ -304,7 +304,7 @@ h1 {
   padding: 0.85rem 1rem;
   overflow-y: auto;
   font-family: monospace;
-  font-size: 0.78rem;
+  font-size: var(--font-tiny);
   line-height: 1.5;
   min-height: 0;
 }
@@ -326,7 +326,7 @@ h1 {
 
 .empty-msg {
   color: var(--text-muted);
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
 }
 
 .alert.error {
@@ -335,7 +335,7 @@ h1 {
   color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
 }
 
 .btn-ghost {
@@ -344,7 +344,7 @@ h1 {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.5rem 1rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
@@ -361,6 +361,6 @@ h1 {
 
 .btn-sm {
   padding: 0.35rem 0.75rem;
-  font-size: 0.82rem;
+  font-size: var(--font-tiny);
 }
 </style>

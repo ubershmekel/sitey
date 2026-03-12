@@ -273,7 +273,7 @@ onMounted(async () => {
 
 <style scoped>
 .breadcrumb {
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   margin-bottom: 0.5rem;
 }
@@ -288,7 +288,7 @@ onMounted(async () => {
 }
 
 h1 {
-  font-size: 1.4rem;
+  font-size: var(--font-huge);
   font-weight: 600;
   margin-bottom: 1.25rem;
 }
@@ -300,7 +300,7 @@ h1 {
 }
 
 .field-label {
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   min-width: 4rem;
 }
@@ -320,7 +320,7 @@ h1 {
 }
 
 .section-title {
-  font-size: 1rem;
+  font-size: var(--font-medium);
   font-weight: 600;
   margin-bottom: 1rem;
 }
@@ -355,7 +355,7 @@ h1 {
 }
 
 .project-repo {
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   font-family: monospace;
 }
@@ -367,7 +367,7 @@ h1 {
 }
 
 .last-deploy {
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
 }
 
@@ -378,20 +378,20 @@ h1 {
 }
 
 .danger-zone h2 {
-  font-size: 1rem;
+  font-size: var(--font-medium);
   font-weight: 600;
   margin-bottom: 0.5rem;
   color: var(--status-err-text);
 }
 
 .danger-desc {
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   margin-bottom: 1rem;
 }
 
 .status {
-  font-size: 0.75rem;
+  font-size: var(--font-tiny);
   padding: 0.2rem 0.5rem;
   border-radius: 4px;
   font-weight: 500;
@@ -456,7 +456,7 @@ h1 {
   color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   margin-bottom: 1rem;
 }
 
@@ -466,7 +466,7 @@ h1 {
   color: var(--status-ok-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   margin-bottom: 1rem;
 }
 
@@ -477,7 +477,7 @@ h1 {
   border: 1px solid var(--status-err-border);
   border-radius: 6px;
   padding: 0.6rem 1.25rem;
-  font-size: 0.9rem;
+  font-size: var(--font-medium);
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s, border-color 0.15s;
@@ -503,7 +503,7 @@ h1 {
   flex-direction: row;
   align-items: center;
   gap: 0.5rem;
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   color: var(--text-secondary);
   cursor: pointer;
 }
@@ -518,7 +518,7 @@ h1 {
 }
 
 .sitey-subdomain-link {
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   color: var(--brand);
   text-decoration: none;
   font-family: monospace;
@@ -542,14 +542,14 @@ h1 {
 }
 
 .dns-label {
-  font-size: 0.85rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   font-family: monospace;
   flex: 1;
 }
 
 .dns-status {
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   white-space: nowrap;
 }
 
@@ -571,7 +571,7 @@ h1 {
   color: var(--text-muted);
   border-radius: 4px;
   padding: 0.1rem 0.4rem;
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   cursor: pointer;
   line-height: 1.4;
   transition: border-color 0.15s, color 0.15s;
@@ -583,14 +583,14 @@ h1 {
 }
 
 .dns-hint {
-  font-size: 0.78rem;
+  font-size: var(--font-tiny);
   color: var(--text-dim);
   margin-top: 0.4rem;
 }
 
 .tls-hint {
   margin: -0.35rem 0 0;
-  font-size: 0.8rem;
+  font-size: var(--font-tiny);
   color: var(--text-muted);
   line-height: 1.45;
 }
@@ -604,7 +604,7 @@ h1 {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 0.45rem;
-  font-size: 0.82rem;
+  font-size: var(--font-tiny);
   color: var(--text-secondary);
 }
 
@@ -620,7 +620,7 @@ h1 {
   max-height: 260px;
   overflow-y: auto;
   font-family: monospace;
-  font-size: 0.78rem;
+  font-size: var(--font-tiny);
   line-height: 1.5;
 }
 
@@ -640,7 +640,7 @@ h1 {
   border: 1px solid var(--border-strong);
   border-radius: 5px;
   padding: 0.25rem 0.55rem;
-  font-size: 0.78rem;
+  font-size: var(--font-tiny);
   cursor: pointer;
   transition: border-color 0.15s, color 0.15s;
 }
