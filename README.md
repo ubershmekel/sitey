@@ -1,10 +1,25 @@
 # Sitey
 
-**Self-hosted, domain-first PaaS.** Deploy Node.js apps from GitHub to your own
-VM with automatic HTTPS via Caddy + Let's Encrypt.
+The easy way to auto-deploy from GitHub to your server.
 
-> **Status:** MVP scaffold — core plumbing is done; polish and edge-case
-> hardening ongoing.
+## Install with one line (tested on Hetzner Ubuntu VPS)
+
+SSH into your server and run:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ubershmekel/sitey/main/deploy/install-ubuntu.sh | bash
+```
+
+This takes 1-2 minutes to install Docker, install Sitey to `/opt/sitey`, starts
+the stack, then prints:
+
+- `URL: http://<your-server-ip>`
+- `Admin password: <one-time-override-password>`
+
+Works on standard Ubuntu VPS hosts (for example: Hetzner, DigitalOcean, Linode).
+
+You'll get a **self-hosted, domain-first PaaS.** Deploy Node.js apps from GitHub
+to your own VM with automatic HTTPS via Caddy + Let's Encrypt.
 
 ---
 
@@ -29,20 +44,6 @@ VM with automatic HTTPS via Caddy + Let's Encrypt.
 ---
 
 ## Quick Start (fresh VM)
-
-### One-liner (Ubuntu VPS, including Hetzner)
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/ubershmekel/sitey/main/deploy/install-ubuntu.sh | bash
-```
-
-This installs Docker, clones/updates Sitey to `/opt/sitey`, starts the stack,
-then prints:
-
-- `URL: http://<your-server-ip>`
-- `Admin password: <one-time-override-password>`
-
-Works on standard Ubuntu VPS hosts (for example: Hetzner, DigitalOcean, Linode).
 
 ### Manual steps
 
@@ -145,7 +146,8 @@ docker compose exec sitey-api npm run -s bootstrap:init
 docker compose exec sitey-api npm run -s bootstrap:reset
 ```
 
-These scripts auto-detect whether the container has built JS (`dist/`) or source TS (`src/`) and run the right entrypoint.
+These scripts auto-detect whether the container has built JS (`dist/`) or source
+TS (`src/`) and run the right entrypoint.
 
 ---
 
@@ -188,8 +190,8 @@ Caddy will automatically obtain a Let's Encrypt certificate.
 1. Open Sitey in your browser and log in.
 2. Click **+ Add domain** → enter your app's hostname (e.g. `myapp.com`). If
    you've set up a wildcard DNS record (`*.myapp.com → your IP`), new projects
-   will automatically get a random subdomain (e.g.
-   `happy-fox-3k2.myapp.com`) — see [Enabling HTTPS](#enabling-https).
+   will automatically get a random subdomain (e.g. `happy-fox-3k2.myapp.com`) —
+   see [Enabling HTTPS](#enabling-https).
 3. On the domain page, click **+ Add project**:
    - Enter repo owner/name (e.g. `acme/my-node-app`) and branch.
    - Choose **Build mode**: `auto` generates a Dockerfile for Node.js apps;
