@@ -129,7 +129,7 @@ h1 {
   font-size: var(--font-large);
   font-weight: 600;
   text-align: center;
-  }
+}
 
 .subtitle {
   text-align: center;
@@ -141,7 +141,7 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  }
+}
 
 input {
   background: var(--bg-input);
@@ -164,5 +164,3 @@ input:focus {
   padding: 0.6rem 0.75rem;
 }
 </style>
-
-
