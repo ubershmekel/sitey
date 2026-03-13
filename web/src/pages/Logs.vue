@@ -151,6 +151,25 @@ h1 {
   min-height: 400px;
 }
 
+@media (max-width: 640px) {
+  .logs-layout {
+    grid-template-columns: 1fr;
+    height: auto;
+  }
+
+  .container-list {
+    overflow-y: visible;
+    flex-wrap: wrap;
+    flex-direction: row;
+    gap: 0.4rem;
+  }
+
+  .log-box {
+    min-height: 300px;
+    max-height: calc(100vh - 20rem);
+  }
+}
+
 /* Container list */
 .container-list {
   display: flex;
