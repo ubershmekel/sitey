@@ -5,7 +5,7 @@ const PASSWORD = process.env.SITEY_PASSWORD;
 const EMAIL = process.env.SITEY_EMAIL;
 const DOMAIN = process.env.SITEY_DOMAIN;
 
-test("setup sitey instance", async ({ page }) => {
+test("setup sitey instance", async ({ page }, testInfo) => {
   if (!process.env.SITEY_HOST || !PASSWORD || !EMAIL || !DOMAIN) {
     throw new Error(
       "Missing env vars: SITEY_HOST, SITEY_PASSWORD, SITEY_EMAIL, SITEY_DOMAIN",
@@ -25,6 +25,10 @@ test("setup sitey instance", async ({ page }) => {
   await page.getByLabel("Confirm new password").fill(PASSWORD);
   await page.getByRole("button", { name: "Set new password" }).click();
   await page.waitForURL(`${BASE_URL}/`);
+  await page.screenshot({
+    path: testInfo.outputPath("after-login.png"),
+    fullPage: true,
+  });
 
   // Add wildcard domain
   await page.getByRole("button", { name: "Add domain now →" }).click();
@@ -33,6 +37,10 @@ test("setup sitey instance", async ({ page }) => {
   await expect(hostnameInput).toBeVisible();
   await hostnameInput.fill(DOMAIN);
   await page.getByRole("button", { name: "Add domain", exact: true }).click();
+  await page.screenshot({
+    path: testInfo.outputPath("after-add-domain.png"),
+    fullPage: true,
+  });
 
   // Open management URL via HTTPS
   const mgmtHost = `sitey.${DOMAIN.replace("*.", "")}`;
@@ -44,6 +52,11 @@ test("setup sitey instance", async ({ page }) => {
   await mgmtPage.getByRole("textbox", { name: "Email" }).fill(EMAIL);
   await mgmtPage.getByRole("textbox", { name: "Password" }).fill(PASSWORD);
   await mgmtPage.getByRole("button", { name: "Sign in" }).click();
+
+  await page.screenshot({
+    path: testInfo.outputPath("after-https-login.png"),
+    fullPage: true,
+  });
 
   // Verify navigation works
   await mgmtPage.getByRole("link", { name: "Projects" }).click();
