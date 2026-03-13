@@ -10,12 +10,13 @@ Example:
   ./scripts/testing/reset-remote.sh root@your-server --url https://sitey.example.com --refresh pull
 
 What it does on the remote host:
-1) optionally refresh code (`git pull` or installer)
-2) cd into Sitey deploy dir
-3) docker compose down
-4) wipe deploy/data/sitey.db and deploy/data/projects
-5) docker compose up -d --build
-6) run bootstrap:init and print a fresh override password
+1) cd into Sitey deploy dir
+2) docker compose down
+3) wipe deploy/data/sitey.db and deploy/data/projects
+4) set SITEY_URL in .env (if --url given)
+5) optionally refresh code (`git pull` or installer)
+6) docker compose up -d --build
+7) run bootstrap:init and print a fresh override password
 EOF
 }
 
@@ -73,15 +74,17 @@ ssh -o StrictHostKeyChecking=accept-new "${SSH_TARGET}" \
   "REMOTE_DEPLOY_DIR='${REMOTE_DEPLOY_DIR}' SITEY_URL='${SITEY_URL}' REFRESH_MODE='${REFRESH_MODE}' bash -s" <<'REMOTE_EOF'
 set -euo pipefail
 
-if [[ "${REFRESH_MODE}" == "installer" ]]; then
-  curl -fsSL https://raw.githubusercontent.com/ubershmekel/sitey/main/deploy/install-ubuntu.sh | bash
-elif [[ "${REFRESH_MODE}" == "pull" ]]; then
-  SITEY_ROOT="$(cd "${REMOTE_DEPLOY_DIR}/.." && pwd)"
-  git -C "${SITEY_ROOT}" pull --ff-only
-fi
-
 cd "${REMOTE_DEPLOY_DIR}"
 
+# Stop all containers
+docker compose down
+
+# Wipe DB and project data so we start fresh
+rm -f data/sitey.db
+rm -rf data/projects
+mkdir -p data/projects
+
+# Set SITEY_URL in .env (upsert)
 if [[ -n "${SITEY_URL}" ]]; then
   touch .env
   if grep -qE '^SITEY_URL=' .env; then
@@ -91,12 +94,18 @@ if [[ -n "${SITEY_URL}" ]]; then
   fi
 fi
 
-docker compose down
-rm -f data/sitey.db
-rm -rf data/projects
-mkdir -p data/projects
+# Refresh code (installer re-clones + rebuilds, pull just fast-forwards)
+if [[ "${REFRESH_MODE}" == "installer" ]]; then
+  curl -fsSL https://raw.githubusercontent.com/ubershmekel/sitey/main/deploy/install-ubuntu.sh | bash
+elif [[ "${REFRESH_MODE}" == "pull" ]]; then
+  SITEY_ROOT="$(cd "${REMOTE_DEPLOY_DIR}/.." && pwd)"
+  git -C "${SITEY_ROOT}" pull --ff-only
+fi
+
+# Rebuild and start containers
 docker compose up -d --build
 
+# Wait for sitey-api to be ready (up to 2 minutes)
 for _ in $(seq 1 60); do
   if docker compose exec --interactive=false -T sitey-api sh -lc "node -v" >/dev/null 2>&1; then
     break
@@ -104,6 +113,7 @@ for _ in $(seq 1 60); do
   sleep 2
 done
 
+# Generate a fresh override password
 PASS_OUTPUT="$(docker compose exec --interactive=false -T sitey-api npm run -s bootstrap:init 2>&1 || true)"
 if [[ -z "${PASS_OUTPUT}" ]]; then
   echo "Failed to get password from bootstrap:init"
@@ -112,6 +122,7 @@ fi
 
 PASSWORD="$(printf "%s\n" "${PASS_OUTPUT}" | sed -n 's/.*Password: \([^[:space:]]\+\).*/\1/p' | head -n1)"
 
+# Print results
 echo "----- SITEY RESET COMPLETE -----"
 if [[ -n "${SITEY_URL}" ]]; then
   echo "URL: ${SITEY_URL}"
