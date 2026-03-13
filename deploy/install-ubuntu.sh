@@ -50,7 +50,7 @@ else
   ${SUDO} git clone "${REPO_URL}" "${INSTALL_DIR}"
 fi
 
-${SUDO} mkdir -p "${INSTALL_DIR}/data"
+${SUDO} mkdir -p "${INSTALL_DIR}/deploy/data"
 ${SUDO} chown -R "${RUN_AS_USER}:${RUN_AS_USER}" "${INSTALL_DIR}"
 
 cd "${INSTALL_DIR}/deploy"
@@ -67,7 +67,7 @@ fi
 SITEY_URL="http://${PUBLIC_IP}"
 
 touch .env
-set_env_key "DATA_ROOT" "/opt/sitey/data" ".env"
+set_env_key "DATA_ROOT" "./data" ".env"
 set_env_key "SITEY_URL" "${SITEY_URL}" ".env"
 
 USE_SUDO_DOCKER=0
