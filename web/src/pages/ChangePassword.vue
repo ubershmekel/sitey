@@ -15,7 +15,7 @@
 
       <label>
         New password <span class="hint">(min 9 chars)</span>
-        <input v-model="next" type="password" autocomplete="new-password" required minlength="12" />
+        <input v-model="next" type="password" autocomplete="new-password" required minlength="9" />
       </label>
 
       <label>

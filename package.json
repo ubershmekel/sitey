@@ -15,6 +15,7 @@
     "test:reset-remote": "node scripts/testing/reset-remote-runner.mjs"
   },
   "devDependencies": {
+    "@playwright/test": "^1.58.2",
     "concurrently": "^9.1.0"
   }
 }

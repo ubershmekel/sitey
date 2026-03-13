@@ -4,19 +4,18 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  ./scripts/testing/reset-remote.sh <ssh-target> [--url https://sitey.example.com] [--dir /opt/sitey/deploy] [--refresh pull|installer|none]
+  ./scripts/testing/reset-remote.sh <ssh-target> [--dir /opt/sitey/deploy] [--refresh pull|installer|none]
 
 Example:
-  ./scripts/testing/reset-remote.sh root@your-server --url https://sitey.example.com --refresh pull
+  ./scripts/testing/reset-remote.sh root@your-server --refresh pull
 
 What it does on the remote host:
 1) cd into Sitey deploy dir
 2) docker compose down
 3) wipe deploy/data/sitey.db and deploy/data/projects
-4) set SITEY_URL in .env (if --url given)
-5) optionally refresh code (`git pull` or installer)
-6) docker compose up -d --build
-7) run bootstrap:init and print a fresh override password
+4) optionally refresh code (`git pull` or installer)
+5) docker compose up -d --build
+6) run bootstrap:init and print a fresh override password + http link
 EOF
 }
 
@@ -28,16 +27,11 @@ fi
 SSH_TARGET="$1"
 shift
 
-SITEY_URL=""
 REMOTE_DEPLOY_DIR="/opt/sitey/deploy"
 REFRESH_MODE="pull"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --url)
-      SITEY_URL="${2:-}"
-      shift 2
-      ;;
     --dir)
       REMOTE_DEPLOY_DIR="${2:-}"
       shift 2
@@ -68,10 +62,13 @@ if [[ "${REFRESH_MODE}" == "installer" && "${REMOTE_DEPLOY_DIR}" != "/opt/sitey/
   exit 1
 fi
 
+## Extract IP/hostname from SSH_TARGET (strip user@ prefix if present)
+SSH_HOST="${SSH_TARGET#*@}"
+
 echo "Resetting Sitey on ${SSH_TARGET} (${REMOTE_DEPLOY_DIR})..."
 
 ssh -o StrictHostKeyChecking=accept-new "${SSH_TARGET}" \
-  "REMOTE_DEPLOY_DIR='${REMOTE_DEPLOY_DIR}' SITEY_URL='${SITEY_URL}' REFRESH_MODE='${REFRESH_MODE}' bash -s" <<'REMOTE_EOF'
+  "REMOTE_DEPLOY_DIR='${REMOTE_DEPLOY_DIR}' REFRESH_MODE='${REFRESH_MODE}' bash -s" <<'REMOTE_EOF'
 set -euo pipefail
 
 cd "${REMOTE_DEPLOY_DIR}"
@@ -83,16 +80,6 @@ docker compose down
 rm -f data/sitey.db
 rm -rf data/projects
 mkdir -p data/projects
-
-# Set SITEY_URL in .env (upsert)
-if [[ -n "${SITEY_URL}" ]]; then
-  touch .env
-  if grep -qE '^SITEY_URL=' .env; then
-    sed -i "s|^SITEY_URL=.*|SITEY_URL=${SITEY_URL}|" .env
-  else
-    echo "SITEY_URL=${SITEY_URL}" >> .env
-  fi
-fi
 
 # Refresh code (installer re-clones + rebuilds, pull just fast-forwards)
 if [[ "${REFRESH_MODE}" == "installer" ]]; then
@@ -125,9 +112,6 @@ PASSWORD="$(printf "%s\n" "${PASS_OUTPUT}" | sed -n 's/.*Password: \([^[:space:]
 
 # Print results
 echo "----- SITEY RESET COMPLETE -----"
-if [[ -n "${SITEY_URL}" ]]; then
-  echo "URL: ${SITEY_URL}"
-fi
 if [[ -n "${PASSWORD}" ]]; then
   echo "Password: ${PASSWORD}"
 else
@@ -135,3 +119,5 @@ else
   printf "%s\n" "${PASS_OUTPUT}"
 fi
 REMOTE_EOF
+
+echo "URL: http://${SSH_HOST}"

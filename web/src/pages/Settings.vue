@@ -60,7 +60,7 @@
         </label>
         <label>
           New password <span class="hint">(min 9 chars)</span>
-          <input v-model="pw.next" type="password" required minlength="12" autocomplete="new-password" />
+          <input v-model="pw.next" type="password" required minlength="9" autocomplete="new-password" />
         </label>
         <label>
           Confirm new password

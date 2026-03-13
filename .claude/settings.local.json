@@ -11,7 +11,9 @@
       "Bash(npx prisma:*)",
       "Bash(DATABASE_URL=\"file:../deploy/data/sitey.db\" npx prisma migrate dev --name remove_github_installation_id)",
       "Bash(npx tsc:*)",
-      "Bash(npx vue-tsc:*)"
+      "Bash(npx vue-tsc:*)",
+      "Bash(npm install:*)",
+      "Bash(npx playwright:*)"
     ]
   }
 }

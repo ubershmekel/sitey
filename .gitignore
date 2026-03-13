@@ -12,3 +12,4 @@ server/src/generated/
 web/dist/
 .DS_Store
 *.log
+test-results/
