@@ -100,8 +100,7 @@ h1 {
 .domain-name {
   font-weight: 600;
   margin-bottom: 0.75rem;
-  color: var(--text-primary);
-}
+  }
 
 .domain-meta {
   display: flex;
@@ -118,13 +117,11 @@ h1 {
 
 .meta-label {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
-}
+  }
 
 .projects-count {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
-}
+  }
 
 .status {
   font-size: var(--font-tiny);
@@ -151,8 +148,7 @@ h1 {
 .empty-state {
   text-align: center;
   padding: 4rem 2rem;
-  color: var(--text-muted);
-}
+  }
 
 .empty-icon {
   font-size: 2.5rem;
@@ -163,9 +159,6 @@ h1 {
   margin: 0.25rem 0 1.5rem;
 }
 
-.state-msg {
-  color: var(--text-muted);
-}
 
 .alert.error {
   background: var(--status-err-bg);
@@ -178,3 +171,5 @@ h1 {
 
 
 </style>
+
+

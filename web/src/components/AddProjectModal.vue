@@ -325,12 +325,8 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  color: var(--text-secondary);
-}
+  }
 
-.hint {
-  color: var(--text-muted);
-}
 
 .hint a {
   color: var(--brand);
@@ -344,8 +340,7 @@ label {
 
 .field-group-label {
   font-size: var(--font-tiny);
-  color: var(--text-secondary);
-}
+  }
 
 .type-selector {
   display: flex;
@@ -360,7 +355,6 @@ label {
   background: var(--bg-input);
   border: none;
   border-right: 1px solid var(--border-strong);
-  color: var(--text-muted);
   font-size: var(--font-tiny);
   padding: 0.5rem 0.25rem;
   cursor: pointer;
@@ -379,12 +373,10 @@ label {
 
 .type-selector button:hover:not(.active) {
   background: var(--bg-elevated);
-  color: var(--text-secondary);
-}
+  }
 
 .type-desc {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   line-height: 1.5;
 }
 
@@ -392,7 +384,7 @@ label {
   background: var(--bg-input);
   border-radius: 3px;
   padding: 0.1em 0.35em;
-  color: #9dcfff;
+  color: var(--status-info-text);
 }
 
 input,
@@ -401,7 +393,6 @@ select {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  color: var(--text-primary);
   outline: none;
   transition: border-color 0.15s;
 }
@@ -420,7 +411,6 @@ select:focus {
 
 .btn-ghost {
   background: none;
-  color: var(--text-secondary);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 1.25rem;
@@ -430,7 +420,6 @@ select:focus {
 
 .btn-ghost:hover {
   border-color: var(--text-muted);
-  color: var(--text-primary);
 }
 
 .alert.error {
@@ -441,3 +430,8 @@ select:focus {
   padding: 0.6rem 0.75rem;
 }
 </style>
+
+
+
+
+

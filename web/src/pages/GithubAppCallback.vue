@@ -45,13 +45,14 @@ onMounted(async () => {
   padding: 6rem 2rem;
 }
 .msg {
-  text-align: center; color: #888;
+  text-align: center;
 }
-.msg.error { color: #ff7070; }
+.msg.error { color: var(--status-err-text); }
 .msg-title { font-size: var(--font-large); font-weight: 600; margin-bottom: 0.5rem; }
-.msg-detail { font-size: var(--font-tiny); color: #cc4444; margin-bottom: 1.5rem; }
+.msg-detail { font-size: var(--font-tiny); margin-bottom: 1.5rem; }
 .btn-link {
-  color: #7c6cfc; text-decoration: none;
+  text-decoration: none;
 }
 .btn-link:hover { text-decoration: underline; }
 </style>
+

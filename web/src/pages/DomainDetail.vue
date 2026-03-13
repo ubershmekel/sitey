@@ -274,7 +274,6 @@ onMounted(async () => {
 <style scoped>
 .breadcrumb {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   margin-bottom: 0.5rem;
 }
 
@@ -300,7 +299,6 @@ h1 {
 
 .field-label {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   min-width: 4rem;
 }
 
@@ -355,7 +353,6 @@ h1 {
 
 .project-repo {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   font-family: monospace;
 }
 
@@ -367,8 +364,7 @@ h1 {
 
 .last-deploy {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
-}
+  }
 
 .danger-zone {
   margin-top: 3rem;
@@ -385,7 +381,6 @@ h1 {
 
 .danger-desc {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   margin-bottom: 1rem;
 }
 
@@ -437,7 +432,6 @@ h1 {
 }
 
 .empty-state {
-  color: var(--text-muted);
   padding: 2rem 0;
 }
 
@@ -445,9 +439,6 @@ h1 {
   margin-top: 1rem;
 }
 
-.state-msg {
-  color: var(--text-muted);
-}
 
 .alert.error {
   background: var(--status-err-bg);
@@ -480,7 +471,7 @@ h1 {
 }
 
 .btn-danger:hover:not(:disabled) {
-  border-color: #7c2323;
+  border-color: var(--status-err-border);
   opacity: 0.92;
 }
 
@@ -499,7 +490,6 @@ h1 {
   flex-direction: row;
   align-items: center;
   gap: 0.5rem;
-  color: var(--text-secondary);
   cursor: pointer;
 }
 
@@ -538,7 +528,6 @@ h1 {
 
 .dns-label {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   font-family: monospace;
   flex: 1;
 }
@@ -548,9 +537,6 @@ h1 {
   white-space: nowrap;
 }
 
-.dns-checking {
-  color: var(--text-muted);
-}
 
 .dns-ok {
   color: var(--status-ok-text);
@@ -563,7 +549,6 @@ h1 {
 .btn-recheck {
   background: none;
   border: 1px solid var(--border-strong);
-  color: var(--text-muted);
   border-radius: 4px;
   padding: 0.1rem 0.4rem;
   font-size: var(--font-tiny);
@@ -574,19 +559,16 @@ h1 {
 
 .btn-recheck:hover {
   border-color: var(--text-muted);
-  color: var(--text-secondary);
 }
 
 .dns-hint {
   font-size: var(--font-tiny);
-  color: var(--text-dim);
   margin-top: 0.4rem;
 }
 
 .tls-hint {
   margin: -0.35rem 0 0;
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   line-height: 1.45;
 }
 
@@ -600,8 +582,7 @@ h1 {
   justify-content: space-between;
   margin-bottom: 0.45rem;
   font-size: var(--font-tiny);
-  color: var(--text-secondary);
-}
+  }
 
 .caddy-logs-error {
   margin-bottom: 0.5rem;
@@ -620,18 +601,14 @@ h1 {
 }
 
 .log-content {
-  color: #b0e0b0;
+  color: var(--status-ok-text);
   white-space: pre-wrap;
   word-break: break-all;
 }
 
-.log-empty {
-  color: var(--text-dim);
-}
 
 .btn-ghost-sm {
   background: none;
-  color: var(--text-secondary);
   border: 1px solid var(--border-strong);
   border-radius: 5px;
   padding: 0.25rem 0.55rem;
@@ -642,7 +619,6 @@ h1 {
 
 .btn-ghost-sm:hover:not(:disabled) {
   border-color: var(--text-muted);
-  color: var(--text-primary);
 }
 
 .btn-ghost-sm:disabled {
@@ -650,6 +626,11 @@ h1 {
   cursor: not-allowed;
 }
 </style>
+
+
+
+
+
 
 
 

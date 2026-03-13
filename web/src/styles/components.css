@@ -1,15 +1,59 @@
+/* --------------------------------------------------
+   Document defaults
+-------------------------------------------------- */
+
+html,
+body,
+#app {
+  margin: 0;
+  background: var(--bg-page);
+  color: var(--text-primary);
+}
 
 /* --------------------------------------------------
    Text defaults
 -------------------------------------------------- */
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+b,
+legend,
+th,
+strong,
+dt {
+  color: var(--text-primary);
+}
+
+.secondary {
+  color: var(--text-secondary)
+}
 
 p,
 span,
 a,
 li,
 option,
-summary {
+summary,
+td,
+dd {
   font-size: var(--font-medium);
+  color: inherit;
+}
+
+a {
+  color: inherit;
+}
+
+a:hover {
+  color: inherit;
+}
+
+code {
+  color: var(--status-info-bright)
 }
 
 small,
@@ -17,14 +61,43 @@ label,
 .hint,
 .badge,
 .alert,
-.help-text {
+.help-text,
+time,
+figcaption {
   font-size: var(--font-tiny);
+  color: var(--text-secondary);
+}
+
+.text-muted {
+  color: var(--text-muted);
+}
+
+.text-dim {
+  color: var(--text-dim);
+}
+
+.text-success {
+  color: var(--status-ok-text);
+}
+
+.text-warning {
+  color: var(--status-warn-text);
+}
+
+.text-error {
+  color: var(--status-err-text);
+}
+
+.section-hint,
+.state-msg,
+.empty-msg,
+.user-email {
+  color: var(--text-muted);
 }
 
 strong {
   font-weight: 600;
 }
-
 
 /* --------------------------------------------------
    Headings
@@ -53,7 +126,6 @@ h3 {
   font-weight: 600;
 }
 
-
 /* --------------------------------------------------
    Code
 -------------------------------------------------- */
@@ -74,7 +146,6 @@ pre {
   overflow-x: auto;
 }
 
-
 /* --------------------------------------------------
    Lists
 -------------------------------------------------- */
@@ -87,7 +158,6 @@ li {
   line-height: 1.5;
 }
 
-
 /* --------------------------------------------------
    Forms
 -------------------------------------------------- */
@@ -98,6 +168,17 @@ select,
 textarea {
   font: inherit;
   font-size: var(--font-medium);
+  color: inherit;
+}
+
+input,
+select,
+textarea {
+  color: var(--text-primary);
+}
+
+::placeholder {
+  color: var(--text-muted);
 }
 
 button {
@@ -107,7 +188,6 @@ button {
 label {
   display: block;
 }
-
 
 /* --------------------------------------------------
    Media

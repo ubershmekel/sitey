@@ -85,16 +85,14 @@ async function handleSubmit() {
   gap: 1.25rem;
 }
 .brand { font-size: var(--font-huge); font-weight: 700; color: var(--brand); justify-content: center; }
-h1 { font-size: var(--font-large); font-weight: 600; text-align: center; color: var(--text-primary); }
-.subtitle { font-size: var(--font-tiny); color: var(--text-muted); text-align: center; margin-top: -0.75rem; }
+h1 { font-size: var(--font-large); font-weight: 600; text-align: center; }
+.subtitle { font-size: var(--font-tiny); text-align: center; margin-top: -0.75rem; }
 label {
   display: flex; flex-direction: column; gap: 0.4rem;
-  color: var(--text-secondary);
-}
-.hint { color: var(--text-muted); }
+  }
 input {
   background: var(--bg-input); border: 1px solid var(--border-strong); border-radius: 6px;
-  padding: 0.6rem 0.75rem; color: var(--text-primary); outline: none;
+  padding: 0.6rem 0.75rem; outline: none;
   transition: border-color 0.15s;
 }
 input:focus { border-color: var(--brand); }
@@ -102,3 +100,5 @@ input:focus { border-color: var(--brand); }
 .alert.error { background: var(--status-err-bg); border: 1px solid var(--status-err-border); color: var(--status-err-text); }
 .alert.success { background: var(--status-ok-bg); border: 1px solid var(--status-ok-border); color: var(--status-ok-text); }
 </style>
+
+

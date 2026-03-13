@@ -16,8 +16,7 @@
 
       <label>
         Email
-        <input v-model="email" type="email" autocomplete="email" required
-          :placeholder="isSetup ? 'you@example.com' : 'admin@sitey.local'" />
+        <input v-model="email" type="email" autocomplete="email" required placeholder="you@example.com" />
       </label>
 
       <label>
@@ -130,12 +129,10 @@ h1 {
   font-size: var(--font-large);
   font-weight: 600;
   text-align: center;
-  color: var(--text-primary);
-}
+  }
 
 .subtitle {
   text-align: center;
-  color: var(--text-muted);
   font-size: var(--font-tiny);
   margin: -0.5rem 0 0;
 }
@@ -144,15 +141,13 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  color: var(--text-secondary);
-}
+  }
 
 input {
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  color: var(--text-primary);
   outline: none;
   transition: border-color 0.15s;
 }
@@ -169,3 +164,5 @@ input:focus {
   padding: 0.6rem 0.75rem;
 }
 </style>
+
+

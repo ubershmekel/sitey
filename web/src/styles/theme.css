@@ -51,6 +51,7 @@
   --status-info-bg:     #1a2a38;
   --status-info-border: #1e3a5f;
   --status-info-text:   #60b4ff;
+  --status-info-bright: #a8caee;
 
   /* ── Status: queued ──────────────────────────────────────── */
   --status-queued-bg:   #1a1a2a;

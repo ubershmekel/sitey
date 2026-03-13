@@ -31,14 +31,14 @@
           <div class="step" :class="{ done: hasDomain }">
             <div class="step-check">{{ hasDomain ? '✓' : '1' }}</div>
             <div class="step-body">
-              <div class="step-heading">Set up a wildcard domain</div>
-              <div class="step-desc">
+              <h3 class="step-heading">Set up a wildcard domain</h3>
+              <p class="step-desc">
                 Add a wildcard DNS A record (<code>*.example.com</code> or <code>*.s.example.com</code>)
                 pointing to this server's public IP<template v-if="serverIp">
                   (detected: <code>{{ serverIp }}</code> — if behind a proxy or NAT, use your external IP
                   instead)</template>.
                 Sitey will automatically issue HTTPS certificates for all your projects.
-              </div>
+              </p>
               <div class="inline-action">
                 <template v-if="!hasDomain">
                   <button class="step-inline-btn" @click="showAddDomain = true">Add domain now →</button>
@@ -54,17 +54,17 @@
           <div class="step" :class="{ done: !!siteyUrl }">
             <div class="step-check">{{ siteyUrl ? '✓' : '2' }}</div>
             <div class="step-body">
-              <div class="step-heading">Open Sitey at its HTTPS address</div>
+              <h3 class="step-heading">Open Sitey at its HTTPS address</h3>
               <div v-if="isHttp" class="step-warning">
                 You are currently using plain HTTP. That's ok to start, but not safe to keep forever. GitHub webhooks
                 and OAuth
                 require HTTPS.
                 Set up your domain first, then open Sitey at your new HTTPS URL.
               </div>
-              <div class="step-desc">
+              <p class="step-desc">
                 GitHub requires HTTPS for OAuth and webhooks. Once your domain is set up and the
                 certificate is issued, continue setup from your HTTPS Sitey URL.
-              </div>
+              </p>
               <div class="inline-action">
                 <template v-if="siteyUrl">
                   <a :href="siteyUrl" class="step-inline-btn" target="_blank" rel="noopener">
@@ -83,10 +83,12 @@
           <div class="step" :class="{ done: hasGitHubApp }">
             <div class="step-check">{{ hasGitHubApp ? '✓' : '3' }}</div>
             <div class="step-body">
-              <div class="step-heading">Connect GitHub App</div>
+              <h3 class="step-heading">Connect GitHub App</h3>
               <div class="step-desc">
                 Connect GitHub so Sitey can clone your repos and auto-deploy on push.
-                Click <strong>Create GitHub App automatically</strong> in Integrations — Sitey pre-fills everything.
+                Click <strong class="secondary">Create GitHub App automatically</strong> in Integrations — Sitey
+                pre-fills
+                everything.
               </div>
               <div class="inline-action">
                 <RouterLink to="/integrations" class="step-inline-btn">
@@ -100,7 +102,7 @@
           <div class="step" :class="{ done: hasProject }">
             <div class="step-check">{{ hasProject ? '✓' : '4' }}</div>
             <div class="step-body">
-              <div class="step-heading">Add your first project</div>
+              <h3 class="step-heading">Add your first project</h3>
               <div class="step-desc">
                 Connect a GitHub repository to a domain and launch your first live deployment.
               </div>
@@ -244,7 +246,6 @@ h1 {
 .onboarding-title {
   font-size: var(--font-medium);
   font-weight: 600;
-  color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
 }
@@ -257,7 +258,6 @@ h1 {
   background: none;
   border: 1px solid var(--border-default);
   border-radius: 5px;
-  color: var(--text-muted);
   font-size: var(--font-tiny);
   padding: 0.2rem 0.6rem;
   cursor: pointer;
@@ -272,7 +272,6 @@ h1 {
 /* Sitey URL banner */
 .sitey-url-banner {
   margin-top: 0.75rem;
-  color: var(--text-secondary);
 }
 
 .sitey-url-banner a {
@@ -317,7 +316,6 @@ h1 {
   justify-content: center;
   font-size: var(--font-tiny);
   font-weight: 700;
-  color: var(--text-dim);
   flex-shrink: 0;
   margin-top: 2px;
 }
@@ -334,22 +332,19 @@ h1 {
 
 .step-heading {
   font-weight: 600;
-  color: var(--text-primary);
   margin-bottom: 0.35rem;
 }
 
 .step-desc {
-  font-size: var(--font-tiny);
-  color: var(--text-muted);
   line-height: 1.55;
   margin-bottom: 0.75rem;
+  color: var(--text-muted);
 }
 
 .step-desc code {
   background: var(--bg-input);
   border-radius: 3px;
   padding: 0.1em 0.35em;
-  color: #9dcfff;
 }
 
 .inline-action {
@@ -394,12 +389,8 @@ h1 {
 
 .step-hint {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
 }
 
-.state-msg {
-  color: var(--text-muted);
-}
 
 .alert.error {
   background: var(--status-err-bg);

@@ -301,7 +301,6 @@ h1 {
 
 .section-hint {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   margin: 0;
   line-height: 1.5;
 }
@@ -333,7 +332,6 @@ h1 {
 
 .badge-idle {
   background: var(--bg-input);
-  color: var(--text-muted);
   border: 1px solid var(--border-strong);
 }
 
@@ -350,13 +348,11 @@ h1 {
 }
 
 .meta-label {
-  color: var(--text-muted);
   min-width: 140px;
   font-size: var(--font-tiny);
 }
 
 .meta-value {
-  color: var(--text-secondary);
   font-size: var(--font-tiny);
 }
 
@@ -402,19 +398,16 @@ h1 {
 }
 
 .install-avatar {
-  color: var(--text-muted);
   flex-shrink: 0;
 }
 
 .install-login {
   font-weight: 500;
-  color: var(--text-primary);
   flex: 1;
 }
 
 .install-type {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: 3px;
@@ -423,7 +416,6 @@ h1 {
 
 .install-repos {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   flex-shrink: 0;
 }
 
@@ -449,7 +441,6 @@ h1 {
 }
 
 .install-link-url {
-  color: var(--text-secondary);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: 4px;
@@ -475,7 +466,6 @@ h1 {
 }
 
 .domain-label {
-  color: var(--text-muted);
   white-space: nowrap;
 }
 
@@ -484,7 +474,6 @@ h1 {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.45rem 0.6rem;
-  color: var(--text-primary);
   flex: 1;
 }
 
@@ -498,14 +487,10 @@ h1 {
 
 .manual-details summary {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   cursor: pointer;
   user-select: none;
 }
 
-.manual-details summary:hover {
-  color: var(--text-secondary);
-}
 
 .settings-form {
   display: flex;
@@ -518,8 +503,7 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  color: var(--text-secondary);
-}
+  }
 
 input,
 textarea,
@@ -528,7 +512,6 @@ select {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  color: var(--text-primary);
   outline: none;
   transition: border-color 0.15s;
   font-family: inherit;
@@ -547,7 +530,6 @@ textarea {
 
 .btn-ghost {
   background: none;
-  color: var(--text-secondary);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.5rem 1rem;
@@ -561,7 +543,6 @@ textarea {
 
 .btn-ghost:hover {
   border-color: var(--text-muted);
-  color: var(--text-primary);
 }
 
 .btn-danger {
@@ -601,3 +582,7 @@ textarea {
   color: var(--status-ok-text);
 }
 </style>
+
+
+
+

@@ -185,7 +185,6 @@ h1 {
 .container-name {
   font-size: var(--font-tiny);
   font-weight: 600;
-  color: var(--text-primary);
   word-break: break-all;
 }
 
@@ -213,7 +212,6 @@ h1 {
 
 .container-status {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -221,7 +219,6 @@ h1 {
 
 .container-image {
   font-size: var(--font-tiny);
-  color: var(--text-dim);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -241,7 +238,6 @@ h1 {
   align-items: center;
   justify-content: center;
   height: 100%;
-  color: var(--text-muted);
   background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: 8px;
@@ -262,7 +258,6 @@ h1 {
 .log-pane-title {
   font-size: var(--font-tiny);
   font-weight: 600;
-  color: var(--text-secondary);
   font-family: monospace;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -280,15 +275,13 @@ h1 {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  color: var(--text-muted);
-}
+  }
 
 .tail-select {
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
   border-radius: 5px;
   padding: 0.2rem 0.4rem;
-  color: var(--text-primary);
   font-size: var(--font-tiny);
   outline: none;
 }
@@ -307,22 +300,15 @@ h1 {
 }
 
 .log-content {
-  color: #b0e0b0;
+  color: var(--status-ok-text);
   white-space: pre-wrap;
   word-break: break-all;
 }
 
-.log-empty {
-  color: var(--text-dim);
-}
 
 /* Misc */
-.state-msg {
-  color: var(--text-muted);
-}
 
 .empty-msg {
-  color: var(--text-muted);
   font-size: var(--font-tiny);
 }
 
@@ -336,7 +322,6 @@ h1 {
 
 .btn-ghost {
   background: none;
-  color: var(--text-secondary);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.5rem 1rem;
@@ -347,7 +332,6 @@ h1 {
 
 .btn-ghost:hover {
   border-color: var(--text-muted);
-  color: var(--text-primary);
 }
 
 .btn-ghost:disabled {
@@ -360,3 +344,8 @@ h1 {
   font-size: var(--font-tiny);
 }
 </style>
+
+
+
+
+

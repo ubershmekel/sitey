@@ -137,7 +137,6 @@ watch(() => auth.needsPasswordChange, (needs) => {
 
 .user-email {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -226,3 +225,5 @@ watch(() => auth.needsPasswordChange, (needs) => {
   }
 }
 </style>
+
+

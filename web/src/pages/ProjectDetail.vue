@@ -478,7 +478,6 @@ onMounted(fetchProject)
 <style scoped>
 .breadcrumb {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   margin-bottom: 0.75rem;
 }
 
@@ -534,12 +533,10 @@ h1 {
 }
 
 .url-sep {
-  color: var(--text-dim);
   margin: 0 0.35rem;
 }
 
 .url-http {
-  color: var(--text-muted);
   font-size: var(--font-tiny);
   text-decoration: none;
 }
@@ -583,15 +580,11 @@ h1 {
 
 .info-label {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-bottom: 0.3rem;
 }
 
-.info-value {
-  color: var(--text-primary);
-}
 
 .mono {
   font-family: monospace;
@@ -610,12 +603,10 @@ h1 {
 
 .section-hint {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   margin-bottom: 1rem;
 }
 
 .empty-msg {
-  color: var(--text-muted);
   font-size: var(--font-tiny);
   margin-bottom: 1rem;
 }
@@ -647,7 +638,7 @@ h1 {
 }
 
 .route-url {
-  color: #b5d0ff;
+  color: var(--status-info-text);
   font-size: var(--font-tiny);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -655,7 +646,7 @@ h1 {
 }
 
 .route-url-link {
-  color: #b5d0ff;
+  color: var(--status-info-text);
   text-decoration: none;
 }
 
@@ -675,7 +666,6 @@ h1 {
   padding: 0.1rem 0.4rem;
   border-radius: 3px;
   background: var(--bg-elevated);
-  color: var(--text-muted);
   border: 1px solid var(--border-subtle);
 }
 
@@ -690,7 +680,6 @@ h1 {
 .add-route-title {
   font-size: var(--font-tiny);
   font-weight: 600;
-  color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   margin-bottom: 0.75rem;
@@ -732,7 +721,6 @@ h1 {
 
 .subdomain-suffix {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   padding: 0 0.6rem 0 0;
   white-space: nowrap;
   font-family: monospace;
@@ -754,7 +742,6 @@ h1 {
 }
 
 .hint {
-  color: var(--text-muted);
   margin-bottom: 1rem;
 }
 
@@ -772,7 +759,6 @@ h1 {
 
 .wh-label {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   min-width: 100px;
 }
 
@@ -790,7 +776,6 @@ code {
 .btn-copy {
   background: none;
   border: 1px solid var(--border-strong);
-  color: var(--text-secondary);
   border-radius: 4px;
   padding: 0.2rem 0.5rem;
   font-size: var(--font-tiny);
@@ -800,7 +785,6 @@ code {
 
 .btn-copy:hover {
   border-color: var(--text-muted);
-  color: var(--text-primary);
 }
 
 /* ── Deployments ───────────────────────────────────────────── */
@@ -835,7 +819,6 @@ code {
 .deploy-sha {
   font-family: monospace;
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   min-width: 70px;
 }
 
@@ -845,18 +828,15 @@ code {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  color: var(--text-secondary);
-}
+  }
 
 .deploy-time {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   white-space: nowrap;
 }
 
 .deploy-trigger {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   background: var(--bg-elevated);
   padding: 0.15rem 0.4rem;
   border-radius: 4px;
@@ -877,8 +857,7 @@ code {
 .log-header h3 {
   font-size: var(--font-huge);
   font-weight: 600;
-  color: var(--text-secondary);
-}
+  }
 
 .log-box {
   background: var(--bg-code);
@@ -893,14 +872,11 @@ code {
 }
 
 .log-content {
-  color: #b0e0b0;
+  color: var(--status-ok-text);
   white-space: pre-wrap;
   word-break: break-all;
 }
 
-.log-empty {
-  color: var(--text-dim);
-}
 
 /* ── Status badges ──────────────────────────────────────────── */
 .status {
@@ -920,8 +896,6 @@ code {
 .status-stopped { background: var(--status-idle-bg); color: var(--status-idle-text); }
 
 /* ── Misc ───────────────────────────────────────────────────── */
-.state-msg { color: var(--text-muted); }
-
 .alert.error {
   background: var(--status-err-bg);
   border: 1px solid var(--status-err-border);
@@ -937,15 +911,13 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  color: var(--text-secondary);
-}
+  }
 
 input, select {
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  color: var(--text-primary);
   outline: none;
   transition: border-color 0.15s;
 }
@@ -969,12 +941,11 @@ input:focus, select:focus {
 
 .btn-danger:hover:not(:disabled) {
   background: #4a1a1a;
-  border-color: #8a3030;
+  border-color: var(--status-err-border);
 }
 
 .btn-ghost {
   background: none;
-  color: var(--text-secondary);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.5rem 1rem;
@@ -985,12 +956,10 @@ input:focus, select:focus {
 
 .btn-ghost:hover {
   border-color: var(--text-muted);
-  color: var(--text-primary);
 }
 
 .btn-ghost-sm {
   background: none;
-  color: var(--text-secondary);
   border: 1px solid var(--border-strong);
   border-radius: 5px;
   padding: 0.3rem 0.6rem;
@@ -1016,7 +985,6 @@ input:focus, select:focus {
 
 .danger-desc {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   margin-bottom: 1rem;
 }
 
@@ -1034,8 +1002,12 @@ input:focus, select:focus {
   border: 1px solid var(--border-strong);
   border-radius: 5px;
   padding: 0.3rem 0.5rem;
-  color: var(--text-primary);
   font-size: var(--font-tiny);
   flex: 1;
 }
 </style>
+
+
+
+
+

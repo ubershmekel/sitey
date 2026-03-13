@@ -130,19 +130,14 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  color: var(--text-secondary);
 }
 
-.hint {
-  color: var(--text-muted);
-}
 
 input {
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  color: var(--text-primary);
   outline: none;
   transition: border-color 0.15s;
 }
@@ -160,7 +155,6 @@ input:focus {
 
 .btn-ghost {
   background: none;
-  color: var(--text-secondary);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 1.25rem;
@@ -170,7 +164,6 @@ input:focus {
 
 .btn-ghost:hover {
   border-color: var(--text-muted);
-  color: var(--text-primary);
 }
 
 .dns-check {
@@ -197,14 +190,14 @@ input:focus {
 }
 
 .tip strong {
-  color: #a8caee;
+  color: var(--status-info-strong);
 }
 
 .tip code {
   background: #1a2a40;
   border-radius: 3px;
   padding: 0.1em 0.35em;
-  color: #9dcfff;
+  color: var(--status-info-strong);
 }
 
 .alert.error {

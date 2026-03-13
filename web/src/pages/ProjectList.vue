@@ -25,18 +25,13 @@
           <div class="project-repo">{{ p.repoOwner }}/{{ p.repoName }}</div>
         </RouterLink>
       </div>
-      <div v-else class="empty-state">
+      <div v-else class="empty-msg">
         <p>No projects yet. Create one to deploy your first app.</p>
         <button class="btn-primary mt-1" @click="showAdd = true">Add project</button>
       </div>
     </template>
 
-    <AddProjectModal
-      v-model="showAdd"
-      title="New project"
-      :domains="domains"
-      @created="handleProjectCreated"
-    />
+    <AddProjectModal v-model="showAdd" title="New project" :domains="domains" @created="handleProjectCreated" />
   </Layout>
 </template>
 
@@ -130,7 +125,6 @@ h1 {
 
 .project-name {
   font-weight: 600;
-  color: var(--text-primary);
 }
 
 .project-meta {
@@ -141,7 +135,6 @@ h1 {
 
 .deploy-mode {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
   padding: 0.15rem 0.4rem;
@@ -165,12 +158,10 @@ h1 {
 
 .no-routes {
   font-size: var(--font-tiny);
-  color: var(--text-dim);
 }
 
 .project-repo {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   margin-top: 0.15rem;
 }
 
@@ -206,12 +197,8 @@ h1 {
   color: var(--status-warn-text);
 }
 
-.state-msg {
-  color: var(--text-muted);
-}
 
-.empty-state {
-  color: var(--text-muted);
+.empty-msg {
   padding: 2rem 0;
 }
 

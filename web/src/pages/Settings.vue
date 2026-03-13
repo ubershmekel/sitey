@@ -236,7 +236,6 @@ h1 {
 
 .section-hint {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   margin-bottom: 1.25rem;
   margin-top: -0.5rem;
 }
@@ -250,12 +249,8 @@ h1 {
   font-size: var(--font-tiny);
 }
 
-.meta-label {
-  color: var(--text-muted);
-}
 
 .meta-value {
-  color: var(--text-primary);
   font-family: monospace;
   word-break: break-all;
   text-align: left;
@@ -277,12 +272,8 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  color: var(--text-secondary);
-}
+  }
 
-.hint {
-  color: var(--text-muted);
-}
 
 input,
 textarea {
@@ -290,7 +281,6 @@ textarea {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
-  color: var(--text-primary);
   outline: none;
   transition: border-color 0.15s;
   font-family: inherit;
@@ -398,7 +388,6 @@ textarea {
 }
 
 .domain-label {
-  color: var(--text-muted);
   white-space: nowrap;
 }
 
@@ -407,7 +396,6 @@ textarea {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.45rem 0.6rem;
-  color: var(--text-primary);
   flex: 1;
 }
 
@@ -421,14 +409,10 @@ textarea {
 
 .manual-details summary {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   cursor: pointer;
   user-select: none;
 }
 
-.manual-details summary:hover {
-  color: var(--text-secondary);
-}
 
 .btn-sm {
   padding: 0.25rem 0.6rem;
@@ -437,7 +421,6 @@ textarea {
 
 .btn-ghost {
   background: none;
-  color: var(--text-secondary);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.5rem 1rem;
@@ -448,12 +431,10 @@ textarea {
 
 .btn-ghost:hover {
   border-color: var(--text-muted);
-  color: var(--text-primary);
 }
 
 .about p {
   font-size: var(--font-tiny);
-  color: var(--text-muted);
   margin-bottom: 0.5rem;
 }
 
@@ -464,9 +445,14 @@ textarea {
   border-radius: 6px;
   padding: 0.75rem 1rem;
   font-family: monospace;
-  color: #a0d0a0;
+  color: var(--status-ok-text);
   margin-top: 0.5rem;
   word-break: break-all;
 }
 </style>
+
+
+
+
+
 
