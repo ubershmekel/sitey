@@ -1,9 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useAuthStore } from './stores/auth'
-import { trpc } from './trpc'
 
 const routes = [
-  { path: '/setup', component: () => import('./pages/Setup.vue'), meta: { public: true } },
   { path: '/login', component: () => import('./pages/Login.vue'), meta: { public: true } },
   { path: '/change-password', component: () => import('./pages/ChangePassword.vue'), meta: { public: true } },
   { path: '/github/app/callback', component: () => import('./pages/GithubAppCallback.vue') },
@@ -22,24 +20,7 @@ export const router = createRouter({
   routes,
 })
 
-// Cached once per session to avoid checking on every navigation
-let setupChecked = false
-let setupComplete = true
-
 router.beforeEach(async (to) => {
-  if (!setupChecked) {
-    setupChecked = true
-    try {
-      const status = await trpc.setup.status.query()
-      setupComplete = status.setupComplete
-    } catch {
-      // API unreachable — fall through; other guards will handle it
-    }
-  }
-
-  if (!setupComplete && to.path !== '/setup') return '/setup'
-  if (setupComplete && to.path === '/setup') return '/login'
-
   const auth = useAuthStore()
 
   if (!auth.user && auth.token) {

@@ -1,32 +1,48 @@
 <template>
   <div class="login-wrap">
-    <form class="login-card" @submit.prevent="handleLogin">
+    <form class="login-card" @submit.prevent="handleSubmit">
       <SiteyLogo class="brand" />
-      <h1>Sign in</h1>
+
+      <template v-if="isSetup">
+        <h1>Welcome — let's get you set up</h1>
+        <p class="subtitle">Create your admin account to get started.</p>
+      </template>
+      <template v-else>
+        <h1>Sign in</h1>
+      </template>
 
       <div v-if="auth.error" class="alert error">{{ auth.error }}</div>
+      <div v-if="setupError" class="alert error">{{ setupError }}</div>
 
       <label>
         Email
-        <input v-model="email" type="email" autocomplete="email" required placeholder="admin@sitey.local" />
+        <input v-model="email" type="email" autocomplete="email" required :placeholder="isSetup ? 'you@example.com' : 'admin@sitey.local'" />
       </label>
 
       <label>
         Password
-        <input v-model="password" type="password" autocomplete="current-password" required />
+        <input
+          v-model="password"
+          type="password"
+          :autocomplete="isSetup ? 'new-password' : 'current-password'"
+          required
+          :placeholder="isSetup ? 'at least 12 characters' : ''"
+        />
       </label>
 
-      <button type="submit" :disabled="auth.loading" class="btn-primary">
-        {{ auth.loading ? 'Signing in…' : 'Sign in' }}
+      <button type="submit" :disabled="auth.loading || setupLoading" class="btn-primary">
+        <template v-if="isSetup">{{ setupLoading ? 'Creating account…' : 'Create account' }}</template>
+        <template v-else>{{ auth.loading ? 'Signing in…' : 'Sign in' }}</template>
       </button>
     </form>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
+import { trpc } from '../trpc'
 import SiteyLogo from '../components/SiteyLogo.vue'
 
 const auth = useAuthStore()
@@ -34,6 +50,42 @@ const router = useRouter()
 
 const email = ref('')
 const password = ref('')
+const isSetup = ref(false)
+const setupLoading = ref(false)
+const setupError = ref('')
+
+onMounted(async () => {
+  try {
+    const status = await trpc.auth.setupStatus.query()
+    isSetup.value = !status.setupComplete
+  } catch {
+    // If we can't reach the API, default to login mode
+  }
+})
+
+async function handleSubmit() {
+  if (isSetup.value) {
+    await handleSetup()
+  } else {
+    await handleLogin()
+  }
+}
+
+async function handleSetup() {
+  setupError.value = ''
+  setupLoading.value = true
+  try {
+    const result = await trpc.auth.setupComplete.mutate({ email: email.value, password: password.value })
+    auth.setToken(result.token)
+    await auth.fetchUser()
+    isSetup.value = false
+    router.push('/')
+  } catch (e: any) {
+    setupError.value = e?.message ?? 'Setup failed.'
+  } finally {
+    setupLoading.value = false
+  }
+}
 
 async function handleLogin() {
   try {
@@ -59,7 +111,7 @@ async function handleLogin() {
 }
 
 .login-card {
-  width: 360px;
+  width: 400px;
   background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: 12px;
@@ -83,6 +135,13 @@ h1 {
   font-weight: 600;
   text-align: center;
   color: var(--text-primary);
+}
+
+.subtitle {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--font-tiny);
+  margin: -0.5rem 0 0;
 }
 
 label {

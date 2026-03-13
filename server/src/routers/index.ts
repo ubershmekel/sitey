@@ -4,11 +4,9 @@ import { domainsRouter } from './domains.js'
 import { projectsRouter } from './projects.js'
 import { deployRouter } from './deploy.js'
 import { githubRouter } from './github.js'
-import { setupRouter } from './setup.js'
 import { systemRouter } from './system.js'
 
 export const appRouter = router({
-  setup: setupRouter,
   auth: authRouter,
   domains: domainsRouter,
   projects: projectsRouter,
