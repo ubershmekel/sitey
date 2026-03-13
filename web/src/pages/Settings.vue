@@ -84,7 +84,9 @@
     <!-- About -->
     <section class="settings-section about">
       <h2>About Sitey</h2>
+      <p><a href="https://github.com/ubershmekel/sitey/" target="_blank" rel="noopener noreferrer">GitHub repository</a></p>
       <p>Self-hosted PaaS. Domain-first. Vibed with ❤️ on TypeScript + Vue 3 + Caddy.</p>
+      <p v-if="installedAt" class="hint">Installed {{ installedAtFormatted }}</p>
       <p class="hint">To reset the admin password, run on the host:</p>
       <code class="block-code">docker compose exec sitey-api node dist/services/bootstrap.js reset</code>
     </section>
@@ -152,6 +154,22 @@ async function clearPublicSiteUrl() {
   }
 }
 
+// ── Install date ─────────────────────────────────────────────────────────────
+const installedAt = ref<string | null>(null)
+const installedAtFormatted = computed(() => {
+  if (!installedAt.value) return ''
+  return new Date(installedAt.value).toLocaleDateString(undefined, {
+    year: 'numeric', month: 'long', day: 'numeric',
+  })
+})
+
+async function loadInstalledAt() {
+  try {
+    const status = await trpc.auth.setupStatus.query()
+    installedAt.value = status.installedAt ?? null
+  } catch { /* non-critical */ }
+}
+
 // ── Password change ───────────────────────────────────────────────────────────
 const pw = reactive({ current: '', next: '', confirm: '', saving: false })
 const pwError = ref('')
@@ -186,7 +204,10 @@ async function loadCaddyfile() {
   }
 }
 
-onMounted(loadPublicSiteUrl)
+onMounted(() => {
+  loadPublicSiteUrl()
+  loadInstalledAt()
+})
 
 </script>
 
@@ -448,3 +469,4 @@ textarea {
   word-break: break-all;
 }
 </style>
+

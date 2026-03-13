@@ -27,7 +27,7 @@ export const authRouter = router({
     const row = await db.systemConfig.findUnique({
       where: { key: "setup_complete" },
     });
-    return { setupComplete: row?.value === "true" };
+    return { setupComplete: !!row?.value, installedAt: row?.value ?? null };
   }),
 
   /** One-time setup: creates the admin account and marks setup as complete. */
@@ -42,7 +42,7 @@ export const authRouter = router({
       const alreadyDone = await db.systemConfig.findUnique({
         where: { key: "setup_complete" },
       });
-      if (alreadyDone?.value === "true") {
+      if (alreadyDone?.value) {
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "Setup already complete.",
@@ -61,8 +61,8 @@ export const authRouter = router({
 
       await db.systemConfig.upsert({
         where: { key: "setup_complete" },
-        create: { key: "setup_complete", value: "true" },
-        update: { value: "true" },
+        create: { key: "setup_complete", value: new Date().toISOString() },
+        update: {},
       });
 
       const token = signToken({

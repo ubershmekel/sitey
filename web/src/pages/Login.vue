@@ -4,7 +4,7 @@
       <SiteyLogo class="brand" />
 
       <template v-if="isSetup">
-        <h1>Welcome — let's get you set up</h1>
+        <h1>Welcome 🎉 let's get you set up</h1>
         <p class="subtitle">Create your admin account to get started.</p>
       </template>
       <template v-else>
@@ -16,18 +16,14 @@
 
       <label>
         Email
-        <input v-model="email" type="email" autocomplete="email" required :placeholder="isSetup ? 'you@example.com' : 'admin@sitey.local'" />
+        <input v-model="email" type="email" autocomplete="email" required
+          :placeholder="isSetup ? 'you@example.com' : 'admin@sitey.local'" />
       </label>
 
       <label>
         Password
-        <input
-          v-model="password"
-          type="password"
-          :autocomplete="isSetup ? 'new-password' : 'current-password'"
-          required
-          :placeholder="isSetup ? 'at least 12 characters' : ''"
-        />
+        <input v-model="password" type="password" :autocomplete="isSetup ? 'new-password' : 'current-password'" required
+          :placeholder="isSetup ? 'at least 9 characters' : ''" />
       </label>
 
       <button type="submit" :disabled="auth.loading || setupLoading" class="btn-primary">
@@ -160,7 +156,10 @@ input {
   outline: none;
   transition: border-color 0.15s;
 }
-input:focus { border-color: var(--brand); }
+
+input:focus {
+  border-color: var(--brand);
+}
 
 .alert.error {
   background: var(--status-err-bg);

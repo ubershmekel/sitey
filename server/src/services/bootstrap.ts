@@ -173,8 +173,8 @@ export async function generateOverridePassword() {
   // Mark setup complete so the web wizard doesn't appear on first visit
   await db.systemConfig.upsert({
     where: { key: "setup_complete" },
-    create: { key: "setup_complete", value: "true" },
-    update: { value: "true" },
+    create: { key: "setup_complete", value: new Date().toISOString() },
+    update: {},
   });
 
   console.log(
