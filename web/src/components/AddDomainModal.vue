@@ -8,10 +8,9 @@
       <div class="tip">
         <strong>Tip: wildcard subdomain setup</strong><br>
         Point a wildcard DNS A record
-        <code>*.yourdomain.com → {{ serverIp || 'your server IP' }}</code>.
-        <template v-if="serverIp">This is the detected local IP — if behind a proxy or NAT, use your external IP
-          instead.</template>
-        Then every new project automatically gets a
+        <code>*.yourdomain.com → {{ serverIp || 'your server IP' }}</code>
+        <template v-if="serverIp"> is the detected IP address but it might be wrong.</template>
+        After this step, every new project automatically gets a
         random subdomain like <code>happy-fox-3k2.yourdomain.com</code> — just like Netlify
         or Vercel — with no extra DNS steps per project.
       </div>
@@ -190,14 +189,13 @@ input:focus {
 }
 
 .tip strong {
-  color: var(--status-info-strong);
+  color: var(--status-info-bright);
 }
 
 .tip code {
   background: #1a2a40;
   border-radius: 3px;
   padding: 0.1em 0.35em;
-  color: var(--status-info-strong);
 }
 
 .alert.error {

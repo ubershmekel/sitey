@@ -35,8 +35,7 @@
               <p class="step-desc">
                 Add a wildcard DNS A record (<code>*.example.com</code> or <code>*.s.example.com</code>)
                 pointing to this server's public IP<template v-if="serverIp">
-                  (detected: <code>{{ serverIp }}</code> — if behind a proxy or NAT, use your external IP
-                  instead)</template>.
+                  (detected: <code>{{ serverIp }}</code> but it might be wrong)</template>.
                 Sitey will automatically issue HTTPS certificates for all your projects.
               </p>
               <div class="inline-action">

@@ -48,6 +48,8 @@ const loading = ref(true)
 const error = ref('')
 const showAdd = ref(false)
 
+function openAddModal() { showAdd.value = true }
+
 async function fetchDomains() {
   loading.value = true
   error.value = ''
