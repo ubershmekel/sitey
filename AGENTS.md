@@ -9,3 +9,4 @@ especially:
   `web/src/styles/components.css`. Do not redefine them inside scoped component
   styles. Don't create the same modal in two different pages, use a component
   instead, etc.
+- If you change .ts code then run `npm run typecheck` to check for errors.
