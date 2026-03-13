@@ -9,7 +9,7 @@
     <div v-else-if="error" class="alert error">{{ error }}</div>
 
     <div v-else-if="domains.length === 0" class="empty-state">
-      <div class="empty-icon">◈</div>
+      <div class="empty-icon"><NavIcon name="domains" /></div>
       <p>No domains yet.</p>
       <p class="hint">Add your first domain to get started.</p>
       <button class="btn-primary" @click="openAddModal">Add domain</button>
@@ -38,6 +38,7 @@
 import { ref, onMounted } from 'vue'
 import { RouterLink } from 'vue-router'
 import Layout from '../components/Layout.vue'
+import NavIcon from '../components/NavIcon.vue'
 import AddDomainModal from '../components/AddDomainModal.vue'
 import { trpc } from '../trpc'
 
@@ -156,6 +157,7 @@ h1 {
   font-size: 2.5rem;
   margin-bottom: 1rem;
 }
+
 
 .hint {
   margin: 0.25rem 0 1.5rem;

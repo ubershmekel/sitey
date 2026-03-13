@@ -25,9 +25,11 @@
           <div class="project-repo">{{ p.repoOwner }}/{{ p.repoName }}</div>
         </RouterLink>
       </div>
-      <div v-else class="empty-msg">
-        <p>No projects yet. Create one to deploy your first app.</p>
-        <button class="btn-primary mt-1" @click="showAdd = true">Add project</button>
+      <div v-else class="empty-state">
+        <div class="empty-icon"><NavIcon name="projects" /></div>
+        <p>No projects yet.</p>
+        <p class="hint">Create one to deploy your first app.</p>
+        <button class="btn-primary" @click="showAdd = true">Add project</button>
       </div>
     </template>
 
@@ -40,6 +42,7 @@ import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import AddProjectModal from '../components/AddProjectModal.vue'
 import Layout from '../components/Layout.vue'
+import NavIcon from '../components/NavIcon.vue'
 import { trpc } from '../trpc'
 
 type Project = Awaited<ReturnType<typeof trpc.projects.list.query>>[number]
@@ -198,12 +201,19 @@ h1 {
 }
 
 
-.empty-msg {
-  padding: 2rem 0;
+.empty-state {
+  text-align: center;
+  padding: 4rem 2rem;
 }
 
-.mt-1 {
-  margin-top: 1rem;
+.empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+}
+
+
+.hint {
+  margin: 0.25rem 0 1.5rem;
 }
 
 .alert.error {

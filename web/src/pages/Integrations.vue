@@ -8,7 +8,7 @@
     <section class="section">
       <div class="section-header">
         <div class="integration-title">
-          <span class="integration-icon">⑂</span>
+          <NavIcon name="integrations" class="integration-icon" />
           <div>
             <h2>GitHub App</h2>
             <p class="section-hint">Connect a GitHub App to clone repos and receive push webhooks for auto-deploy.</p>
@@ -128,6 +128,7 @@
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import Layout from '../components/Layout.vue'
+import NavIcon from '../components/NavIcon.vue'
 import { trpc } from '../trpc'
 
 type AppConfig = Awaited<ReturnType<typeof trpc.github.getAppConfig.query>>
@@ -287,8 +288,7 @@ h1 {
 }
 
 .integration-icon {
-  font-size: var(--font-huge);
-  line-height: 1;
+  font-size: 1.5rem;
   margin-top: 2px;
   color: var(--pink);
 }
