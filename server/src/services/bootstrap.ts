@@ -68,22 +68,21 @@ export async function bootstrap() {
   });
   if (!setupDone) {
     const displayIps = publicIp ? [publicIp] : localIps;
-    console.log(banner([
-      "SITEY — FIRST RUN SETUP",
-      "",
-      "Open one of these addresses in your browser:",
-      ...displayIps.map((ip) => `  http://${ip}`),
-      "",
-      "Complete the setup wizard to create your account.",
-    ]));
+    console.log(
+      banner([
+        "SITEY — FIRST RUN SETUP",
+        "",
+        "Open one of these addresses in your browser:",
+        ...displayIps.map((ip) => `  http://${ip}`),
+        "",
+        "Complete the setup wizard to create your account.",
+      ]),
+    );
   }
 }
 
 async function detectPublicIP(): Promise<string | null> {
-  const services = [
-    "https://icanhazip.com",
-    "https://api.ipify.org",
-  ];
+  const services = ["https://icanhazip.com", "https://api.ipify.org"];
   for (const url of services) {
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
@@ -138,14 +137,16 @@ export async function resetAdminPassword() {
     data: { passwordHash: hash, mustChangePassword: true },
   });
 
-  console.log(banner([
-    "SITEY — ADMIN PASSWORD RESET",
-    "",
-    `Email   : ${user.email}`,
-    `Password: ${newPassword}`,
-    "",
-    "You will be required to change this password on next login.",
-  ]));
+  console.log(
+    banner([
+      "SITEY — ADMIN PASSWORD RESET",
+      "",
+      `Email   : ${user.email}`,
+      `Password: ${newPassword}`,
+      "",
+      "You will be required to change this password on next login.",
+    ]),
+  );
 
   await db.$disconnect();
 }
@@ -176,17 +177,19 @@ export async function generateOverridePassword() {
     update: { value: "true" },
   });
 
-  console.log(banner([
-    "SITEY — OVERRIDE PASSWORD GENERATED",
-    "",
-    `Password: ${password}`,
-    "",
-    "Use this password with ANY email on the login page",
-    "to take over that account. You will be prompted to",
-    "set a new password after logging in.",
-    "",
-    "Save this — it will not be shown again.",
-  ]));
+  console.log(
+    banner([
+      "SITEY — OVERRIDE PASSWORD GENERATED",
+      "",
+      `Password: ${password}`,
+      "",
+      "Use this password with ANY email on the login page",
+      "to take over that account. You will be prompted to",
+      "set a new password after logging in.",
+      "",
+      "Save this — it will not be shown again.",
+    ]),
+  );
 
   await db.$disconnect();
 }
@@ -195,11 +198,28 @@ export async function generateOverridePassword() {
 // `node --enable-source-maps dist/services/bootstrap.js <init|reset>`
 // or `node --enable-source-maps dist/bootstrap.js <init|reset>`
 import { fileURLToPath } from "node:url";
+import { execSync } from "node:child_process";
 const isMain =
   process.argv[1] === fileURLToPath(import.meta.url) ||
   process.argv[1]?.endsWith("bootstrap.js");
 
 if (isMain) {
+  // Run migrations first — the main server does this in index.ts, but when
+  // bootstrap.ts is invoked directly as a CLI the tables may not exist yet.
+  // This call is a safety net and should be fine because prisma uses
+  // _prisma_migrations as a lock table.
+  if (process.env.NODE_ENV === "production") {
+    console.log("[bootstrap] Running database migrations...");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    execSync("npm run db:migrate", {
+      stdio: "inherit",
+      cwd: process.cwd(),
+      shell: true,
+      env: process.env,
+    } as any);
+    console.log("[bootstrap] Migrations complete.");
+  }
+
   await db.$connect();
   const cmd = process.argv[2];
   if (cmd === "reset") {

@@ -105,9 +105,10 @@ fi
 # Rebuild and start containers
 docker compose up -d --build
 
-# Wait for sitey-api to be ready (up to 2 minutes)
+# Wait for sitey-api to be healthy (up to 2 minutes)
+# /health only responds after migrations + bootstrap have completed
 for _ in $(seq 1 60); do
-  if docker compose exec --interactive=false -T sitey-api sh -lc "node -v" >/dev/null 2>&1; then
+  if docker compose exec --interactive=false -T sitey-api sh -c "wget -qO- http://localhost:3001/health" >/dev/null 2>&1; then
     break
   fi
   sleep 2
