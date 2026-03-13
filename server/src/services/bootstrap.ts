@@ -51,21 +51,52 @@ export async function bootstrap() {
     console.log("[bootstrap] Created built-in sitey project and root route.");
   }
 
+  // ── Server IP ────────────────────────────────────────────────────────────
+  const publicIp = await detectPublicIP();
+  const localIps = getLocalIPs();
+  if (publicIp) {
+    await db.systemConfig.upsert({
+      where: { key: "server_ip" },
+      create: { key: "server_ip", value: publicIp },
+      update: { value: publicIp },
+    });
+  }
+
   // ── First-run hint ─────────────────────────────────────────────────────────
   const setupDone = await db.systemConfig.findUnique({
     where: { key: "setup_complete" },
   });
   if (!setupDone) {
-    const ips = getLocalIPs();
+    const displayIps = publicIp ? [publicIp] : localIps;
     console.log(banner([
       "SITEY — FIRST RUN SETUP",
       "",
       "Open one of these addresses in your browser:",
-      ...ips.map((ip) => `  http://${ip}`),
+      ...displayIps.map((ip) => `  http://${ip}`),
       "",
       "Complete the setup wizard to create your account.",
     ]));
   }
+}
+
+async function detectPublicIP(): Promise<string | null> {
+  const services = [
+    "https://icanhazip.com",
+    "https://api.ipify.org",
+  ];
+  for (const url of services) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+      if (!res.ok) continue;
+      const ip = (await res.text()).trim();
+      if (/^\d{1,3}(\.\d{1,3}){3}$/.test(ip)) return ip;
+    } catch {
+      // try next service
+    }
+  }
+  // Fall back to first non-internal local IP
+  const local = getLocalIPs();
+  return local[0] !== "localhost" ? local[0] : null;
 }
 
 function getLocalIPs(): string[] {

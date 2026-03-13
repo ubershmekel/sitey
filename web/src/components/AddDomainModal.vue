@@ -7,8 +7,11 @@
 
       <div class="tip">
         <strong>Tip: wildcard subdomain setup</strong><br>
-        Point a wildcard DNS A record <code>*.yourdomain.com → your server IP</code> (in addition to
-        <code>yourdomain.com → IP</code>). Then every new project automatically gets a
+        Point a wildcard DNS A record
+        <code>*.yourdomain.com → {{ serverIp || 'your server IP' }}</code>.
+        <template v-if="serverIp">This is the detected local IP — if behind a proxy or NAT, use your external IP
+          instead.</template>
+        Then every new project automatically gets a
         random subdomain like <code>happy-fox-3k2.yourdomain.com</code> — just like Netlify
         or Vercel — with no extra DNS steps per project.
       </div>
@@ -51,6 +54,7 @@ const emit = defineEmits<{
   created: []
 }>()
 
+const serverIp = ref('')
 const newHostname = ref('')
 const adding = ref(false)
 const addError = ref('')
@@ -62,7 +66,10 @@ type DnsResult = {
 } | null
 const dnsResult = ref<DnsResult>(null)
 
-watch(() => props.modelValue, (open) => {
+watch(() => props.modelValue, async (open) => {
+  if (open && !serverIp.value) {
+    trpc.system.getServerIp.query().then(r => { serverIp.value = r.ip ?? '' }).catch(() => { })
+  }
   if (!open) {
     newHostname.value = ''
     dnsResult.value = null

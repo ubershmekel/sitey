@@ -9,9 +9,15 @@ import {
   setConfiguredPublicSiteUrl,
 } from '../services/siteUrl.js'
 import { docker, decodeDockerLogPayload } from '../services/docker.js'
+import { db } from '../lib/db.js'
 
 export const systemRouter = router({
   getPublicSiteUrl: settledProcedure.query(async () => resolvePublicSiteUrl()),
+
+  getServerIp: settledProcedure.query(async () => {
+    const row = await db.systemConfig.findUnique({ where: { key: 'server_ip' } })
+    return { ip: row?.value ?? null }
+  }),
 
   setPublicSiteUrl: settledProcedure
     .input(z.object({ url: z.string().min(1) }))

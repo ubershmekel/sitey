@@ -1,6 +1,7 @@
 # Sitey
 
-The easy way to auto-deploy from GitHub to your server.
+The easiest way to auto-deploy from GitHub to your server. Designed for vibe
+coders, coders, and kids who can't read good.
 
 ## Install with one line (tested on Hetzner Ubuntu VPS)
 
@@ -272,15 +273,3 @@ port.
 
 See [docs/development.md](docs/development.md) for local setup, DB scripts, and
 how to keep migrations in sync with `schema.prisma`.
-
----
-
-## Roadmap
-
-- [ ] Environment variable editor in UI
-- [ ] Multi-project per domain via subdomains (UI support)
-- [ ] GitHub App OAuth flow (auto-select repos)
-- [ ] Deployment rollback
-- [ ] Real-time log streaming (SSE/WebSocket)
-- [ ] Resource limits (CPU/memory) on project containers
-- [ ] Teams / multi-user support

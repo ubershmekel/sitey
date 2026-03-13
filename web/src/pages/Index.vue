@@ -34,7 +34,10 @@
               <div class="step-heading">Set up a wildcard domain</div>
               <div class="step-desc">
                 Add a wildcard DNS A record (<code>*.example.com</code> or <code>*.s.example.com</code>)
-                pointing to this server's IP. Sitey will automatically issue HTTPS certificates for all your projects.
+                pointing to this server's public IP<template v-if="serverIp">
+                  (detected: <code>{{ serverIp }}</code> — if behind a proxy or NAT, use your external IP
+                  instead)</template>.
+                Sitey will automatically issue HTTPS certificates for all your projects.
               </div>
               <div class="inline-action">
                 <template v-if="!hasDomain">
@@ -52,6 +55,12 @@
             <div class="step-check">{{ siteyUrl ? '✓' : '2' }}</div>
             <div class="step-body">
               <div class="step-heading">Open Sitey at its HTTPS address</div>
+              <div v-if="isHttp" class="step-warning">
+                You are currently using plain HTTP. That's ok to start, but not safe to keep forever. GitHub webhooks
+                and OAuth
+                require HTTPS.
+                Set up your domain first, then open Sitey at your new HTTPS URL.
+              </div>
               <div class="step-desc">
                 GitHub requires HTTPS for OAuth and webhooks. Once your domain is set up and the
                 certificate is issued, continue setup from your HTTPS Sitey URL.
@@ -135,6 +144,8 @@ const expanded = ref(false)
 const siteyUrl = ref('')
 const domains = ref<Pick<Domain, 'id' | 'hostname'>[]>([])
 
+const serverIp = ref('')
+const isHttp = window.location.protocol === 'http:'
 const showAddDomain = ref(false)
 const showAddProject = ref(false)
 
@@ -144,17 +155,19 @@ async function fetchAll() {
   loading.value = true
   error.value = ''
   try {
-    const [projectList, domainList, appConfig, siteUrlInfo] = await Promise.all([
+    const [projectList, domainList, appConfig, siteUrlInfo, ipInfo] = await Promise.all([
       trpc.projects.list.query(),
       trpc.domains.list.query(),
       trpc.github.getAppConfig.query(),
       trpc.system.getPublicSiteUrl.query().catch(() => null),
+      trpc.system.getServerIp.query().catch(() => null),
     ])
     hasDomain.value = domainList.length > 0
     hasGitHubApp.value = appConfig.configured
     hasProject.value = projectList.filter(p => !p.protected).length > 0
     domains.value = domainList.map(d => ({ id: d.id, hostname: d.hostname }))
     siteyUrl.value = siteUrlInfo?.effectiveUrl ?? ''
+    serverIp.value = ipInfo?.ip ?? ''
   } catch (e: unknown) {
     error.value = (e as { message?: string })?.message ?? 'Failed to load'
   } finally {
@@ -366,6 +379,17 @@ h1 {
 
 .step-link:hover {
   text-decoration: underline;
+}
+
+.step-warning {
+  background: var(--status-warn-bg);
+  border: 1px solid var(--status-warn-border);
+  color: var(--status-warn-text);
+  border-radius: 6px;
+  padding: 0.5rem 0.75rem;
+  font-size: var(--font-tiny);
+  line-height: 1.55;
+  margin-bottom: 0.5rem;
 }
 
 .step-hint {
