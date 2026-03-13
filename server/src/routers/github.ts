@@ -196,7 +196,7 @@ export const githubRouter = router({
     const privateKey = await getConfig(KEYS.PRIVATE_KEY)
     if (!appId || !privateKey) {
       return {
-        configured: false,
+        configured: false as const,
         installations: 0,
         app: { slug: null as string | null, name: null as string | null, installUrl: null as string | null },
         repos: [],
@@ -309,7 +309,7 @@ export const githubRouter = router({
 
     const repos = Array.from(deduped.values()).sort((a, b) => a.fullName.localeCompare(b.fullName))
     return {
-      configured: true,
+      configured: true as const,
       installations: installationsWithCounts,
       app: {
         slug: appSlug,
