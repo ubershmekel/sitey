@@ -7,6 +7,7 @@ data/
 *.db-shm
 *.db-wal
 deploy/.env
+scripts/testing/reset-remote.env
 server/src/generated/
 web/dist/
 .DS_Store

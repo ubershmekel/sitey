@@ -11,7 +11,8 @@
     "build": "npm run build -w web && npm run build -w server",
     "typecheck": "npm run db:generate -w server && npm run typecheck -w server && npm run typecheck -w web",
     "db:migrate": "npm run db:migrate -w server",
-    "db:studio": "npm run db:studio -w server"
+    "db:studio": "npm run db:studio -w server",
+    "test:reset-remote": "node scripts/testing/reset-remote-runner.mjs"
   },
   "devDependencies": {
     "concurrently": "^9.1.0"

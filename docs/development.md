@@ -93,19 +93,19 @@ column. The goal is clarity, predictability, and mobile-friendliness.
 
 **Core rule: one thing per row, top to bottom.**
 
-Every element the user reads or interacts with gets its own full-width row in the
-vertical flow. Side-by-side layouts must be justified — not the default.
+Every element the user reads or interacts with gets its own full-width row in
+the vertical flow. Side-by-side layouts must be justified — not the default.
 
 ### Pages
 
 - **No split headers.** Don't use `justify-content: space-between` to push
-  actions to the far right. Status badges, primary action buttons (Deploy, Save),
-  and destructive buttons (Delete) all live in the main vertical flow.
-- **The page IS the edit form.** Domain and project detail pages render
-  editable fields inline — there is no separate "Edit" modal or route. A
-  "Save changes" button appears near the top alongside other primary actions.
-- **Action row at the top, danger zone at the bottom.** Primary actions
-  (Save, Add, Deploy) appear in a horizontal row just below the title. Destructive
+  actions to the far right. Status badges, primary action buttons (Deploy,
+  Save), and destructive buttons (Delete) all live in the main vertical flow.
+- **The page IS the edit form.** Domain and project detail pages render editable
+  fields inline — there is no separate "Edit" modal or route. A "Save changes"
+  button appears near the top alongside other primary actions.
+- **Action row at the top, danger zone at the bottom.** Primary actions (Save,
+  Add, Deploy) appear in a horizontal row just below the title. Destructive
   actions (Delete) are separated into a "Danger zone" section at the bottom of
   the page, with a descriptive label and a top border to visually separate them.
 - **Info cards and secondary content can be a grid.** It's fine for metadata
@@ -134,19 +134,19 @@ vertical flow. Side-by-side layouts must be justified — not the default.
 
 ## Shared component styles
 
-- **Design tokens live in `web/src/styles/theme.css`.** Keep this file focused on
-  variables (colors, status tokens, etc), not component class rules.
-- **Reusable component classes live in `web/src/styles/components.css`.** This is
-  imported once in `web/src/main.ts` and is the single source of truth for
+- **Design tokens live in `web/src/styles/theme.css`.** Keep this file focused
+  on variables (colors, status tokens, etc), not component class rules.
+- **Reusable component classes live in `web/src/styles/components.css`.** This
+  is imported once in `web/src/main.ts` and is the single source of truth for
   shared classes like `.btn-primary`.
-- **Do not redefine shared classes inside page/component `<style scoped>` blocks.**
-  If a screen needs a small variation, use local CSS custom properties instead
-  of copying the whole class.
+- **Do not redefine shared classes inside page/component `<style scoped>`
+  blocks.** If a screen needs a small variation, use local CSS custom properties
+  instead of copying the whole class.
 - **Current `.btn-primary` override hooks:** `--btn-primary-bg`,
   `--btn-primary-color`, `--btn-primary-border`, `--btn-primary-radius`,
-  `--btn-primary-padding`, `--btn-primary-font-size`, `--btn-primary-font-weight`.
-  Set these on a local container (for example `.login-card`) to customize only
-  that scope.
+  `--btn-primary-padding`, `--btn-primary-font-size`,
+  `--btn-primary-font-weight`. Set these on a local container (for example
+  `.login-card`) to customize only that scope.
 
 ## API performance principles
 
@@ -159,9 +159,9 @@ These rules exist to prevent read paths from becoming slow under load.
   requires an external call, return the cached DB value immediately and trigger
   a background refresh that writes the result back to the DB for the next
   request.
-- **Status is eventually consistent.** Callers should expect stale status
-  values and surface freshness metadata (e.g. `statusCheckedAt`) in the UI
-  rather than implying real-time accuracy.
+- **Status is eventually consistent.** Callers should expect stale status values
+  and surface freshness metadata (e.g. `statusCheckedAt`) in the UI rather than
+  implying real-time accuracy.
 - **Deduplicate in-flight work.** Background refreshes use an in-process
   `Set`/`Map` keyed by record ID so concurrent page loads don't fan out into
   duplicate external calls. A TTL (currently 5 min for TLS status) prevents
@@ -171,8 +171,8 @@ These rules exist to prevent read paths from becoming slow under load.
   to the DB and log server-side — the read response still returns immediately,
   and the UI shows the failure state on the next poll.
 - **The DB is the source of truth; Caddy config is derived state.** A domain
-  exists when it's in the DB. The Caddy config is just a projection of that
-  data — it can always be rebuilt from the DB and reloaded. This means a Caddy
+  exists when it's in the DB. The Caddy config is just a projection of that data
+  — it can always be rebuilt from the DB and reloaded. This means a Caddy
   failure on `create`/`delete` is a delivery problem, not a correctness problem.
   Never let it throw and fail the whole mutation — that implies the DB write
   didn't happen, which is wrong. Instead, `await` Caddy separately, catch the
@@ -303,3 +303,35 @@ docker compose -f deploy/docker-compose.yml logs caddy -f
 # View live Caddy config (JSON)
 curl http://localhost:2019/config/ | jq .
 ```
+
+### Remote reset helper (test runs)
+
+One-time setup:
+
+```bash
+cp scripts/testing/reset-remote.env.example scripts/testing/reset-remote.env
+```
+
+PowerShell alternative:
+
+```powershell
+Copy-Item scripts/testing/reset-remote.env.example scripts/testing/reset-remote.env
+```
+
+Set `SSH_TARGET` / `SITEY_URL` / `REFRESH_MODE` in
+`scripts/testing/reset-remote.env`, then run:
+
+```bash
+npm run test:reset-remote
+```
+
+This is intended for repeatable test resets (not normal upgrade/deploy flows),
+and is convenient to run from an IDE package scripts panel with one click. For
+the full browser test checklist, see
+[remote-smoke-test.md](remote-smoke-test.md).
+
+`REFRESH_MODE` options:
+
+- `pull` (recommended): `git pull --ff-only` before reset
+- `installer`: run `install-ubuntu.sh` first
+- `none`: skip code refresh
