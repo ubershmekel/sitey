@@ -59,7 +59,7 @@
           <input v-model="pw.current" type="password" required autocomplete="current-password" />
         </label>
         <label>
-          New password <span class="hint">(min 12 chars)</span>
+          New password <span class="hint">(min 9 chars)</span>
           <input v-model="pw.next" type="password" required minlength="12" autocomplete="new-password" />
         </label>
         <label>
@@ -84,7 +84,8 @@
     <!-- About -->
     <section class="settings-section about">
       <h2>About Sitey</h2>
-      <p><a href="https://github.com/ubershmekel/sitey/" target="_blank" rel="noopener noreferrer">GitHub repository</a></p>
+      <p><a href="https://github.com/ubershmekel/sitey/" target="_blank" rel="noopener noreferrer">GitHub repository</a>
+      </p>
       <p>Self-hosted PaaS. Domain-first. Vibed with ❤️ on TypeScript + Vue 3 + Caddy.</p>
       <p v-if="installedAt" class="hint">Installed {{ installedAtFormatted }}</p>
       <p class="hint">To reset the admin password, run on the host:</p>
@@ -272,7 +273,7 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  }
+}
 
 
 input,
@@ -450,9 +451,3 @@ textarea {
   word-break: break-all;
 }
 </style>
-
-
-
-
-
-

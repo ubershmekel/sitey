@@ -14,7 +14,7 @@
       </label>
 
       <label>
-        New password <span class="hint">(min 12 chars)</span>
+        New password <span class="hint">(min 9 chars)</span>
         <input v-model="next" type="password" autocomplete="new-password" required minlength="12" />
       </label>
 
@@ -73,6 +73,7 @@ async function handleSubmit() {
   justify-content: center;
   background: var(--bg-page);
 }
+
 .card {
   width: 380px;
   background: var(--bg-card);
@@ -84,21 +85,59 @@ async function handleSubmit() {
   flex-direction: column;
   gap: 1.25rem;
 }
-.brand { font-size: var(--font-huge); font-weight: 700; color: var(--brand); justify-content: center; }
-h1 { font-size: var(--font-large); font-weight: 600; text-align: center; }
-.subtitle { font-size: var(--font-tiny); text-align: center; margin-top: -0.75rem; }
+
+.brand {
+  font-size: var(--font-huge);
+  font-weight: 700;
+  color: var(--brand);
+  justify-content: center;
+}
+
+h1 {
+  font-size: var(--font-large);
+  font-weight: 600;
+  text-align: center;
+}
+
+.subtitle {
+  font-size: var(--font-tiny);
+  text-align: center;
+  margin-top: -0.75rem;
+}
+
 label {
-  display: flex; flex-direction: column; gap: 0.4rem;
-  }
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
 input {
-  background: var(--bg-input); border: 1px solid var(--border-strong); border-radius: 6px;
-  padding: 0.6rem 0.75rem; outline: none;
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  outline: none;
   transition: border-color 0.15s;
 }
-input:focus { border-color: var(--brand); }
-.alert { border-radius: 6px; padding: 0.6rem 0.75rem; }
-.alert.error { background: var(--status-err-bg); border: 1px solid var(--status-err-border); color: var(--status-err-text); }
-.alert.success { background: var(--status-ok-bg); border: 1px solid var(--status-ok-border); color: var(--status-ok-text); }
+
+input:focus {
+  border-color: var(--brand);
+}
+
+.alert {
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+}
+
+.alert.error {
+  background: var(--status-err-bg);
+  border: 1px solid var(--status-err-border);
+  color: var(--status-err-text);
+}
+
+.alert.success {
+  background: var(--status-ok-bg);
+  border: 1px solid var(--status-ok-border);
+  color: var(--status-ok-text);
+}
 </style>
-
-
