@@ -50,8 +50,8 @@
           </div>
 
           <!-- Step 2: Switch to HTTPS URL -->
-          <div class="step" :class="{ done: !!siteyUrl }">
-            <div class="step-check">{{ siteyUrl ? '✓' : '2' }}</div>
+          <div class="step" :class="{ done: isHttps }">
+            <div class="step-check">{{ isHttps ? '✓' : '2' }}</div>
             <div class="step-body">
               <h3 class="step-heading">Open Sitey at its HTTPS address</h3>
               <div v-if="isHttp" class="step-warning">
@@ -150,7 +150,8 @@ const isHttp = window.location.protocol === 'http:'
 const showAddDomain = ref(false)
 const showAddProject = ref(false)
 
-const allDone = computed(() => hasDomain.value && !!siteyUrl.value && hasGitHubApp.value && hasProject.value)
+const isHttps = window.location.protocol === 'https:'
+const allDone = computed(() => hasDomain.value && isHttps && hasGitHubApp.value && hasProject.value)
 
 async function fetchAll() {
   loading.value = true
