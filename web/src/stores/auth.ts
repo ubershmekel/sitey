@@ -4,6 +4,25 @@ import { trpc } from '../trpc'
 
 type User = { id: string; email: string; mustChangePassword: boolean }
 
+function toAuthErrorMessage(error: unknown, fallback: string) {
+  const message = (error as { message?: string })?.message?.trim()
+  if (!message) return fallback
+
+  const lowered = message.toLowerCase()
+  const isApiUnavailable =
+    lowered.includes('unexpected end of json input') ||
+    lowered.includes("failed to execute 'json' on 'response'") ||
+    lowered.includes('failed to fetch') ||
+    lowered.includes('networkerror') ||
+    lowered.includes('network request failed')
+
+  if (isApiUnavailable) {
+    return 'Failed to reach Sitey API. Is it up and is your network OK?'
+  }
+
+  return message
+}
+
 export const useAuthStore = defineStore('auth', () => {
   const token = ref<string | null>(localStorage.getItem('sitey_token'))
   const user = ref<User | null>(null)
@@ -42,7 +61,7 @@ export const useAuthStore = defineStore('auth', () => {
       user.value = { id: res.id, email: res.email, mustChangePassword: res.mustChangePassword }
       return { mustChangePassword: res.mustChangePassword }
     } catch (e: unknown) {
-      const msg = (e as { message?: string })?.message ?? 'Login failed'
+      const msg = toAuthErrorMessage(e, 'Login failed')
       error.value = msg
       throw e
     } finally {
