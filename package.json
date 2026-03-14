@@ -12,7 +12,8 @@
     "typecheck": "npm run db:generate -w server && npm run typecheck -w server && npm run typecheck -w web",
     "db:migrate": "npm run db:migrate -w server",
     "db:studio": "npm run db:studio -w server",
-    "test:remote-wipe-and-test": "node scripts/testing/remote-test-wipe.mjs"
+    "test:remote-wipe-and-test": "node scripts/testing/remote-test-wipe.mjs",
+    "test:remote-test-install": "node scripts/testing/remote-test-install.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
