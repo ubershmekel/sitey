@@ -66,3 +66,10 @@ other operational tasks, see [docs/ops.md](docs/ops.md).
 
 See [docs/development.md](docs/development.md) for local setup, DB scripts, and
 how to keep migrations in sync with `schema.prisma`.
+
+## Onboarding guides
+
+New to self-hosting? Start with the
+[Guide to self-hosting](docs/guides/README.md) for a step-by-step path from
+server setup (on Hetzner, or AWS EC2) to live DNS (on Namecheap, Route 53, or
+GoDaddy).
