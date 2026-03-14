@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <Layout>
     <div class="page-header">
       <h1>Dashboard</h1>
@@ -40,10 +40,10 @@
               </p>
               <div class="inline-action">
                 <template v-if="!hasDomain">
-                  <button class="step-inline-btn" @click="showAddDomain = true">Add domain now →</button>
+                  <button class="step-inline-btn" @click="showAddDomain = true">Add domain now -></button>
                 </template>
                 <template v-else>
-                  <RouterLink to="/domains" class="step-link">Manage domains →</RouterLink>
+                  <RouterLink to="/domains" class="step-link">Manage domains -></RouterLink>
                 </template>
               </div>
             </div>
@@ -56,8 +56,7 @@
               <h3 class="step-heading">Open Sitey at its HTTPS address</h3>
               <div v-if="isHttp" class="step-warning">
                 You are currently using plain HTTP. That's ok to start, but not safe to keep forever. GitHub webhooks
-                and OAuth
-                require HTTPS.
+                and OAuth require HTTPS.
                 Set up your domain first, then open Sitey at your new HTTPS URL.
               </div>
               <p class="step-desc">
@@ -67,11 +66,11 @@
               <div class="inline-action">
                 <template v-if="siteyUrl">
                   <a :href="siteyUrl" class="step-inline-btn" target="_blank" rel="noopener">
-                    Open {{ siteyUrl }} →
+                    Open {{ siteyUrl }} ->
                   </a>
                 </template>
                 <template v-else>
-                  <span class="step-hint">Complete step 1 first — Sitey will generate your HTTPS URL
+                  <span class="step-hint">Complete step 1 first - Sitey will generate your HTTPS URL
                     automatically.</span>
                 </template>
               </div>
@@ -79,19 +78,27 @@
           </div>
 
           <!-- Step 3: GitHub App -->
-          <div class="step" :class="{ done: hasGitHubApp }">
-            <div class="step-check">{{ hasGitHubApp ? '✓' : '3' }}</div>
+          <div class="step" :class="{ done: hasGitHubReady }">
+            <div class="step-check">{{ hasGitHubReady ? '✓' : '3' }}</div>
             <div class="step-body">
-              <h3 class="step-heading">Connect GitHub App</h3>
-              <div class="step-desc">
+              <h3 class="step-heading">Connect and install GitHub App</h3>
+              <div v-if="!hasGitHubAppConfig" class="step-desc">
                 Connect GitHub so Sitey can clone your repos and auto-deploy on push.
-                Click <strong class="secondary">Create GitHub App automatically</strong> in Integrations — Sitey
-                pre-fills
-                everything.
+                Click <strong class="secondary">Create GitHub App automatically</strong> in Integrations and Sitey
+                pre-fills everything.
+              </div>
+              <div v-else-if="!hasGitHubInstall" class="step-desc">
+                GitHub App is created, but it still needs to be installed on at least one personal account or
+                organization before repository autocomplete will work.
+              </div>
+              <div v-else class="step-desc">
+                GitHub App is connected and installed. Repository autocomplete is ready.
               </div>
               <div class="inline-action">
                 <RouterLink to="/integrations" class="step-inline-btn">
-                  {{ hasGitHubApp ? 'Manage integrations →' : 'Connect GitHub →' }}
+                  {{ hasGitHubReady ? 'Manage integrations ->' : hasGitHubAppConfig ? 'Finish GitHub install ->' :
+                  'Connect GitHub
+                  ->' }}
                 </RouterLink>
               </div>
             </div>
@@ -107,10 +114,10 @@
               </div>
               <div class="inline-action">
                 <template v-if="!hasProject">
-                  <button class="step-inline-btn" @click="showAddProject = true">Add project now →</button>
+                  <button class="step-inline-btn" @click="showAddProject = true">Add project now -></button>
                 </template>
                 <template v-else>
-                  <RouterLink to="/projects" class="step-link">View projects →</RouterLink>
+                  <RouterLink to="/projects" class="step-link">View projects -></RouterLink>
                 </template>
               </div>
             </div>
@@ -139,7 +146,8 @@ const router = useRouter()
 const loading = ref(true)
 const error = ref('')
 const hasDomain = ref(false)
-const hasGitHubApp = ref(false)
+const hasGitHubAppConfig = ref(false)
+const hasGitHubInstall = ref(false)
 const hasProject = ref(false)
 const expanded = ref(false)
 const siteyUrl = ref('')
@@ -151,21 +159,30 @@ const showAddDomain = ref(false)
 const showAddProject = ref(false)
 
 const isHttps = window.location.protocol === 'https:'
-const allDone = computed(() => hasDomain.value && isHttps && hasGitHubApp.value && hasProject.value)
+const hasGitHubReady = computed(
+  () => hasGitHubAppConfig.value && hasGitHubInstall.value,
+)
+const allDone = computed(() => hasDomain.value && isHttps && hasGitHubReady.value && hasProject.value)
 
 async function fetchAll() {
   loading.value = true
   error.value = ''
   try {
-    const [projectList, domainList, appConfig, siteUrlInfo, ipInfo] = await Promise.all([
+    const [projectList, domainList, appConfig, repoInfo, siteUrlInfo, ipInfo] = await Promise.all([
       trpc.projects.list.query(),
       trpc.domains.list.query(),
       trpc.github.getAppConfig.query(),
+      trpc.github.listAppRepos.query().catch(() => null),
       trpc.system.getPublicSiteUrl.query().catch(() => null),
       trpc.system.getServerIp.query().catch(() => null),
     ])
     hasDomain.value = domainList.length > 0
-    hasGitHubApp.value = appConfig.configured
+    hasGitHubAppConfig.value = appConfig.configured
+    hasGitHubInstall.value = !!(
+      repoInfo &&
+      repoInfo.configured &&
+      repoInfo.installations.length > 0
+    )
     hasProject.value = projectList.filter(p => !p.protected).length > 0
     domains.value = domainList.map(d => ({ id: d.id, hostname: d.hostname }))
     siteyUrl.value = siteUrlInfo?.effectiveUrl ?? ''
@@ -176,7 +193,6 @@ async function fetchAll() {
     loading.value = false
   }
 }
-
 
 async function onProjectCreated(projectId: number) {
   await router.push(`/projects/${projectId}`)
@@ -390,7 +406,6 @@ h1 {
 .step-hint {
   font-size: var(--font-tiny);
 }
-
 
 .alert.error {
   background: var(--status-err-bg);

@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <Layout>
     <div class="page-header">
       <h1>Integrations</h1>
@@ -14,12 +14,19 @@
             <p class="section-hint">Connect a GitHub App to clone repos and receive push webhooks for auto-deploy.</p>
           </div>
         </div>
-        <span v-if="appConfig?.configured" class="badge badge-ok">Connected</span>
+        <span v-if="repoStatusLoading && appConfig?.configured" class="badge badge-idle">Checking install status</span>
+        <span v-else-if="isInstallReady" class="badge badge-ok">Connected</span>
+        <span v-else-if="appConfig?.configured" class="badge badge-idle">Install pending</span>
         <span v-else class="badge badge-idle">Not connected</span>
       </div>
 
-      <div v-if="appCreated" class="alert success" style="margin-bottom:1.25rem">
-        GitHub App created and connected successfully.
+      <div v-if="appCreated && appConfig?.configured" class="alert success" style="margin-bottom:1.25rem">
+        <template v-if="isInstallReady">
+          GitHub App created and installed successfully.
+        </template>
+        <template v-else>
+          GitHub App created. Final step: install it on a GitHub account or organization.
+        </template>
       </div>
 
       <div v-if="appConfig?.configured" class="connected-body">
@@ -28,23 +35,45 @@
           <span class="meta-value">{{ appConfig.appId }}</span>
         </div>
 
-        <div v-if="repoStatusLoading" class="section-hint">Checking installations…</div>
+        <div class="setup-checklist">
+          <div class="setup-step done">
+            <span class="setup-step-check">1</span>
+            <div class="setup-step-body">
+              <p class="setup-step-title">GitHub App created</p>
+              <p class="section-hint">The app credentials are connected to Sitey.</p>
+            </div>
+          </div>
+          <div class="setup-step" :class="{ done: isInstallReady }">
+            <span class="setup-step-check">2</span>
+            <div class="setup-step-body">
+              <p class="setup-step-title">Install GitHub App on at least one account or organization</p>
+              <p class="section-hint" v-if="isInstallReady">
+                {{ installations.length }} installation{{ installations.length === 1 ? '' : 's' }} found.
+              </p>
+              <p class="section-hint" v-else>
+                Required before project autocomplete can see repositories.
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="repoStatusLoading" class="section-hint">Checking installations...</div>
         <template v-else-if="!repoStatusError">
           <!-- Installation list -->
           <div class="installations-section">
             <div class="installations-header">
               <span class="meta-label">Installed on</span>
-              <span class="meta-value" v-if="installations.length === 0">—</span>
+              <span class="meta-value" v-if="installations.length === 0">-</span>
             </div>
 
-            <div v-if="installations.length === 0" class="warn-box">
-              App is created but not installed on any account or organization yet —
-              project autocomplete won't see any repositories.
+            <div v-if="installations.length === 0" class="pending-box">
+              App is created but not installed on any account or organization yet.
+              Project autocomplete will not see repositories until this is done.
             </div>
 
             <ul v-else class="installation-list">
               <li v-for="inst in installations" :key="inst.id" class="installation-item">
-                <span class="install-avatar">{{ inst.accountType === 'Organization' ? '⊞' : '○' }}</span>
+                <span class="install-avatar">{{ inst.accountType === 'Organization' ? 'Org' : 'User' }}</span>
                 <span class="install-login">{{ inst.accountLogin }}</span>
                 <span class="install-type">{{ inst.accountType === 'Organization' ? 'org' : 'user' }}</span>
                 <span class="install-repos">{{ inst.repoCount }} repo{{ inst.repoCount !== 1 ? 's' : '' }}</span>
@@ -52,17 +81,24 @@
             </ul>
           </div>
 
-          <!-- Install link — shareable -->
+          <!-- Install link -->
           <div v-if="installUrl" class="install-link-section">
             <p class="section-hint install-link-label">
-              Install on another personal account or organization — share this link or open it yourself.
-              On the GitHub page, use the <strong>account switcher</strong> at the top to select a personal account or
-              org.
+              <template v-if="isInstallReady">
+                Install on another personal account or organization.
+              </template>
+              <template v-else>
+                Finish setup by installing on a personal account or organization.
+              </template>
+              On the GitHub page, use the <strong>account switcher</strong> at the top to select a personal account or org.
             </p>
-            <div class="install-link-row">
+            <a :href="installUrl" target="_blank" rel="noopener" class="btn-primary install-hero-btn">
+              {{ isInstallReady ? 'Install on another account or organization ->' : 'Open GitHub install page ->' }}
+            </a>
+            <div class="install-link-share">
+              <span class="meta-label">Shareable install link</span>
               <code class="install-link-url">{{ installUrl }}</code>
-              <button class="btn-ghost btn-sm" @click="copyInstallUrl">{{ copied ? 'Copied!' : 'Copy' }}</button>
-              <a :href="installUrl" target="_blank" rel="noopener" class="btn-ghost btn-sm">Open →</a>
+              <button class="btn-ghost btn-sm install-copy-btn" @click="copyInstallUrl">{{ copied ? 'Copied!' : 'Copy link' }}</button>
             </div>
           </div>
         </template>
@@ -76,7 +112,7 @@
       <template v-else>
         <p class="section-hint">
           Click below to create and connect a GitHub App in one step.
-          Sitey will open GitHub with everything pre-filled — just click <strong>Create GitHub App</strong>.
+          Sitey will open GitHub with everything pre-filled - just click <strong>Create GitHub App</strong>.
         </p>
 
         <div v-if="manifestDomains.length > 1" class="domain-select-row">
@@ -87,15 +123,14 @@
         </div>
 
         <p v-if="manifest?.effectiveSiteUrl" class="section-hint">
-          Callback base URL: <code>{{ manifest.effectiveSiteUrl }}</code> (source: {{ manifest.effectiveSiteUrlSource
-          }})
+          Callback base URL: <code>{{ manifest.effectiveSiteUrl }}</code> (source: {{ manifest.effectiveSiteUrlSource }})
         </p>
         <p class="section-hint warn" v-if="manifestError">{{ manifestError }}</p>
 
         <form v-if="manifest" :action="manifest.actionUrl" method="post" target="_blank" class="auto-form">
           <input type="hidden" name="manifest" :value="manifest.manifest" />
           <button type="submit" class="btn-primary">
-            Create GitHub App →
+            Create GitHub App ->
           </button>
         </form>
 
@@ -117,7 +152,7 @@
               <input v-model="app.webhookSecret" type="password" placeholder="your-webhook-secret" />
             </label>
             <button type="submit" class="btn-primary" :disabled="app.saving">
-              {{ app.saving ? 'Saving…' : 'Save' }}
+              {{ app.saving ? 'Saving...' : 'Save' }}
             </button>
           </form>
         </details>
@@ -153,6 +188,9 @@ const installations = ref<Installation[]>([])
 const installUrl = ref<string | null>(null)
 const copied = ref(false)
 const appCreated = computed(() => route.query.app_created === '1')
+const isInstallReady = computed(
+  () => !!appConfig.value?.configured && installations.value.length > 0,
+)
 
 async function copyInstallUrl() {
   if (!installUrl.value) return
@@ -219,7 +257,9 @@ async function fetchAppConfig() {
       installUrl.value = null
       repoStatusError.value = ''
     }
-  } catch { /* ignore */ }
+  } catch {
+    // ignore
+  }
   await fetchManifest()
 }
 
@@ -274,8 +314,8 @@ h1 {
 
 .section-header {
   display: flex;
+  flex-direction: column;
   align-items: flex-start;
-  justify-content: space-between;
   gap: 1rem;
   margin-bottom: 1.5rem;
 }
@@ -322,6 +362,7 @@ h1 {
   border-radius: 4px;
   white-space: nowrap;
   flex-shrink: 0;
+  align-self: flex-start;
 }
 
 .badge-ok {
@@ -338,6 +379,58 @@ h1 {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.setup-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.setup-step {
+  display: flex;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--bg-input);
+}
+
+.setup-step.done {
+  border-color: var(--status-ok-border);
+}
+
+.setup-step-check {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: var(--bg-card);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  font-weight: 700;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.setup-step.done .setup-step-check {
+  border-color: var(--status-ok-border);
+  background: var(--status-ok-bg);
+  color: var(--status-ok-text);
+}
+
+.setup-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.setup-step-title {
+  margin: 0;
+  font-size: var(--font-tiny);
+  font-weight: 600;
 }
 
 .meta-row {
@@ -367,11 +460,11 @@ h1 {
   align-items: baseline;
 }
 
-.warn-box {
+.pending-box {
   font-size: var(--font-tiny);
-  color: var(--status-warn-text);
-  background: var(--status-warn-bg);
-  border: 1px solid var(--status-warn-border);
+  color: var(--text-secondary);
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.5rem 0.75rem;
 }
@@ -421,7 +514,7 @@ h1 {
 .install-link-section {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: 0.75rem;
   padding: 0.75rem;
   background: var(--bg-input);
   border: 1px solid var(--border-default);
@@ -432,23 +525,31 @@ h1 {
   margin: 0;
 }
 
-.install-link-row {
+.install-hero-btn {
+  width: 100%;
+  box-sizing: border-box;
+  display: inline-flex;
+  justify-content: center;
+  text-decoration: none;
+}
+
+.install-link-share {
   display: flex;
-  align-items: center;
+  flex-direction: column;
   gap: 0.5rem;
-  flex-wrap: wrap;
 }
 
 .install-link-url {
   background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: 4px;
-  padding: 0.3rem 0.5rem;
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  padding: 0.45rem 0.6rem;
+  word-break: break-all;
+  white-space: normal;
+}
+
+.install-copy-btn {
+  align-self: flex-start;
 }
 
 .action-row {
@@ -459,13 +560,14 @@ h1 {
 
 .domain-select-row {
   display: flex;
-  align-items: center;
-  gap: 0.75rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
   margin-bottom: 1.25rem;
 }
 
 .domain-label {
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .domain-select {
@@ -473,7 +575,7 @@ h1 {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.45rem 0.6rem;
-  flex: 1;
+  width: 100%;
 }
 
 .auto-form {
@@ -489,7 +591,6 @@ h1 {
   cursor: pointer;
   user-select: none;
 }
-
 
 .settings-form {
   display: flex;
