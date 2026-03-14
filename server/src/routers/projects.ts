@@ -351,10 +351,15 @@ export const projectsRouter = router({
         ? webhookDomains.find(
             (d: { id: number; hostname: string }) => d.id === input.domainId,
           )
-        : webhookDomains.length === 1
-          ? webhookDomains[0]
-          : null;
-      const baseUrl = await resolveWebhookBaseUrl(chosen?.hostname);
+        : null;
+      const fallbackHostname =
+        webhookDomains.length === 1 ? webhookDomains[0].hostname : undefined;
+      const baseUrl = chosen?.hostname
+        ? await resolveWebhookBaseUrl(chosen.hostname)
+        : await resolveWebhookBaseUrl().catch((err) => {
+            if (fallbackHostname) return resolveWebhookBaseUrl(fallbackHostname);
+            throw err;
+          });
       return {
         webhookUrl: `${baseUrl}/webhook/github/${input.id}`,
         webhookSecret: project.webhookSecret,

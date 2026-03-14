@@ -410,9 +410,6 @@ async function refetchWebhookInfo() {
       ...(webhookDomainId.value ? { domainId: webhookDomainId.value } : {}),
     })
     webhookInfo.value = info
-    if (!webhookDomainId.value && info.domains.length === 1) {
-      webhookDomainId.value = info.domains[0].id
-    }
   } catch (e: unknown) {
     webhookInfo.value = null
     webhookError.value = (e as { message?: string })?.message ?? 'Could not resolve webhook URL.'

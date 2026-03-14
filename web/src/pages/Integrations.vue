@@ -56,7 +56,8 @@
           <div v-if="installUrl" class="install-link-section">
             <p class="section-hint install-link-label">
               Install on another personal account or organization — share this link or open it yourself.
-              On the GitHub page, use the <strong>account switcher</strong> at the top to select a personal account or org.
+              On the GitHub page, use the <strong>account switcher</strong> at the top to select a personal account or
+              org.
             </p>
             <div class="install-link-row">
               <code class="install-link-url">{{ installUrl }}</code>
@@ -86,14 +87,15 @@
         </div>
 
         <p v-if="manifest?.effectiveSiteUrl" class="section-hint">
-          Callback base URL: <code>{{ manifest.effectiveSiteUrl }}</code> (source: {{ manifest.effectiveSiteUrlSource }})
+          Callback base URL: <code>{{ manifest.effectiveSiteUrl }}</code> (source: {{ manifest.effectiveSiteUrlSource
+          }})
         </p>
         <p class="section-hint warn" v-if="manifestError">{{ manifestError }}</p>
 
         <form v-if="manifest" :action="manifest.actionUrl" method="post" target="_blank" class="auto-form">
           <input type="hidden" name="manifest" :value="manifest.manifest" />
           <button type="submit" class="btn-primary">
-            Create GitHub App automatically →
+            Create GitHub App →
           </button>
         </form>
 
@@ -167,9 +169,6 @@ async function fetchManifest() {
     )
     manifest.value = mf
     manifestDomains.value = mf.domains
-    if (!selectedDomainId.value && mf.domains.length === 1) {
-      selectedDomainId.value = mf.domains[0].id
-    }
   } catch (e: unknown) {
     manifest.value = null
     manifestError.value = (e as { message?: string })?.message ?? 'Could not generate GitHub App manifest.'
@@ -503,7 +502,7 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  }
+}
 
 input,
 textarea,
@@ -582,7 +581,3 @@ textarea {
   color: var(--status-ok-text);
 }
 </style>
-
-
-
-
