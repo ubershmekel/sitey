@@ -96,9 +96,7 @@
               </div>
               <div class="inline-action">
                 <RouterLink to="/integrations" class="step-inline-btn">
-                  {{ hasGitHubReady ? 'Manage integrations ->' : hasGitHubAppConfig ? 'Finish GitHub install ->' :
-                  'Connect GitHub
-                  ->' }}
+                  {{ hasGitHubReady ? 'Manage integrations ->' : hasGitHubAppConfig ? 'Finish GitHub install ->' : 'Connect GitHub ->' }}
                 </RouterLink>
               </div>
             </div>
