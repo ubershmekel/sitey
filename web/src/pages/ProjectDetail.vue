@@ -18,10 +18,12 @@
       <div class="hero-card">
         <div class="hero-top">
           <div class="hero-name-row">
-            <h1>{{ project.name }}</h1>
-            <span :class="`status status-${project.status}`">{{
-              containerLabel(project.status, project.deployMode)
-            }}</span>
+            <h1>111{{ project.name }}</h1>
+            <span :class="`status status-${project.status}`"
+              >1111{{
+                containerLabel(project.status, project.deployMode)
+              }}</span
+            >
           </div>
           <button
             class="btn-primary"
@@ -270,7 +272,14 @@
         <div v-if="selectedDeployId" class="log-section">
           <div class="log-header">
             <h3>Build logs</h3>
-            <button class="btn-ghost-sm" @click="refreshLogs">Refresh</button>
+            <button
+              type="button"
+              class="btn-ghost-sm"
+              :disabled="logsLoading"
+              @click="refreshLogs"
+            >
+              {{ logsLoading ? "Refreshing..." : "Refresh" }}
+            </button>
           </div>
           <div class="log-box" ref="logBox">
             <div v-if="logLines.length === 0" class="log-empty">
@@ -310,7 +319,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from "vue";
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 import { useRoute, useRouter, RouterLink } from "vue-router";
 import Layout from "../components/Layout.vue";
 import { trpc } from "../trpc";
@@ -341,6 +350,9 @@ const webhookDomainId = ref<number | null>(null);
 const selectedDeployId = ref<string | null>(null);
 const logLines = ref<string[]>([]);
 const logBox = ref<HTMLElement | null>(null);
+const logsLoading = ref(false);
+const LOG_POLL_MS = 3000;
+let logPollTimer: ReturnType<typeof setInterval> | null = null;
 
 const newRoute = ref({
   domainId: null as number | null,
@@ -395,6 +407,18 @@ const deployTypeLabel = computed(() => {
     return p === "Dockerfile" ? "Dockerfile" : `Dockerfile (${p})`;
   }
   return "Server app";
+});
+
+const selectedDeployment = computed(
+  () =>
+    project.value?.deployments.find((d) => d.id === selectedDeployId.value) ??
+    null,
+);
+
+const shouldAutoRefreshLogs = computed(() => {
+  if (!selectedDeployId.value) return false;
+  const status = selectedDeployment.value?.status ?? project.value?.status;
+  return status === "building" || status === "queued";
 });
 
 function normalizePathPrefix(input: string): string {
@@ -512,18 +536,35 @@ async function selectDeploy(id: string) {
 }
 
 async function fetchLogs() {
-  if (!selectedDeployId.value) return;
-  const res = await trpc.deploy.getLogs.query({
-    deploymentId: selectedDeployId.value,
-  });
-  logLines.value = res.lines;
-  await nextTick();
-  if (logBox.value) logBox.value.scrollTop = logBox.value.scrollHeight;
+  if (!selectedDeployId.value || logsLoading.value) return;
+  logsLoading.value = true;
+  try {
+    const res = await trpc.deploy.getLogs.query({
+      deploymentId: selectedDeployId.value,
+    });
+    logLines.value = res.lines;
+    await nextTick();
+    if (logBox.value) logBox.value.scrollTop = logBox.value.scrollHeight;
+  } finally {
+    logsLoading.value = false;
+  }
 }
 
 async function refreshLogs() {
-  await fetchProject();
   await fetchLogs();
+}
+
+function startLogPolling() {
+  if (logPollTimer) return;
+  logPollTimer = setInterval(() => {
+    void fetchLogs();
+  }, LOG_POLL_MS);
+}
+
+function stopLogPolling() {
+  if (!logPollTimer) return;
+  clearInterval(logPollTimer);
+  logPollTimer = null;
 }
 
 async function refetchWebhookInfo() {
@@ -600,7 +641,21 @@ function relativeTime(ts: string | Date) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
-onMounted(fetchProject);
+onMounted(async () => {
+  await fetchProject();
+});
+watch(
+  shouldAutoRefreshLogs,
+  (enabled) => {
+    if (enabled) {
+      startLogPolling();
+      return;
+    }
+    stopLogPolling();
+  },
+  { immediate: true },
+);
+onUnmounted(stopLogPolling);
 </script>
 
 <style scoped>
@@ -1019,26 +1074,32 @@ code {
   background: var(--status-queued-bg);
   color: var(--status-queued-text);
 }
+
 .status-building {
   background: var(--status-info-bg);
   color: var(--status-info-text);
 }
+
 .status-running {
   background: var(--status-ok-bg);
   color: var(--status-ok-text);
 }
+
 .status-success {
   background: var(--status-ok-bg);
   color: var(--status-ok-text);
 }
+
 .status-failed {
   background: var(--status-err-bg);
   color: var(--status-err-text);
 }
+
 .status-idle {
   background: var(--status-idle-bg);
   color: var(--status-idle-text);
 }
+
 .status-stopped {
   background: var(--status-idle-bg);
   color: var(--status-idle-text);

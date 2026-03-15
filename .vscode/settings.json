@@ -1,3 +1,5 @@
 {
-  "docker.lsp.experimental.vulnerabilityScanning": false
+  "docker.lsp.experimental.vulnerabilityScanning": false,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.formatOnSave": true
 }

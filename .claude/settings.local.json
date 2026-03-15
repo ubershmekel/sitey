@@ -19,7 +19,8 @@
       "Bash(docker ps:*)",
       "Bash(npx dotenv:*)",
       "Bash(export DATABASE_URL=\"file:../../deploy/data/sitey.db\")",
-      "Bash(export DATABASE_URL=\"file:../../deploy/data/sitey-test.db\")"
+      "Bash(export DATABASE_URL=\"file:../../deploy/data/sitey-test.db\")",
+      "Bash(ls e:/dev/2026/sitey/server/src/generated/prisma/index.*)"
     ]
   }
 }
