@@ -1,89 +1,48 @@
-import { z } from 'zod';
-import { TRPCError } from '@trpc/server';
-import jwt from 'jsonwebtoken';
-import { router, settledProcedure } from '../trpc.js';
-import { db } from '../lib/db.js';
-import { normalizeSiteUrl, resolvePublicSiteUrl } from '../services/siteUrl.js';
-
-// GitHub App credentials are stored in SystemConfig with these keys:
-const KEYS = {
-  APP_ID: 'github_app_id',
-  PRIVATE_KEY: 'github_app_private_key',
-  WEBHOOK_SECRET: 'github_app_webhook_secret',
-  APP_SLUG: 'github_app_slug',
-} as const;
-
-const GITHUB_API_BASE = 'https://api.github.com';
+import { z } from "zod";
+import { TRPCError } from "@trpc/server";
+import { router, settledProcedure } from "../trpc.js";
+import { db } from "../lib/db.js";
+import { normalizeSiteUrl, resolvePublicSiteUrl } from "../services/siteUrl.js";
+import {
+  GITHUB_CONFIG_KEYS as KEYS,
+  getConfig,
+  setConfig,
+  createAppJwt,
+  githubFetch,
+} from "../services/github.js";
 
 function isWildcardDomain(hostname: string): boolean {
-  return hostname.startsWith('*.');
-}
-
-async function getConfig(key: string) {
-  const row = await db.systemConfig.findUnique({ where: { key } });
-  return row?.value ?? null;
-}
-
-async function setConfig(key: string, value: string) {
-  return db.systemConfig.upsert({
-    where: { key },
-    create: { key, value },
-    update: { value },
-  });
-}
-
-function toPem(key: string) {
-  return key.includes('\\n') ? key.replace(/\\n/g, '\n') : key;
-}
-
-function createAppJwt(appId: string, privateKey: string) {
-  const now = Math.floor(Date.now() / 1000);
-  return jwt.sign(
-    { iat: now - 60, exp: now + 9 * 60, iss: appId },
-    toPem(privateKey),
-    { algorithm: 'RS256' },
-  );
-}
-
-async function githubFetch(path: string, init?: RequestInit) {
-  return fetch(`${GITHUB_API_BASE}${path}`, {
-    ...init,
-    headers: {
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
-      ...(init?.headers ?? {}),
-    },
-  });
+  return hostname.startsWith("*.");
 }
 
 function splitOwnerRepo(fullName: string) {
-  const [owner, name] = fullName.split('/');
+  const [owner, name] = fullName.split("/");
   return {
-    owner: owner ?? '',
-    name: name ?? '',
+    owner: owner ?? "",
+    name: name ?? "",
   };
 }
 
 async function resolveBaseUrl(
   hostname?: string,
-): Promise<{ url: string; source: 'domain' | 'config' | 'wildcard' | 'env' }> {
+): Promise<{ url: string; source: "domain" | "config" | "wildcard" | "env" }> {
   if (hostname) {
     const fromDomain = normalizeSiteUrl(`https://${hostname}`);
     if (!fromDomain) {
       throw new TRPCError({
-        code: 'BAD_REQUEST',
+        code: "BAD_REQUEST",
         message: `Invalid domain hostname: ${hostname}`,
       });
     }
-    return { url: fromDomain, source: 'domain' };
+    return { url: fromDomain, source: "domain" };
   }
 
   const resolved = await resolvePublicSiteUrl();
-  if (!resolved.effectiveUrl || resolved.source === 'none') {
+  if (!resolved.effectiveUrl || resolved.source === "none") {
     throw new TRPCError({
-      code: 'BAD_REQUEST',
+      code: "BAD_REQUEST",
       message:
-        'Public Site URL is not configured. Configure it in Settings or enable Sitey subdomains on a wildcard domain.',
+        "Public Site URL is not configured. Configure it in Settings or enable Sitey subdomains on a wildcard domain.",
     });
   }
   return {
@@ -99,7 +58,7 @@ export const githubRouter = router({
     .query(async ({ input }) => {
       const domains = await db.domain.findMany({
         select: { id: true, hostname: true },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: "asc" },
       });
       const hasWildcardDomains = domains.some((d: { hostname: string }) =>
         isWildcardDomain(d.hostname),
@@ -125,7 +84,7 @@ export const githubRouter = router({
         try {
           return new URL(siteUrl).hostname;
         } catch {
-          return 'sitey';
+          return "sitey";
         }
       })();
       const name = `sitey-${hostname}`.slice(0, 34);
@@ -134,12 +93,12 @@ export const githubRouter = router({
         url: siteUrl,
         hook_attributes: { url: `${siteUrl}/webhook/github`, active: true },
         redirect_url: `${siteUrl}/github/app/callback`,
-        default_permissions: { contents: 'read' },
-        default_events: ['push'],
+        default_permissions: { contents: "read" },
+        default_events: ["push"],
         public: true,
       };
       return {
-        actionUrl: 'https://github.com/settings/apps/new',
+        actionUrl: "https://github.com/settings/apps/new",
         manifest: JSON.stringify(manifest),
         domains: manifestDomains,
         hasWildcardDomains,
@@ -155,17 +114,17 @@ export const githubRouter = router({
       const res = await fetch(
         `https://api.github.com/app-manifests/${input.code}/conversions`,
         {
-          method: 'POST',
+          method: "POST",
           headers: {
-            Accept: 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28',
+            Accept: "application/vnd.github+json",
+            "X-GitHub-Api-Version": "2022-11-28",
           },
         },
       );
       if (!res.ok) {
         const text = await res.text();
         throw new TRPCError({
-          code: 'BAD_REQUEST',
+          code: "BAD_REQUEST",
           message: `GitHub API error: ${text}`,
         });
       }
@@ -213,7 +172,7 @@ export const githubRouter = router({
       await setConfig(KEYS.WEBHOOK_SECRET, input.webhookSecret);
       try {
         const appJwt = createAppJwt(input.appId, input.privateKey);
-        const appRes = await githubFetch('/app', {
+        const appRes = await githubFetch("/app", {
           headers: { Authorization: `Bearer ${appJwt}` },
         });
         if (appRes.ok) {
@@ -249,20 +208,20 @@ export const githubRouter = router({
       };
     }
 
-    let appJwt = '';
+    let appJwt = "";
     try {
       appJwt = createAppJwt(appId, privateKey);
     } catch {
       throw new TRPCError({
-        code: 'BAD_REQUEST',
-        message: 'Invalid GitHub App private key.',
+        code: "BAD_REQUEST",
+        message: "Invalid GitHub App private key.",
       });
     }
 
     let appSlug: string | null = null;
     let appName: string | null = null;
     try {
-      const appRes = await githubFetch('/app', {
+      const appRes = await githubFetch("/app", {
         headers: { Authorization: `Bearer ${appJwt}` },
       });
       if (appRes.ok) {
@@ -292,7 +251,7 @@ export const githubRouter = router({
       if (!res.ok) {
         const text = await res.text();
         throw new TRPCError({
-          code: 'BAD_REQUEST',
+          code: "BAD_REQUEST",
           message: `GitHub API error: ${text}`,
         });
       }
@@ -303,8 +262,8 @@ export const githubRouter = router({
       rawInstallations.push(
         ...rows.map((r) => ({
           id: r.id,
-          accountLogin: r.account?.login ?? 'unknown',
-          accountType: r.account?.type ?? 'User',
+          accountLogin: r.account?.login ?? "unknown",
+          accountType: r.account?.type ?? "User",
         })),
       );
       if (rows.length < 100) break;
@@ -334,14 +293,14 @@ export const githubRouter = router({
       const tokenRes = await githubFetch(
         `/app/installations/${installation.id}/access_tokens`,
         {
-          method: 'POST',
+          method: "POST",
           headers: { Authorization: `Bearer ${appJwt}` },
         },
       );
       if (!tokenRes.ok) {
         const text = await tokenRes.text();
         throw new TRPCError({
-          code: 'BAD_REQUEST',
+          code: "BAD_REQUEST",
           message: `GitHub API error: ${text}`,
         });
       }
@@ -359,7 +318,7 @@ export const githubRouter = router({
         if (!reposRes.ok) {
           const text = await reposRes.text();
           throw new TRPCError({
-            code: 'BAD_REQUEST',
+            code: "BAD_REQUEST",
             message: `GitHub API error: ${text}`,
           });
         }
@@ -423,7 +382,7 @@ export const githubRouter = router({
       });
       const domains = await db.domain.findMany({
         select: { id: true, hostname: true },
-        orderBy: { createdAt: 'asc' },
+        orderBy: { createdAt: "asc" },
       });
       const webhookDomains = domains.filter(
         (d: { id: number; hostname: string }) => !isWildcardDomain(d.hostname),
@@ -444,8 +403,8 @@ export const githubRouter = router({
       return {
         webhookUrl: `${baseUrl.url}/webhook/github/${input.projectId}`,
         webhookSecret: project.webhookSecret,
-        contentType: 'application/json',
-        events: ['push'],
+        contentType: "application/json",
+        events: ["push"],
         domains: webhookDomains,
         effectiveSiteUrlSource: baseUrl.source,
       };

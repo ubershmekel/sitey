@@ -28,6 +28,7 @@ import {
   allocateHostPort,
 } from "./docker.js";
 import { reloadCaddy } from "./caddy.js";
+import { getInstallationToken } from "./github.js";
 import { nanoid } from "nanoid";
 
 type RouteWithDomain = {
@@ -193,11 +194,30 @@ async function runDeployment(
     onLog(
       `[deploy] Starting deployment for project ${project.name} (${project.id})`,
     );
+
+    // For GitHub App projects, mint a short-lived installation token so
+    // we can clone/pull private repos.
+    let gitToken: string | null = null;
+    if (project.githubMode === "app") {
+      gitToken = await getInstallationToken(
+        project.repoOwner,
+        project.repoName,
+      );
+      if (gitToken) {
+        onLog("[deploy] Acquired GitHub App installation token for clone");
+      } else {
+        onLog(
+          "[deploy] Warning: GitHub App mode but could not acquire token — falling back to unauthenticated clone",
+        );
+      }
+    }
+
     const { sha, message } = await cloneOrPull({
       repoOwner: project.repoOwner,
       repoName: project.repoName,
       branch: project.branch,
       projectId: project.id,
+      token: gitToken,
       onLog,
     });
 

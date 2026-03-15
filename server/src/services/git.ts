@@ -43,28 +43,38 @@ export async function isTrackedFile(
 /**
  * Clone or pull the latest commits for a project.
  * Returns the HEAD commit SHA after the operation.
+ *
+ * When `token` is provided (GitHub App installation token), the clone/fetch
+ * URL becomes `https://x-access-token:<token>@github.com/…` so private
+ * repos are accessible.
  */
 export async function cloneOrPull(opts: {
   repoOwner: string;
   repoName: string;
   branch: string;
   projectId: number;
+  token?: string | null;
   onLog: (line: string) => void;
 }): Promise<{ sha: string; message: string }> {
-  const { repoOwner, repoName, branch, projectId, onLog } = opts;
-  const repoUrl = `https://github.com/${repoOwner}/${repoName}.git`;
+  const { repoOwner, repoName, branch, projectId, token, onLog } = opts;
+  const publicUrl = `https://github.com/${repoOwner}/${repoName}.git`;
+  const repoUrl = token
+    ? `https://x-access-token:${token}@github.com/${repoOwner}/${repoName}.git`
+    : publicUrl;
   const repoPath = projectRepoPath(projectId);
 
   fs.mkdirSync(path.dirname(repoPath), { recursive: true });
 
   if (fs.existsSync(path.join(repoPath, ".git"))) {
-    onLog(`[git] Pulling latest from ${repoUrl} (${branch})`);
+    onLog(`[git] Pulling latest from ${publicUrl} (${branch})`);
     const git = simpleGit(repoPath);
+    // Update the remote URL in case the token changed (tokens are short-lived)
+    await git.remote(["set-url", "origin", repoUrl]);
     await git.fetch("origin");
     await git.checkout(branch);
     await git.pull("origin", branch, { "--ff-only": null });
   } else {
-    onLog(`[git] Cloning ${repoUrl} (${branch}) → ${repoPath}`);
+    onLog(`[git] Cloning ${publicUrl} (${branch}) → ${repoPath}`);
     fs.mkdirSync(repoPath, { recursive: true });
     const git = simpleGit();
     await git.clone(repoUrl, repoPath, ["--branch", branch, "--single-branch"]);
