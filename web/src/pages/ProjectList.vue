@@ -18,7 +18,12 @@
         >
           <div class="project-name">{{ p.name }}</div>
           <div class="project-meta">
-            <span :class="`status status-${p.status}`">{{ p.status }}</span>
+            <span v-if="!p.active" class="status status-inactive"
+              >inactive</span
+            >
+            <span v-else :class="`status status-${p.status}`">{{
+              p.status
+            }}</span>
             <span class="deploy-mode">{{ p.deployMode }}</span>
           </div>
           <div class="project-routes">
@@ -214,6 +219,11 @@ h1 {
 .status-stopped {
   background: var(--status-warn-bg);
   color: var(--status-warn-text);
+}
+
+.status-inactive {
+  background: var(--status-warn-bg, #3d2e00);
+  color: var(--status-warn-text, #f5a623);
 }
 
 .empty-state {

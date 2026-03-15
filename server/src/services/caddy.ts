@@ -348,6 +348,7 @@ function toProjectRoutes(
       outputDir: string;
       containerName: string | null;
       containerPort: number;
+      active: boolean;
     } | null;
   }>,
   runningContainers: Set<string>,
@@ -355,6 +356,7 @@ function toProjectRoutes(
   const result: ProjectRoute[] = [];
   for (const route of routes) {
     if (!route.project) continue;
+    if (!route.project.active) continue;
     const p = route.project;
     result.push({
       subdomain: route.subdomain,

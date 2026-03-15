@@ -162,6 +162,7 @@ async function main() {
     const deploymentIds: string[] = [];
 
     for (const project of projects) {
+      if (!project.active) continue;
       const expectedRef = `refs/heads/${project.branch}`;
       if (pushedRef !== expectedRef) continue;
 
@@ -198,6 +199,13 @@ async function main() {
       const project = await db.project.findUnique({ where: { id: projectId } });
       if (!project) {
         return reply.code(404).send({ error: "Project not found" });
+      }
+      if (!project.active) {
+        return reply.send({
+          ok: true,
+          skipped: true,
+          reason: "project inactive",
+        });
       }
 
       // Verify signature

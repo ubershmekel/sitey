@@ -63,6 +63,9 @@ model Project {
   // System-managed projects (e.g. the sitey UI itself) cannot be deleted
   protected     Boolean        @default(false)
 
+  // When deactivated, container is stopped and Caddy routes are removed (data is kept)
+  active        Boolean        @default(true)
+
   createdAt     DateTime       @default(now())
   updatedAt     DateTime       @updatedAt
 

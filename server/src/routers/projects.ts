@@ -218,6 +218,63 @@ export const projectsRouter = router({
       return { ok: true };
     }),
 
+  // ── Activate / Deactivate ─────────────────────────────────────────────────
+
+  deactivate: settledProcedure
+    .input(z.object({ id: z.number().int() }))
+    .mutation(async ({ input }) => {
+      const project = await db.project.findUnique({ where: { id: input.id } });
+      if (!project)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Project not found",
+        });
+      if (!project.active) return { ok: true };
+
+      // Stop & remove Docker container (best-effort, server projects only)
+      if (project.deployMode === "server") {
+        const noop = () => {};
+        await stopAndRemoveContainer(`sitey-project-${project.id}`, noop);
+        await stopAndRemoveContainer(`sitey-${project.id}`, noop);
+      }
+
+      await db.project.update({
+        where: { id: input.id },
+        data: {
+          active: false,
+          status: "stopped",
+          containerId: null,
+          containerName: null,
+        },
+      });
+
+      // Reload Caddy so routes stop serving traffic
+      reloadCaddy().catch((err) =>
+        console.error("[projects] Caddy reload failed after deactivate:", err),
+      );
+
+      return { ok: true };
+    }),
+
+  activate: settledProcedure
+    .input(z.object({ id: z.number().int() }))
+    .mutation(async ({ input }) => {
+      const project = await db.project.findUnique({ where: { id: input.id } });
+      if (!project)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Project not found",
+        });
+      if (project.active) return { ok: true };
+
+      await db.project.update({
+        where: { id: input.id },
+        data: { active: true },
+      });
+
+      return { ok: true };
+    }),
+
   // ── Routes ─────────────────────────────────────────────────────────────────
 
   addRoute: settledProcedure

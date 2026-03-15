@@ -19,13 +19,16 @@
         <div class="hero-top">
           <div class="hero-name-row">
             <h1>{{ project.name }}</h1>
-            <span :class="`status status-${project.status}`">{{
+            <span v-if="!project.active" class="status status-inactive"
+              >Inactive</span
+            >
+            <span v-else :class="`status status-${project.status}`">{{
               containerLabel(project.status, project.deployMode)
             }}</span>
           </div>
           <button
             class="btn-primary"
-            :disabled="deploying"
+            :disabled="deploying || !project.active"
             @click="triggerDeploy"
           >
             {{ deploying ? "Deploying..." : "Deploy now" }}
@@ -70,6 +73,13 @@
           class="deploy-notice deploy-notice-building"
         >
           Deploy in progress — site will update once it finishes.
+        </div>
+        <div
+          v-if="!project.active"
+          class="deploy-notice deploy-notice-inactive"
+        >
+          This project is inactive. Routes are not served and the container is
+          stopped. Activate it from the danger zone below to resume.
         </div>
       </div>
 
@@ -334,13 +344,58 @@
       <!-- ── Danger zone ───────────────────────────────────────────── -->
       <div class="danger-zone">
         <h2>Danger zone</h2>
-        <p class="danger-desc">
-          Deleting this project stops the container and removes all files. This
-          cannot be undone.
-        </p>
-        <button class="btn-danger" :disabled="deleting" @click="deleteProject">
-          {{ deleting ? "Deleting..." : "Delete project" }}
-        </button>
+
+        <div class="danger-item">
+          <div class="danger-item-text">
+            <template v-if="project.active">
+              <strong>Deactivate project</strong>
+              <p class="danger-desc">
+                Stops the container and removes Caddy routes so the project no
+                longer serves traffic. All data, configuration, and deployment
+                history are preserved. You can reactivate at any time.
+              </p>
+            </template>
+            <template v-else>
+              <strong>Activate project</strong>
+              <p class="danger-desc">
+                Re-enables the project. You will need to trigger a new deploy to
+                start the container and resume serving traffic.
+              </p>
+            </template>
+          </div>
+          <button
+            v-if="project.active"
+            class="btn-danger"
+            :disabled="toggling"
+            @click="deactivateProject"
+          >
+            {{ toggling ? "Deactivating..." : "Deactivate project" }}
+          </button>
+          <button
+            v-else
+            class="btn-activate"
+            :disabled="toggling"
+            @click="activateProject"
+          >
+            {{ toggling ? "Activating..." : "Activate project" }}
+          </button>
+        </div>
+
+        <div class="danger-item">
+          <div class="danger-item-text">
+            <strong>Delete project</strong>
+            <p class="danger-desc">
+              Stops the container and removes all files. This cannot be undone.
+            </p>
+          </div>
+          <button
+            class="btn-danger"
+            :disabled="deleting"
+            @click="deleteProject"
+          >
+            {{ deleting ? "Deleting..." : "Delete project" }}
+          </button>
+        </div>
       </div>
     </template>
   </Layout>
@@ -370,6 +425,7 @@ const error = ref("");
 const deploying = ref(false);
 const deployError = ref("");
 const deleting = ref(false);
+const toggling = ref(false);
 const routeSaving = ref(false);
 const routeError = ref("");
 const webhookInfo = ref<WebhookInfo | null>(null);
@@ -652,6 +708,38 @@ async function deleteProject() {
   }
 }
 
+async function deactivateProject() {
+  if (
+    !confirm(
+      `Deactivate "${project.value?.name}"? The container will be stopped and routes will no longer serve traffic.`,
+    )
+  )
+    return;
+  toggling.value = true;
+  try {
+    await trpc.projects.deactivate.mutate({ id: projectId });
+    await fetchProject();
+  } catch (e: unknown) {
+    alert(
+      (e as { message?: string })?.message ?? "Failed to deactivate project",
+    );
+  } finally {
+    toggling.value = false;
+  }
+}
+
+async function activateProject() {
+  toggling.value = true;
+  try {
+    await trpc.projects.activate.mutate({ id: projectId });
+    await fetchProject();
+  } catch (e: unknown) {
+    alert((e as { message?: string })?.message ?? "Failed to activate project");
+  } finally {
+    toggling.value = false;
+  }
+}
+
 async function rotateSecret() {
   if (!confirm("Rotate webhook secret? You will need to update GitHub."))
     return;
@@ -797,6 +885,11 @@ h1 {
 .deploy-notice-building {
   background: var(--status-info-bg);
   color: var(--status-info-text);
+}
+
+.deploy-notice-inactive {
+  background: var(--status-warn-bg, #3d2e00);
+  color: var(--status-warn-text, #f5a623);
 }
 
 /* ── Info grid ───────────────────────────────────────────────── */
@@ -1204,6 +1297,11 @@ code {
   color: var(--status-idle-text);
 }
 
+.status-inactive {
+  background: var(--status-warn-bg, #3d2e00);
+  color: var(--status-warn-text, #f5a623);
+}
+
 /* ── Misc ───────────────────────────────────────────────────── */
 .alert.error {
   background: var(--status-err-bg);
@@ -1248,6 +1346,8 @@ select:focus {
   font-weight: 600;
   cursor: pointer;
   transition: opacity 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .btn-danger:disabled {
@@ -1303,9 +1403,54 @@ select:focus {
   color: var(--status-err-text);
 }
 
+.danger-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1.5rem;
+  padding: 1rem 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.danger-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.danger-item-text {
+  flex: 1;
+}
+
+.danger-item-text strong {
+  font-size: var(--font-small, 0.95rem);
+}
+
 .danger-desc {
   font-size: var(--font-tiny);
-  margin-bottom: 1rem;
+  margin-top: 0.25rem;
+  margin-bottom: 0;
+}
+
+.btn-activate {
+  background: var(--status-ok-bg);
+  color: var(--status-ok-text);
+  border: 1px solid var(--status-ok-text);
+  border-radius: 6px;
+  padding: 0.6rem 1.25rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-activate:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-activate:hover:not(:disabled) {
+  opacity: 0.85;
 }
 
 .logs-link {

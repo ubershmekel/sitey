@@ -25,6 +25,11 @@ export const deployRouter = router({
           code: "NOT_FOUND",
           message: "Project not found",
         });
+      if (!project.active)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Cannot deploy an inactive project. Activate it first.",
+        });
 
       const deployment = await db.deployment.create({
         data: {
