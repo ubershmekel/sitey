@@ -16,7 +16,10 @@
       "Bash(npx playwright:*)",
       "Bash(curl -sv http://localhost/health)",
       "Bash(curl -sv http://localhost:3000/health)",
-      "Bash(docker ps:*)"
+      "Bash(docker ps:*)",
+      "Bash(npx dotenv:*)",
+      "Bash(export DATABASE_URL=\"file:../../deploy/data/sitey.db\")",
+      "Bash(export DATABASE_URL=\"file:../../deploy/data/sitey-test.db\")"
     ]
   }
 }

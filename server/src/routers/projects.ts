@@ -7,7 +7,10 @@ import { db } from "../lib/db.js";
 import { generateWebhookSecret } from "../services/crypto.js";
 import { reloadCaddy } from "../services/caddy.js";
 import { enqueueDeployment } from "../services/deployment.js";
-import { stopAndRemoveContainer, pruneProjectImages } from "../services/docker.js";
+import {
+  stopAndRemoveContainer,
+  pruneProjectImages,
+} from "../services/docker.js";
 import { projectRootPath } from "../services/git.js";
 import { normalizeSiteUrl, resolvePublicSiteUrl } from "../services/siteUrl.js";
 
@@ -128,6 +131,7 @@ export const projectsRouter = router({
         outputDir: z.string().default("dist"),
         serverRunCommand: z.string().default(""),
         buildMode: z.enum(["auto", "dockerfile"]).default("auto"),
+        dockerfilePath: z.string().default(""),
         containerPort: z.number().int().min(1).max(65535).default(3000),
         envVars: z.record(z.string()).default({}),
         githubMode: z.enum(["webhook", "app"]).default("webhook"),
@@ -146,8 +150,8 @@ export const projectsRouter = router({
       const deployment = await db.deployment.create({
         data: {
           projectId: project.id,
-          status: 'queued',
-          triggeredBy: 'manual',
+          status: "queued",
+          triggeredBy: "manual",
         },
       });
       enqueueDeployment(project, deployment);
@@ -165,6 +169,7 @@ export const projectsRouter = router({
         outputDir: z.string().optional(),
         serverRunCommand: z.string().optional(),
         buildMode: z.enum(["auto", "dockerfile"]).optional(),
+        dockerfilePath: z.string().optional(),
         containerPort: z.number().int().min(1).max(65535).optional(),
         envVars: z.record(z.string()).optional(),
         githubMode: z.enum(["webhook", "app"]).optional(),
@@ -334,7 +339,9 @@ export const projectsRouter = router({
     }),
 
   getWebhookInfo: settledProcedure
-    .input(z.object({ id: z.number().int(), domainId: z.number().int().optional() }))
+    .input(
+      z.object({ id: z.number().int(), domainId: z.number().int().optional() }),
+    )
     .query(async ({ input }) => {
       const project = await db.project.findUniqueOrThrow({
         where: { id: input.id },
@@ -357,7 +364,8 @@ export const projectsRouter = router({
       const baseUrl = chosen?.hostname
         ? await resolveWebhookBaseUrl(chosen.hostname)
         : await resolveWebhookBaseUrl().catch((err) => {
-            if (fallbackHostname) return resolveWebhookBaseUrl(fallbackHostname);
+            if (fallbackHostname)
+              return resolveWebhookBaseUrl(fallbackHostname);
             throw err;
           });
       return {

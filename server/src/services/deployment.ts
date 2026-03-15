@@ -94,24 +94,28 @@ async function resolveDockerBuildSource(
   const projectRoot = projectRootPath(project.id);
   const repoPath = projectRepoPath(project.id);
   const managedDockerfilePath = projectDockerfilePath(project.id);
-  const repoDockerfilePath = path.join(repoPath, "Dockerfile");
+  const dockerfileRelPath = project.dockerfilePath || "Dockerfile";
+  const repoDockerfilePath = path.join(repoPath, dockerfileRelPath);
   const repoDockerfileTracked =
     fs.existsSync(repoDockerfilePath) &&
-    (await isTrackedFile(repoPath, "Dockerfile"));
+    (await isTrackedFile(repoPath, dockerfileRelPath));
 
   if (project.buildMode === "dockerfile") {
     if (repoDockerfileTracked) {
-      onLog("[deploy] Using tracked Dockerfile from repository root");
-      return { contextPath: repoPath, dockerfilePath: repoDockerfilePath };
+      onLog(`[deploy] Using tracked Dockerfile: ${dockerfileRelPath}`);
+      // Context is the directory containing the Dockerfile
+      const contextPath = path.dirname(repoDockerfilePath);
+      return { contextPath, dockerfilePath: repoDockerfilePath };
     }
     throw new Error(
-      "Build mode is dockerfile, but repository has no tracked Dockerfile at root",
+      `Build mode is dockerfile, but repository has no tracked Dockerfile at: ${dockerfileRelPath}`,
     );
   }
 
   if (repoDockerfileTracked) {
-    onLog("[deploy] Using tracked Dockerfile from repository root");
-    return { contextPath: repoPath, dockerfilePath: repoDockerfilePath };
+    onLog(`[deploy] Using tracked Dockerfile: ${dockerfileRelPath}`);
+    const contextPath = path.dirname(repoDockerfilePath);
+    return { contextPath, dockerfilePath: repoDockerfilePath };
   }
 
   ensureManagedDockerfile(project, managedDockerfilePath, onLog);

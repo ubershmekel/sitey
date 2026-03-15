@@ -7,30 +7,63 @@
 
       <label>
         GitHub repository
-        <input v-model="form.githubUrl" type="text" required list="repo-list"
-          placeholder="owner/repo or https://github.com/owner/repo" @input="parseGithubUrl" @blur="parseGithubUrl" />
+        <input
+          v-model="form.githubUrl"
+          type="text"
+          required
+          list="repo-list"
+          placeholder="owner/repo or https://github.com/owner/repo"
+          @input="parseGithubUrl"
+          @blur="parseGithubUrl"
+        />
         <datalist id="repo-list">
-          <option v-for="repo in appRepos" :key="repo.id" :value="repo.fullName" />
+          <option
+            v-for="repo in appRepos"
+            :key="repo.id"
+            :value="repo.fullName"
+          />
         </datalist>
-        <span v-if="reposLoading" class="hint">Loading repos from GitHub App...</span>
+        <span v-if="reposLoading" class="hint"
+          >Loading repos from GitHub App...</span
+        >
         <span v-else-if="repoLoadError" class="hint">{{ repoLoadError }}</span>
         <span v-else-if="reposConfigured && appRepos.length > 0" class="hint">
           Autocomplete powered by your GitHub App repositories.
         </span>
-        <span v-else-if="reposConfigured && repoInstallations === 0" class="hint">
+        <span
+          v-else-if="reposConfigured && repoInstallations === 0"
+          class="hint"
+        >
           GitHub App configured but not installed yet.
-          <a v-if="repoInstallUrl" :href="repoInstallUrl" target="_blank" rel="noopener">Install app</a>.
+          <a
+            v-if="repoInstallUrl"
+            :href="repoInstallUrl"
+            target="_blank"
+            rel="noopener"
+            >Install app</a
+          >.
         </span>
       </label>
 
       <label>
         Project name <span class="hint">(lowercase, hyphens only)</span>
-        <input v-model="form.name" type="text" required placeholder="my-app" pattern="[a-z0-9-]+" />
+        <input
+          v-model="form.name"
+          type="text"
+          required
+          placeholder="my-app"
+          pattern="[a-z0-9-]+"
+        />
       </label>
 
       <label>
         Branch
-        <input v-model="form.branch" type="text" placeholder="main" list="branch-list" />
+        <input
+          v-model="form.branch"
+          type="text"
+          placeholder="main"
+          list="branch-list"
+        />
         <datalist id="branch-list">
           <option v-for="b in branches" :key="b" :value="b" />
         </datalist>
@@ -40,28 +73,51 @@
       <div class="field-group">
         <div class="field-group-label">Deploy type</div>
         <div class="type-selector">
-          <button type="button" :class="{ active: deployType === 'static' }" @click="deployType = 'static'">
+          <button
+            type="button"
+            :class="{ active: deployType === 'static' }"
+            @click="deployType = 'static'"
+          >
             Static site
           </button>
-          <button type="button" :class="{ active: deployType === 'server' }" @click="deployType = 'server'">
+          <button
+            type="button"
+            :class="{ active: deployType === 'server' }"
+            @click="deployType = 'server'"
+          >
             Server app
           </button>
-          <button type="button" :class="{ active: deployType === 'dockerfile' }" @click="deployType = 'dockerfile'">
+          <button
+            type="button"
+            :class="{ active: deployType === 'dockerfile' }"
+            @click="deployType = 'dockerfile'"
+          >
             Dockerfile
           </button>
         </div>
         <div class="type-desc">
-          <span v-if="deployType === 'static'">Build your site and serve the output as static files via Caddy.</span>
-          <span v-else-if="deployType === 'server'">Sitey generates a Dockerfile from your run command and runs it in a
-            container.</span>
-          <span v-else>Use your own <code>Dockerfile</code> in the repository root.</span>
+          <span v-if="deployType === 'static'"
+            >Build your site and serve the output as static files via
+            Caddy.</span
+          >
+          <span v-else-if="deployType === 'server'"
+            >Sitey generates a Dockerfile from your run command and runs it in a
+            container.</span
+          >
+          <span v-else
+            >Use your own <code>Dockerfile</code> from the repository.</span
+          >
         </div>
       </div>
 
       <template v-if="deployType === 'static'">
         <label>
           Build command <span class="hint">(optional)</span>
-          <input v-model="form.buildCommand" type="text" placeholder="npm run build" />
+          <input
+            v-model="form.buildCommand"
+            type="text"
+            placeholder="npm run build"
+          />
         </label>
         <label>
           Output directory <span class="hint">(relative to repo root)</span>
@@ -72,38 +128,76 @@
       <template v-else-if="deployType === 'server'">
         <label>
           Build command <span class="hint">(optional, e.g. npm run build)</span>
-          <input v-model="form.buildCommand" type="text" placeholder="npm run build" />
+          <input
+            v-model="form.buildCommand"
+            type="text"
+            placeholder="npm run build"
+          />
         </label>
         <label>
           Start command <span class="hint">(e.g. node server.js)</span>
-          <input v-model="form.serverRunCommand" type="text" required placeholder="node server.js" />
+          <input
+            v-model="form.serverRunCommand"
+            type="text"
+            required
+            placeholder="node server.js"
+          />
         </label>
         <label>
-          Container port <span class="hint">(port your server listens on)</span>
-          <input v-model.number="form.containerPort" type="number" min="1" max="65535" required />
+          Container port
+          <span class="hint"
+            >(port your app listens on inside the generated container)</span
+          >
+          <input
+            v-model.number="form.containerPort"
+            type="number"
+            min="1"
+            max="65535"
+            required
+          />
         </label>
       </template>
 
       <template v-else>
         <!-- dockerfile -->
         <label>
-          Container port <span class="hint">(port exposed by your Dockerfile)</span>
-          <input v-model.number="form.containerPort" type="number" min="1" max="65535" required />
+          Dockerfile path <span class="hint">(relative to repo root)</span>
+          <input
+            v-model="form.dockerfilePath"
+            type="text"
+            placeholder="Dockerfile"
+          />
+        </label>
+        <label>
+          Container port
+          <span class="hint"
+            >(port your app listens on inside the container)</span
+          >
+          <input
+            v-model.number="form.containerPort"
+            type="number"
+            min="1"
+            max="65535"
+            required
+          />
         </label>
       </template>
 
       <label v-if="allowDomainSelection">
-        Domain <span class="hint">(optional — can add routes after creation)</span>
+        Domain
+        <span class="hint">(optional — can add routes after creation)</span>
         <select v-model="form.domainId">
           <option value="">No domain yet</option>
-          <option v-for="d in domains" :key="d.id" :value="d.id">{{ d.hostname }}</option>
+          <option v-for="d in domains" :key="d.id" :value="d.id">
+            {{ d.hostname }}
+          </option>
         </select>
       </label>
 
       <div class="modal-actions">
         <button type="button" class="btn-ghost" @click="close">Cancel</button>
         <button type="submit" class="btn-primary" :disabled="adding">
-          {{ adding ? 'Creating...' : 'Create project' }}
+          {{ adding ? "Creating..." : "Create project" }}
         </button>
       </div>
     </form>
@@ -111,185 +205,215 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { trpc } from '../trpc'
+import { computed, ref, watch } from "vue";
+import { trpc } from "../trpc";
 
-type AppRepo = Awaited<ReturnType<typeof trpc.github.listAppRepos.query>>['repos'][number]
-type DomainOption = { id: number; hostname: string }
+type AppRepo = Awaited<
+  ReturnType<typeof trpc.github.listAppRepos.query>
+>["repos"][number];
+type DomainOption = { id: number; hostname: string };
 
-const props = withDefaults(defineProps<{
-  modelValue: boolean
-  title?: string
-  domains?: DomainOption[]
-  fixedDomainId?: number | null
-}>(), {
-  title: 'New project',
-  domains: () => [],
-  fixedDomainId: null,
-})
+const props = withDefaults(
+  defineProps<{
+    modelValue: boolean;
+    title?: string;
+    domains?: DomainOption[];
+    fixedDomainId?: number | null;
+  }>(),
+  {
+    title: "New project",
+    domains: () => [],
+    fixedDomainId: null,
+  },
+);
 
 const emit = defineEmits<{
-  (e: 'update:modelValue', value: boolean): void
-  (e: 'created', projectId: number): void
-}>()
+  (e: "update:modelValue", value: boolean): void;
+  (e: "created", projectId: number): void;
+}>();
 
-const adding = ref(false)
-const addError = ref('')
-const branches = ref<string[]>([])
-const appRepos = ref<AppRepo[]>([])
-const reposLoading = ref(false)
-const repoLoadError = ref('')
-const reposConfigured = ref(false)
-const repoInstallations = ref<number>(0)
-const repoInstallUrl = ref('')
-const inferredProjectName = ref('')
-const deployType = ref<'static' | 'server' | 'dockerfile'>('server')
+const adding = ref(false);
+const addError = ref("");
+const branches = ref<string[]>([]);
+const appRepos = ref<AppRepo[]>([]);
+const reposLoading = ref(false);
+const repoLoadError = ref("");
+const reposConfigured = ref(false);
+const repoInstallations = ref<number>(0);
+const repoInstallUrl = ref("");
+const inferredProjectName = ref("");
+const deployType = ref<"static" | "server" | "dockerfile">("server");
 
-const form = ref(emptyForm())
+const form = ref(emptyForm());
 
 const repoByFullName = computed(() => {
-  return new Map(appRepos.value.map(repo => [repo.fullName.toLowerCase(), repo]))
-})
+  return new Map(
+    appRepos.value.map((repo) => [repo.fullName.toLowerCase(), repo]),
+  );
+});
 
-const allowDomainSelection = computed(() => props.fixedDomainId == null && props.domains.length > 0)
+const allowDomainSelection = computed(
+  () => props.fixedDomainId == null && props.domains.length > 0,
+);
 
 function emptyForm() {
   return {
-    name: '',
-    githubUrl: '',
-    repoOwner: '',
-    repoName: '',
+    name: "",
+    githubUrl: "",
+    repoOwner: "",
+    repoName: "",
     domainId: null as number | null,
-    branch: 'main',
-    buildCommand: '',
-    outputDir: 'dist',
-    serverRunCommand: '',
+    branch: "main",
+    buildCommand: "",
+    outputDir: "dist",
+    serverRunCommand: "",
+    dockerfilePath: "",
     containerPort: 3000,
-  }
+  };
 }
 
 function close() {
-  emit('update:modelValue', false)
+  emit("update:modelValue", false);
 }
 
 function parseGithubUrl() {
-  const val = form.value.githubUrl.trim()
-  const match = val.match(/(?:github\.com\/)([^/]+)\/([^/]+?)(?:\.git)?$/) ?? val.match(/^([^/]+)\/([^/]+)$/)
-  if (!match) return
+  const val = form.value.githubUrl.trim();
+  const match =
+    val.match(/(?:github\.com\/)([^/]+)\/([^/]+?)(?:\.git)?$/) ??
+    val.match(/^([^/]+)\/([^/]+)$/);
+  if (!match) return;
 
-  form.value.repoOwner = match[1]
-  form.value.repoName = match[2]
-  inferProjectName(match[2])
+  form.value.repoOwner = match[1];
+  form.value.repoName = match[2];
+  inferProjectName(match[2]);
 
-  const selected = repoByFullName.value.get(`${match[1]}/${match[2]}`.toLowerCase())
-  if (selected?.defaultBranch && (!form.value.branch.trim() || form.value.branch === 'main')) {
-    form.value.branch = selected.defaultBranch
+  const selected = repoByFullName.value.get(
+    `${match[1]}/${match[2]}`.toLowerCase(),
+  );
+  if (
+    selected?.defaultBranch &&
+    (!form.value.branch.trim() || form.value.branch === "main")
+  ) {
+    form.value.branch = selected.defaultBranch;
   }
-  fetchBranches()
+  fetchBranches();
 }
 
 function inferProjectName(repoName: string) {
   const inferred = repoName
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .replace(/-+/g, '-')
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .replace(/-+/g, "-");
 
-  if (!inferred) return
-  if (!form.value.name.trim() || form.value.name === inferredProjectName.value) {
-    form.value.name = inferred
+  if (!inferred) return;
+  if (
+    !form.value.name.trim() ||
+    form.value.name === inferredProjectName.value
+  ) {
+    form.value.name = inferred;
   }
-  inferredProjectName.value = inferred
+  inferredProjectName.value = inferred;
 }
 
 async function fetchBranches() {
-  const { repoOwner, repoName } = form.value
-  if (!repoOwner || !repoName) return
+  const { repoOwner, repoName } = form.value;
+  if (!repoOwner || !repoName) return;
   try {
-    const res = await fetch(`https://api.github.com/repos/${repoOwner}/${repoName}/branches?per_page=50`)
-    if (!res.ok) return
-    const data = await res.json() as { name: string }[]
-    branches.value = data.map(b => b.name)
+    const res = await fetch(
+      `https://api.github.com/repos/${repoOwner}/${repoName}/branches?per_page=50`,
+    );
+    if (!res.ok) return;
+    const data = (await res.json()) as { name: string }[];
+    branches.value = data.map((b) => b.name);
   } catch {
     // branch autocomplete is optional
   }
 }
 
 async function loadRepoSuggestions() {
-  reposLoading.value = true
-  repoLoadError.value = ''
+  reposLoading.value = true;
+  repoLoadError.value = "";
   try {
-    const res = await trpc.github.listAppRepos.query()
-    appRepos.value = res.repos
-    reposConfigured.value = res.configured
-    repoInstallations.value = Array.isArray(res.installations) ? res.installations.length : 0
-    repoInstallUrl.value = res.app.installUrl ?? ''
+    const res = await trpc.github.listAppRepos.query();
+    appRepos.value = res.repos;
+    reposConfigured.value = res.configured;
+    repoInstallations.value = Array.isArray(res.installations)
+      ? res.installations.length
+      : 0;
+    repoInstallUrl.value = res.app.installUrl ?? "";
   } catch {
-    appRepos.value = []
-    reposConfigured.value = false
-    repoInstallations.value = 0
-    repoInstallUrl.value = ''
-    repoLoadError.value = 'Could not load GitHub App repositories.'
+    appRepos.value = [];
+    reposConfigured.value = false;
+    repoInstallations.value = 0;
+    repoInstallUrl.value = "";
+    repoLoadError.value = "Could not load GitHub App repositories.";
   } finally {
-    reposLoading.value = false
+    reposLoading.value = false;
   }
 }
 
 async function addProject() {
-  addError.value = ''
-  adding.value = true
-  parseGithubUrl()
+  addError.value = "";
+  adding.value = true;
+  parseGithubUrl();
 
   try {
-    const isStatic = deployType.value === 'static'
-    const isDockerfile = deployType.value === 'dockerfile'
+    const isStatic = deployType.value === "static";
+    const isDockerfile = deployType.value === "dockerfile";
     const created = await trpc.projects.create.mutate({
       name: form.value.name.trim(),
       repoOwner: form.value.repoOwner.trim(),
       repoName: form.value.repoName.trim(),
-      branch: form.value.branch.trim() || 'main',
-      githubMode: reposConfigured.value ? 'app' : 'webhook',
-      deployMode: isStatic ? 'static' : 'server',
+      branch: form.value.branch.trim() || "main",
+      githubMode: reposConfigured.value ? "app" : "webhook",
+      deployMode: isStatic ? "static" : "server",
       buildCommand: form.value.buildCommand.trim(),
-      outputDir: isStatic ? (form.value.outputDir.trim() || 'dist') : '',
-      serverRunCommand: isStatic || isDockerfile ? '' : form.value.serverRunCommand.trim(),
-      buildMode: isDockerfile ? 'dockerfile' : 'auto',
+      outputDir: isStatic ? form.value.outputDir.trim() || "dist" : "",
+      serverRunCommand:
+        isStatic || isDockerfile ? "" : form.value.serverRunCommand.trim(),
+      buildMode: isDockerfile ? "dockerfile" : "auto",
+      dockerfilePath: isDockerfile ? form.value.dockerfilePath.trim() : "",
       containerPort: form.value.containerPort,
-    })
+    });
 
-    const routeDomainId = props.fixedDomainId ?? form.value.domainId
+    const routeDomainId = props.fixedDomainId ?? form.value.domainId;
     if (routeDomainId) {
       await trpc.projects.addRoute.mutate({
         projectId: created.id,
         domainId: routeDomainId,
-      })
+      });
     }
 
-    emit('created', created.id)
-    emit('update:modelValue', false)
+    emit("created", created.id);
+    emit("update:modelValue", false);
   } catch (e: unknown) {
-    addError.value = (e as { message?: string })?.message ?? 'Failed to create project'
+    addError.value =
+      (e as { message?: string })?.message ?? "Failed to create project";
   } finally {
-    adding.value = false
+    adding.value = false;
   }
 }
 
-watch(() => props.modelValue, async (visible) => {
-  if (!visible) {
-    form.value = emptyForm()
-    branches.value = []
-    inferredProjectName.value = ''
-    addError.value = ''
-    deployType.value = 'server'
-    return
-  }
+watch(
+  () => props.modelValue,
+  async (visible) => {
+    if (!visible) {
+      form.value = emptyForm();
+      branches.value = [];
+      inferredProjectName.value = "";
+      addError.value = "";
+      deployType.value = "server";
+      return;
+    }
 
-  if (allowDomainSelection.value && props.domains.length === 1) {
-    form.value.domainId = props.domains[0].id
-  }
-  await loadRepoSuggestions()
-})
+    if (allowDomainSelection.value && props.domains.length === 1) {
+      form.value.domainId = props.domains[0].id;
+    }
+    await loadRepoSuggestions();
+  },
+);
 </script>
 
 <style scoped>
@@ -325,8 +449,7 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  }
-
+}
 
 .hint a {
   color: var(--brand);
@@ -340,7 +463,7 @@ label {
 
 .field-group-label {
   font-size: var(--font-tiny);
-  }
+}
 
 .type-selector {
   display: flex;
@@ -358,7 +481,9 @@ label {
   font-size: var(--font-tiny);
   padding: 0.5rem 0.25rem;
   cursor: pointer;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
 
 .type-selector button:last-child {
@@ -373,7 +498,7 @@ label {
 
 .type-selector button:hover:not(.active) {
   background: var(--bg-elevated);
-  }
+}
 
 .type-desc {
   font-size: var(--font-tiny);
@@ -415,7 +540,9 @@ select:focus {
   border-radius: 6px;
   padding: 0.6rem 1.25rem;
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
 }
 
 .btn-ghost:hover {
@@ -430,8 +557,3 @@ select:focus {
   padding: 0.6rem 0.75rem;
 }
 </style>
-
-
-
-
-

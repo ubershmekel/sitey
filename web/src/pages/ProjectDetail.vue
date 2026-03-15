@@ -19,29 +19,56 @@
         <div class="hero-top">
           <div class="hero-name-row">
             <h1>{{ project.name }}</h1>
-            <span :class="`status status-${project.status}`">{{ containerLabel(project.status, project.deployMode) }}</span>
+            <span :class="`status status-${project.status}`">{{
+              containerLabel(project.status, project.deployMode)
+            }}</span>
           </div>
-          <button class="btn-primary" :disabled="deploying" @click="triggerDeploy">
-            {{ deploying ? 'Deploying...' : 'Deploy now' }}
+          <button
+            class="btn-primary"
+            :disabled="deploying"
+            @click="triggerDeploy"
+          >
+            {{ deploying ? "Deploying..." : "Deploy now" }}
           </button>
         </div>
 
         <div v-if="projectUrl" class="hero-url">
-          <a :href="projectUrl" target="_blank" rel="noopener" class="url-https">{{ projectUrl }}</a>
+          <a
+            :href="projectUrl"
+            target="_blank"
+            rel="noopener"
+            class="url-https"
+            >{{ projectUrl }}</a
+          >
           <span class="url-sep">·</span>
-          <a :href="projectUrl.replace('https://', 'http://')" target="_blank" rel="noopener" class="url-http">http</a>
+          <a
+            :href="projectUrl.replace('https://', 'http://')"
+            target="_blank"
+            rel="noopener"
+            class="url-http"
+            >http</a
+          >
         </div>
         <div v-else-if="fallbackUrl" class="hero-url hint">
           No domain route yet — fallback: <code>{{ fallbackUrl }}</code>
         </div>
         <div v-else class="hero-url hint">No route assigned yet.</div>
 
-        <div v-if="deployError" class="alert error" style="margin-top:0.75rem">{{ deployError }}</div>
-        <div v-if="project.status === 'failed'" class="deploy-notice deploy-notice-failed">
+        <div v-if="deployError" class="alert error" style="margin-top: 0.75rem">
+          {{ deployError }}
+        </div>
+        <div
+          v-if="project.status === 'failed'"
+          class="deploy-notice deploy-notice-failed"
+        >
           Last deploy failed — check build logs below.
         </div>
-        <div v-else-if="project.status === 'building' || project.status === 'queued'"
-          class="deploy-notice deploy-notice-building">
+        <div
+          v-else-if="
+            project.status === 'building' || project.status === 'queued'
+          "
+          class="deploy-notice deploy-notice-building"
+        >
           Deploy in progress — site will update once it finishes.
         </div>
       </div>
@@ -50,7 +77,9 @@
       <div class="info-grid">
         <div class="info-card">
           <div class="info-label">Repository</div>
-          <div class="info-value mono">{{ project.repoOwner }}/{{ project.repoName }}:{{ project.branch }}</div>
+          <div class="info-value mono">
+            {{ project.repoOwner }}/{{ project.repoName }}:{{ project.branch }}
+          </div>
         </div>
         <div class="info-card">
           <div class="info-label">Deploy type</div>
@@ -62,16 +91,22 @@
         </div>
         <div class="info-card">
           <div class="info-label">GitHub</div>
-          <div class="info-value">{{ project.githubMode === 'app' ? 'GitHub App' : 'Webhook' }}</div>
+          <div class="info-value">
+            {{ project.githubMode === "app" ? "GitHub App" : "Webhook" }}
+          </div>
         </div>
       </div>
 
       <!-- ── Routes ────────────────────────────────────────────────── -->
       <div class="section">
         <h2>Routes</h2>
-        <p class="section-hint">Each route maps a domain (or path prefix) to this project.</p>
+        <p class="section-hint">
+          Each route maps a domain (or path prefix) to this project.
+        </p>
 
-        <div v-if="project.routes.length === 0" class="empty-msg">No domain routes yet — add one below.</div>
+        <div v-if="project.routes.length === 0" class="empty-msg">
+          No domain routes yet — add one below.
+        </div>
         <div v-else class="route-list">
           <div v-for="r in project.routes" :key="r.id" class="route-row">
             <div class="route-url-wrap">
@@ -81,42 +116,78 @@
                 target="_blank"
                 rel="noopener"
                 class="route-url mono route-url-link"
-              >{{ routeLabel(r) }}</a>
+                >{{ routeLabel(r) }}</a
+              >
               <span v-else class="route-url mono">{{ routeLabel(r) }}</span>
             </div>
             <div class="route-meta">
-              <span v-if="r.domain?.hostname.startsWith('*.')" class="route-badge">wildcard</span>
+              <span
+                v-if="r.domain?.hostname.startsWith('*.')"
+                class="route-badge"
+                >wildcard</span
+              >
               <span v-if="r.pathPrefix" class="route-badge">path</span>
             </div>
-            <button class="btn-ghost-sm" :disabled="routeSaving || r.protected" @click="removeRoute(r.id)">
-              {{ r.protected ? 'Protected' : 'Remove' }}
+            <button
+              class="btn-ghost-sm"
+              :disabled="routeSaving || r.protected"
+              @click="removeRoute(r.id)"
+            >
+              {{ r.protected ? "Protected" : "Remove" }}
             </button>
           </div>
         </div>
 
         <div class="add-route-box">
           <div class="add-route-title">Add route</div>
-          <form class="route-form" :style="isWildcardSelected ? 'grid-template-columns: 1fr 1fr 1fr auto' : ''" @submit.prevent="addRoute">
+          <form
+            class="route-form"
+            :style="
+              isWildcardSelected
+                ? 'grid-template-columns: 1fr 1fr 1fr auto'
+                : ''
+            "
+            @submit.prevent="addRoute"
+          >
             <label>
               Domain
-              <select v-model="newRoute.domainId" required @change="onDomainChange">
+              <select
+                v-model="newRoute.domainId"
+                required
+                @change="onDomainChange"
+              >
                 <option value="">Select domain</option>
-                <option v-for="d in domains" :key="d.id" :value="d.id">{{ d.hostname }}</option>
+                <option v-for="d in domains" :key="d.id" :value="d.id">
+                  {{ d.hostname }}
+                </option>
               </select>
             </label>
             <label v-if="isWildcardSelected">
               Subdomain <span class="hint">(e.g. myapp)</span>
               <div class="subdomain-input-wrap">
-                <input v-model="newRoute.subdomain" type="text" placeholder="auto" class="subdomain-input" />
+                <input
+                  v-model="newRoute.subdomain"
+                  type="text"
+                  placeholder="auto"
+                  class="subdomain-input"
+                />
                 <span class="subdomain-suffix">.{{ selectedDomainBase }}</span>
               </div>
             </label>
             <label>
               Path prefix <span class="hint">(optional)</span>
-              <input v-model="newRoute.pathPrefix" type="text" placeholder="/" />
+              <input
+                v-model="newRoute.pathPrefix"
+                type="text"
+                placeholder="/"
+              />
             </label>
-            <button class="btn-primary" type="submit" :disabled="routeSaving || !newRoute.domainId">
-              {{ routeSaving ? 'Saving...' : 'Add route' }}
+            <button
+              class="btn-primary"
+              type="submit"
+              :disabled="routeSaving || !newRoute.domainId"
+            >
+              {{ routeSaving ? "Saving..." : "Add route" }}
             </button>
           </form>
           <div v-if="routeError" class="alert error mt-1">{{ routeError }}</div>
@@ -126,39 +197,71 @@
       <!-- ── GitHub Webhook setup ───────────────────────────────────── -->
       <div v-if="project.githubMode === 'webhook'" class="webhook-card">
         <h2>GitHub Webhook Setup</h2>
-        <p class="hint">Add this webhook in your GitHub repo settings to auto-deploy on push.</p>
+        <p class="hint">
+          Add this webhook in your GitHub repo settings to auto-deploy on push.
+        </p>
         <p v-if="webhookError" class="hint webhook-error">{{ webhookError }}</p>
         <template v-if="webhookInfo">
           <div v-if="webhookInfo.domains.length > 1" class="webhook-row">
             <span class="wh-label">Domain</span>
-            <select v-model="webhookDomainId" @change="refetchWebhookInfo" class="domain-select">
-              <option v-for="d in webhookInfo.domains" :key="d.id" :value="d.id">{{ d.hostname }}</option>
+            <select
+              v-model="webhookDomainId"
+              @change="refetchWebhookInfo"
+              class="domain-select"
+            >
+              <option
+                v-for="d in webhookInfo.domains"
+                :key="d.id"
+                :value="d.id"
+              >
+                {{ d.hostname }}
+              </option>
             </select>
           </div>
           <div class="webhook-row">
             <span class="wh-label">Payload URL</span>
             <code>{{ webhookInfo.webhookUrl }}</code>
-            <button class="btn-copy" @click="copy(webhookInfo.webhookUrl)">Copy</button>
+            <button class="btn-copy" @click="copy(webhookInfo.webhookUrl)">
+              Copy
+            </button>
           </div>
           <div class="webhook-row">
             <span class="wh-label">Secret</span>
             <code>{{ webhookInfo.webhookSecret }}</code>
-            <button class="btn-copy" @click="copy(webhookInfo.webhookSecret ?? '')">Copy</button>
+            <button
+              class="btn-copy"
+              @click="copy(webhookInfo.webhookSecret ?? '')"
+            >
+              Copy
+            </button>
           </div>
-          <button class="btn-ghost mt-1" @click="rotateSecret">Rotate secret</button>
+          <button class="btn-ghost mt-1" @click="rotateSecret">
+            Rotate secret
+          </button>
         </template>
       </div>
 
       <!-- ── Build deployments ─────────────────────────────────────── -->
       <div class="section">
         <h2>Deployments</h2>
-        <div v-if="project.deployments.length === 0" class="empty-msg">No deployments yet.</div>
+        <div v-if="project.deployments.length === 0" class="empty-msg">
+          No deployments yet.
+        </div>
         <div v-else class="deploy-list">
-          <div v-for="d in project.deployments" :key="d.id" class="deploy-row"
-            :class="{ active: selectedDeployId === d.id }" @click="selectDeploy(d.id)">
+          <div
+            v-for="d in project.deployments"
+            :key="d.id"
+            class="deploy-row"
+            :class="{ active: selectedDeployId === d.id }"
+            @click="selectDeploy(d.id)"
+          >
             <span :class="`status status-${d.status}`">{{ d.status }}</span>
-            <span class="deploy-sha mono">{{ d.commitSha?.slice(0, 8) ?? '-' }}</span>
-            <span class="deploy-msg">{{ d.commitMessage?.slice(0, 60) ?? '' }}</span>
+            <span class="deploy-sha mono">{{
+              d.commitSha?.slice(0, 8) ?? "-"
+            }}</span>
+            <span class="deploy-msg">{{
+              d.commitMessage?.slice(0, 60) ?? ""
+            }}</span>
             <span class="deploy-time">{{ relativeTime(d.createdAt) }}</span>
             <span class="deploy-trigger">{{ d.triggeredBy }}</span>
           </div>
@@ -170,8 +273,10 @@
             <button class="btn-ghost-sm" @click="refreshLogs">Refresh</button>
           </div>
           <div class="log-box" ref="logBox">
-            <div v-if="logLines.length === 0" class="log-empty">No logs yet.</div>
-            <pre v-else class="log-content">{{ logLines.join('\n') }}</pre>
+            <div v-if="logLines.length === 0" class="log-empty">
+              No logs yet.
+            </div>
+            <pre v-else class="log-content">{{ logLines.join("\n") }}</pre>
           </div>
         </div>
       </div>
@@ -181,16 +286,23 @@
         <h2>Docker logs</h2>
         <p class="section-hint">
           View live container output in the
-          <RouterLink :to="`/logs?container=sitey-${project.id}`" class="logs-link">Logs tab</RouterLink>.
+          <RouterLink
+            :to="`/logs?container=sitey-${project.id}`"
+            class="logs-link"
+            >Logs tab</RouterLink
+          >.
         </p>
       </div>
 
       <!-- ── Danger zone ───────────────────────────────────────────── -->
       <div class="danger-zone">
         <h2>Danger zone</h2>
-        <p class="danger-desc">Deleting this project stops the container and removes all files. This cannot be undone.</p>
+        <p class="danger-desc">
+          Deleting this project stops the container and removes all files. This
+          cannot be undone.
+        </p>
         <button class="btn-danger" :disabled="deleting" @click="deleteProject">
-          {{ deleting ? 'Deleting...' : 'Delete project' }}
+          {{ deleting ? "Deleting..." : "Delete project" }}
         </button>
       </div>
     </template>
@@ -198,278 +310,297 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
-import { useRoute, useRouter, RouterLink } from 'vue-router'
-import Layout from '../components/Layout.vue'
-import { trpc } from '../trpc'
+import { ref, computed, onMounted, nextTick } from "vue";
+import { useRoute, useRouter, RouterLink } from "vue-router";
+import Layout from "../components/Layout.vue";
+import { trpc } from "../trpc";
 
-type Project = Awaited<ReturnType<typeof trpc.projects.get.query>>
-type ProjectRoute = Project['routes'][number]
-type WebhookInfo = Awaited<ReturnType<typeof trpc.projects.getWebhookInfo.query>>
-type Domain = Awaited<ReturnType<typeof trpc.domains.list.query>>[number]
+type Project = Awaited<ReturnType<typeof trpc.projects.get.query>>;
+type ProjectRoute = Project["routes"][number];
+type WebhookInfo = Awaited<
+  ReturnType<typeof trpc.projects.getWebhookInfo.query>
+>;
+type Domain = Awaited<ReturnType<typeof trpc.domains.list.query>>[number];
 
-const route = useRoute()
-const router = useRouter()
-const projectId = Number(route.params.id)
+const route = useRoute();
+const router = useRouter();
+const projectId = Number(route.params.id);
 
-const project = ref<Project | null>(null)
-const domains = ref<Pick<Domain, 'id' | 'hostname'>[]>([])
-const loading = ref(true)
-const error = ref('')
-const deploying = ref(false)
-const deployError = ref('')
-const deleting = ref(false)
-const routeSaving = ref(false)
-const routeError = ref('')
-const webhookInfo = ref<WebhookInfo | null>(null)
-const webhookError = ref('')
-const webhookDomainId = ref<number | null>(null)
-const selectedDeployId = ref<string | null>(null)
-const logLines = ref<string[]>([])
-const logBox = ref<HTMLElement | null>(null)
+const project = ref<Project | null>(null);
+const domains = ref<Pick<Domain, "id" | "hostname">[]>([]);
+const loading = ref(true);
+const error = ref("");
+const deploying = ref(false);
+const deployError = ref("");
+const deleting = ref(false);
+const routeSaving = ref(false);
+const routeError = ref("");
+const webhookInfo = ref<WebhookInfo | null>(null);
+const webhookError = ref("");
+const webhookDomainId = ref<number | null>(null);
+const selectedDeployId = ref<string | null>(null);
+const logLines = ref<string[]>([]);
+const logBox = ref<HTMLElement | null>(null);
 
 const newRoute = ref({
   domainId: null as number | null,
-  pathPrefix: '',
-  subdomain: '',
-})
+  pathPrefix: "",
+  subdomain: "",
+});
 
 const isWildcardSelected = computed(() => {
-  if (!newRoute.value.domainId) return false
-  const d = domains.value.find((x) => x.id === newRoute.value.domainId)
-  return d?.hostname.startsWith('*.') ?? false
-})
+  if (!newRoute.value.domainId) return false;
+  const d = domains.value.find((x) => x.id === newRoute.value.domainId);
+  return d?.hostname.startsWith("*.") ?? false;
+});
 
 const selectedDomainBase = computed(() => {
-  const d = domains.value.find((x) => x.id === newRoute.value.domainId)
-  if (!d?.hostname.startsWith('*.')) return ''
-  return d.hostname.slice(2)
-})
+  const d = domains.value.find((x) => x.id === newRoute.value.domainId);
+  if (!d?.hostname.startsWith("*.")) return "";
+  return d.hostname.slice(2);
+});
 
 function onDomainChange() {
-  newRoute.value.subdomain = ''
+  newRoute.value.subdomain = "";
 }
 
-const primaryDomainRoute = computed(() =>
-  project.value?.routes.find((r) => !!r.domain) ?? null,
-)
+const primaryDomainRoute = computed(
+  () => project.value?.routes.find((r) => !!r.domain) ?? null,
+);
 
 function routeHostname(r: ProjectRoute): string {
-  if (!r.domain?.hostname) return ''
-  if (!r.domain.hostname.startsWith('*.')) return r.domain.hostname
+  if (!r.domain?.hostname) return "";
+  if (!r.domain.hostname.startsWith("*.")) return r.domain.hostname;
   return r.subdomain
     ? `${r.subdomain}.${r.domain.hostname.slice(2)}`
-    : r.domain.hostname
+    : r.domain.hostname;
 }
 
 const projectUrl = computed(() => {
-  const r = primaryDomainRoute.value
-  if (!r?.domain) return ''
-  return `https://${routeHostname(r)}${r.pathPrefix || ''}`
-})
+  const r = primaryDomainRoute.value;
+  if (!r?.domain) return "";
+  return `https://${routeHostname(r)}${r.pathPrefix || ""}`;
+});
 
 const fallbackUrl = computed(() => {
-  if (!project.value?.hostPort) return ''
-  return `http://<server-ip>:${project.value.hostPort}`
-})
+  if (!project.value?.hostPort) return "";
+  return `http://<server-ip>:${project.value.hostPort}`;
+});
 
 const deployTypeLabel = computed(() => {
-  if (!project.value) return ''
-  if (project.value.deployMode === 'static') return 'Static site'
-  if (project.value.buildMode === 'dockerfile') return 'Dockerfile'
-  return 'Server app'
-})
+  if (!project.value) return "";
+  if (project.value.deployMode === "static") return "Static site";
+  if (project.value.buildMode === "dockerfile") {
+    const p = project.value.dockerfilePath || "Dockerfile";
+    return p === "Dockerfile" ? "Dockerfile" : `Dockerfile (${p})`;
+  }
+  return "Server app";
+});
 
 function normalizePathPrefix(input: string): string {
-  const raw = input.trim()
-  if (!raw || raw === '/') return ''
-  return raw.startsWith('/') ? raw : `/${raw}`
+  const raw = input.trim();
+  if (!raw || raw === "/") return "";
+  return raw.startsWith("/") ? raw : `/${raw}`;
 }
 
 function routeLabel(r: ProjectRoute): string {
-  const pathPrefix = r.pathPrefix || ''
-  const hostname = routeHostname(r)
+  const pathPrefix = r.pathPrefix || "";
+  const hostname = routeHostname(r);
   if (hostname) {
-    return `https://${hostname}${pathPrefix}`
+    return `https://${hostname}${pathPrefix}`;
   }
-  return pathPrefix ? `<server>${pathPrefix}` : '<server>'
+  return pathPrefix ? `<server>${pathPrefix}` : "<server>";
 }
 
 function routeIsHttps(r: ProjectRoute): boolean {
-  return !!r.domain?.hostname
+  return !!r.domain?.hostname;
 }
 
 async function fetchProject() {
-  loading.value = true
-  error.value = ''
+  loading.value = true;
+  error.value = "";
   try {
     const [proj, domainList] = await Promise.all([
       trpc.projects.get.query({ id: projectId }),
       trpc.domains.list.query(),
-    ])
-    project.value = proj
-    domains.value = domainList.map((d) => ({ id: d.id, hostname: d.hostname }))
+    ]);
+    project.value = proj;
+    domains.value = domainList.map((d) => ({ id: d.id, hostname: d.hostname }));
     if (!newRoute.value.domainId && domains.value.length === 1) {
-      newRoute.value.domainId = domains.value[0].id
+      newRoute.value.domainId = domains.value[0].id;
     }
 
-    if (project.value.githubMode === 'webhook') {
-      await refetchWebhookInfo()
+    if (project.value.githubMode === "webhook") {
+      await refetchWebhookInfo();
     } else {
-      webhookInfo.value = null
-      webhookDomainId.value = null
+      webhookInfo.value = null;
+      webhookDomainId.value = null;
     }
 
     if (project.value.deployments[0]) {
-      selectedDeployId.value = project.value.deployments[0].id
-      await fetchLogs()
+      selectedDeployId.value = project.value.deployments[0].id;
+      await fetchLogs();
     } else {
-      selectedDeployId.value = null
-      logLines.value = []
+      selectedDeployId.value = null;
+      logLines.value = [];
     }
   } catch (e: unknown) {
-    error.value = (e as { message?: string })?.message ?? 'Failed to load project'
+    error.value =
+      (e as { message?: string })?.message ?? "Failed to load project";
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 async function addRoute() {
-  if (!newRoute.value.domainId) return
-  routeSaving.value = true
-  routeError.value = ''
+  if (!newRoute.value.domainId) return;
+  routeSaving.value = true;
+  routeError.value = "";
   try {
     await trpc.projects.addRoute.mutate({
       projectId,
       domainId: newRoute.value.domainId ?? undefined,
       pathPrefix: normalizePathPrefix(newRoute.value.pathPrefix),
       subdomain: newRoute.value.subdomain.trim().toLowerCase(),
-    })
-    newRoute.value.pathPrefix = ''
-    newRoute.value.subdomain = ''
-    await fetchProject()
+    });
+    newRoute.value.pathPrefix = "";
+    newRoute.value.subdomain = "";
+    await fetchProject();
   } catch (e: unknown) {
-    routeError.value = (e as { message?: string })?.message ?? 'Failed to add route'
+    routeError.value =
+      (e as { message?: string })?.message ?? "Failed to add route";
   } finally {
-    routeSaving.value = false
+    routeSaving.value = false;
   }
 }
 
 async function removeRoute(routeId: string) {
-  if (!confirm('Remove this route?')) return
-  routeSaving.value = true
-  routeError.value = ''
+  if (!confirm("Remove this route?")) return;
+  routeSaving.value = true;
+  routeError.value = "";
   try {
-    await trpc.projects.removeRoute.mutate({ routeId })
-    await fetchProject()
+    await trpc.projects.removeRoute.mutate({ routeId });
+    await fetchProject();
   } catch (e: unknown) {
-    routeError.value = (e as { message?: string })?.message ?? 'Failed to remove route'
+    routeError.value =
+      (e as { message?: string })?.message ?? "Failed to remove route";
   } finally {
-    routeSaving.value = false
+    routeSaving.value = false;
   }
 }
 
 async function triggerDeploy() {
-  deploying.value = true
-  deployError.value = ''
+  deploying.value = true;
+  deployError.value = "";
   try {
-    const res = await trpc.deploy.trigger.mutate({ projectId, triggeredBy: 'manual' })
-    selectedDeployId.value = res.deploymentId
-    await fetchProject()
+    const res = await trpc.deploy.trigger.mutate({
+      projectId,
+      triggeredBy: "manual",
+    });
+    selectedDeployId.value = res.deploymentId;
+    await fetchProject();
   } catch (e: unknown) {
-    deployError.value = (e as { message?: string })?.message ?? 'Deploy failed'
+    deployError.value = (e as { message?: string })?.message ?? "Deploy failed";
   } finally {
-    deploying.value = false
+    deploying.value = false;
   }
 }
 
 async function selectDeploy(id: string) {
-  selectedDeployId.value = id
-  await fetchLogs()
+  selectedDeployId.value = id;
+  await fetchLogs();
 }
 
 async function fetchLogs() {
-  if (!selectedDeployId.value) return
-  const res = await trpc.deploy.getLogs.query({ deploymentId: selectedDeployId.value })
-  logLines.value = res.lines
-  await nextTick()
-  if (logBox.value) logBox.value.scrollTop = logBox.value.scrollHeight
+  if (!selectedDeployId.value) return;
+  const res = await trpc.deploy.getLogs.query({
+    deploymentId: selectedDeployId.value,
+  });
+  logLines.value = res.lines;
+  await nextTick();
+  if (logBox.value) logBox.value.scrollTop = logBox.value.scrollHeight;
 }
 
 async function refreshLogs() {
-  await fetchProject()
-  await fetchLogs()
+  await fetchProject();
+  await fetchLogs();
 }
 
-
 async function refetchWebhookInfo() {
-  webhookError.value = ''
+  webhookError.value = "";
   try {
     const info = await trpc.projects.getWebhookInfo.query({
       id: projectId,
       ...(webhookDomainId.value ? { domainId: webhookDomainId.value } : {}),
-    })
-    webhookInfo.value = info
+    });
+    webhookInfo.value = info;
   } catch (e: unknown) {
-    webhookInfo.value = null
-    webhookError.value = (e as { message?: string })?.message ?? 'Could not resolve webhook URL.'
+    webhookInfo.value = null;
+    webhookError.value =
+      (e as { message?: string })?.message ?? "Could not resolve webhook URL.";
   }
 }
 
 async function deleteProject() {
-  if (!confirm(`Delete project "${project.value?.name}"? This will stop the container and remove all files.`)) return
-  deleting.value = true
+  if (
+    !confirm(
+      `Delete project "${project.value?.name}"? This will stop the container and remove all files.`,
+    )
+  )
+    return;
+  deleting.value = true;
   try {
-    await trpc.projects.delete.mutate({ id: projectId })
-    router.push('/')
+    await trpc.projects.delete.mutate({ id: projectId });
+    router.push("/");
   } catch (e: unknown) {
-    alert((e as { message?: string })?.message ?? 'Failed to delete project')
-    deleting.value = false
+    alert((e as { message?: string })?.message ?? "Failed to delete project");
+    deleting.value = false;
   }
 }
 
 async function rotateSecret() {
-  if (!confirm('Rotate webhook secret? You will need to update GitHub.')) return
-  const res = await trpc.projects.rotateWebhookSecret.mutate({ id: projectId })
-  if (webhookInfo.value) webhookInfo.value.webhookSecret = res.webhookSecret
+  if (!confirm("Rotate webhook secret? You will need to update GitHub."))
+    return;
+  const res = await trpc.projects.rotateWebhookSecret.mutate({ id: projectId });
+  if (webhookInfo.value) webhookInfo.value.webhookSecret = res.webhookSecret;
 }
 
 function copy(text: string) {
-  navigator.clipboard.writeText(text)
+  navigator.clipboard.writeText(text);
 }
 
 function containerLabel(status: string, deployMode: string) {
-  if (deployMode === 'static') {
+  if (deployMode === "static") {
     const labels: Record<string, string> = {
-      idle: 'Deployed',
-      building: 'Building…',
-      queued: 'Queued',
-      failed: 'Deploy failed',
-    }
-    return labels[status] ?? status
+      idle: "Deployed",
+      building: "Building…",
+      queued: "Queued",
+      failed: "Deploy failed",
+    };
+    return labels[status] ?? status;
   }
   const labels: Record<string, string> = {
-    idle: 'Not started',
-    building: 'Building…',
-    queued: 'Queued',
-    running: 'Running',
-    failed: 'Failed',
-    stopped: 'Stopped',
-  }
-  return labels[status] ?? status
+    idle: "Not started",
+    building: "Building…",
+    queued: "Queued",
+    running: "Running",
+    failed: "Failed",
+    stopped: "Stopped",
+  };
+  return labels[status] ?? status;
 }
 
 function relativeTime(ts: string | Date) {
-  const diff = Date.now() - new Date(ts).getTime()
-  const m = Math.floor(diff / 60000)
-  if (m < 1) return 'just now'
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
+  const diff = Date.now() - new Date(ts).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
 }
 
-onMounted(fetchProject)
+onMounted(fetchProject);
 </script>
 
 <style scoped>
@@ -581,7 +712,6 @@ h1 {
   letter-spacing: 0.04em;
   margin-bottom: 0.3rem;
 }
-
 
 .mono {
   font-family: monospace;
@@ -777,7 +907,9 @@ code {
   padding: 0.2rem 0.5rem;
   font-size: var(--font-tiny);
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
 }
 
 .btn-copy:hover {
@@ -825,7 +957,7 @@ code {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  }
+}
 
 .deploy-time {
   font-size: var(--font-tiny);
@@ -854,7 +986,7 @@ code {
 .log-header h3 {
   font-size: var(--font-huge);
   font-weight: 600;
-  }
+}
 
 .log-box {
   background: var(--bg-code);
@@ -874,7 +1006,6 @@ code {
   word-break: break-all;
 }
 
-
 /* ── Status badges ──────────────────────────────────────────── */
 .status {
   font-size: var(--font-tiny);
@@ -884,13 +1015,34 @@ code {
   white-space: nowrap;
 }
 
-.status-queued { background: var(--status-queued-bg); color: var(--status-queued-text); }
-.status-building { background: var(--status-info-bg); color: var(--status-info-text); }
-.status-running { background: var(--status-ok-bg); color: var(--status-ok-text); }
-.status-success { background: var(--status-ok-bg); color: var(--status-ok-text); }
-.status-failed { background: var(--status-err-bg); color: var(--status-err-text); }
-.status-idle { background: var(--status-idle-bg); color: var(--status-idle-text); }
-.status-stopped { background: var(--status-idle-bg); color: var(--status-idle-text); }
+.status-queued {
+  background: var(--status-queued-bg);
+  color: var(--status-queued-text);
+}
+.status-building {
+  background: var(--status-info-bg);
+  color: var(--status-info-text);
+}
+.status-running {
+  background: var(--status-ok-bg);
+  color: var(--status-ok-text);
+}
+.status-success {
+  background: var(--status-ok-bg);
+  color: var(--status-ok-text);
+}
+.status-failed {
+  background: var(--status-err-bg);
+  color: var(--status-err-text);
+}
+.status-idle {
+  background: var(--status-idle-bg);
+  color: var(--status-idle-text);
+}
+.status-stopped {
+  background: var(--status-idle-bg);
+  color: var(--status-idle-text);
+}
 
 /* ── Misc ───────────────────────────────────────────────────── */
 .alert.error {
@@ -902,15 +1054,18 @@ code {
   margin-bottom: 1rem;
 }
 
-.mt-1 { margin-top: 1rem; }
+.mt-1 {
+  margin-top: 1rem;
+}
 
 label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-  }
+}
 
-input, select {
+input,
+select {
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
   border-radius: 6px;
@@ -919,7 +1074,8 @@ input, select {
   transition: border-color 0.15s;
 }
 
-input:focus, select:focus {
+input:focus,
+select:focus {
   border-color: var(--brand);
 }
 
@@ -934,7 +1090,10 @@ input:focus, select:focus {
   transition: opacity 0.15s;
 }
 
-.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; }
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
 
 .btn-danger:hover:not(:disabled) {
   background: #4a1a1a;
@@ -948,7 +1107,9 @@ input:focus, select:focus {
   padding: 0.5rem 1rem;
   font-size: var(--font-tiny);
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
 }
 
 .btn-ghost:hover {
@@ -962,7 +1123,9 @@ input:focus, select:focus {
   padding: 0.3rem 0.6rem;
   font-size: var(--font-tiny);
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
   white-space: nowrap;
 }
 
@@ -1003,8 +1166,3 @@ input:focus, select:focus {
   flex: 1;
 }
 </style>
-
-
-
-
-

@@ -45,6 +45,7 @@ model Project {
 
   // Build / run
   buildMode        String         @default("auto") // auto | dockerfile
+  dockerfilePath   String         @default("") // path to Dockerfile relative to repo root (empty = "Dockerfile")
   serverRunCommand String         @default("") // custom CMD for auto-generated server Dockerfile
   containerPort    Int            @default(3000)
   hostPort      Int?           // auto-allocated fallback port when the project has no routes
