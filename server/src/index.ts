@@ -54,6 +54,7 @@ async function main() {
       level: process.env.LOG_LEVEL ?? "info",
     },
     trustProxy: true,
+    maxParamLength: 500,
   });
 
   // Capture raw body for webhook routes (replaces @fastify/rawbody)
