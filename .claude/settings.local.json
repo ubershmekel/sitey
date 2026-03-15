@@ -13,7 +13,10 @@
       "Bash(npx tsc:*)",
       "Bash(npx vue-tsc:*)",
       "Bash(npm install:*)",
-      "Bash(npx playwright:*)"
+      "Bash(npx playwright:*)",
+      "Bash(curl -sv http://localhost/health)",
+      "Bash(curl -sv http://localhost:3000/health)",
+      "Bash(docker ps:*)"
     ]
   }
 }

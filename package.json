@@ -8,15 +8,25 @@
   "scripts": {
     "dev:docker": "docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up --build",
     "dev:nocaddy": "concurrently \"npm run dev -w server\" \"npm run dev -w web\"",
+    "prepare": "husky",
     "build": "npm run build -w web && npm run build -w server",
     "typecheck": "npm run db:generate -w server && npm run typecheck -w server && npm run typecheck -w web",
+    "format": "prettier --write .",
+    "format:staged": "lint-staged",
+    "format:check": "prettier --check .",
     "db:migrate": "npm run db:migrate -w server",
     "db:studio": "npm run db:studio -w server",
     "test:remote-wipe-and-test": "node scripts/testing/remote-test-wipe.mjs",
     "test:remote-test-install": "node scripts/testing/remote-test-install.mjs"
   },
+  "lint-staged": {
+    "*": "prettier --write --ignore-unknown"
+  },
   "devDependencies": {
     "@playwright/test": "^1.58.2",
-    "concurrently": "^9.1.0"
+    "concurrently": "^9.1.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.1.6",
+    "prettier": "^3.6.2"
   }
 }
