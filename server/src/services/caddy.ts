@@ -14,6 +14,7 @@
 
 import { db } from "../lib/db.js";
 import { resolvePublicSiteUrl } from "./siteUrl.js";
+import { docker } from "./docker.js";
 import tls from "node:tls";
 
 const CADDY_ADMIN_URL = process.env.CADDY_ADMIN_URL ?? "http://caddy:2019";
@@ -196,14 +197,16 @@ function appendAdminHandlers(lines: string[]): void {
   lines.push("    }");
 }
 
-type ActiveRoute = {
+type ProjectRoute = {
   subdomain: string;
   pathPrefix: string;
   project: {
     id: number;
     deployMode: string;
+    status: string;
     outputDir: string;
     containerName: string | null;
+    containerRunning?: boolean;
     containerPort: number;
   } | null;
 };
@@ -219,8 +222,34 @@ function resolveRouteHostname(
   return `${label}.${base}`;
 }
 
-function appendRouteHandler(lines: string[], route: ActiveRoute): void {
+function appendRouteHandler(lines: string[], route: ProjectRoute): void {
   const project = route.project!;
+  const staticReady =
+    project.deployMode === "static" && project.status === "running";
+  const serverReady =
+    project.deployMode !== "static" &&
+    !!project.containerName &&
+    !!project.containerRunning;
+
+  if (!staticReady && !serverReady) {
+    if (route.pathPrefix) {
+      // Redirect exact prefix (no trailing slash) so /app -> /app/
+      lines.push(`    handle ${route.pathPrefix} {`);
+      lines.push(`        redir ${route.pathPrefix}/ 308`);
+      lines.push("    }");
+      lines.push(`    handle_path ${route.pathPrefix}/* {`);
+      lines.push("        root * /srv");
+      lines.push("        rewrite * /pending.html");
+      lines.push("        file_server");
+      lines.push("    }");
+    } else {
+      lines.push("    root * /srv");
+      lines.push("    rewrite * /pending.html");
+      lines.push("    file_server");
+    }
+    return;
+  }
+
   if (project.deployMode === "static") {
     const repoBase = `/srv/projects/${project.id}/repo`;
     const dir = project.outputDir
@@ -269,7 +298,7 @@ function appendSiteBlock(
   lines: string[],
   hostname: string,
   email: string,
-  routes: ActiveRoute[],
+  routes: ProjectRoute[],
 ): void {
   lines.push(`${hostname} {`);
   appendTlsDirective(lines, email);
@@ -308,8 +337,58 @@ function appendProbeSiteBlock(
   lines.push("");
 }
 
+function toProjectRoutes(
+  routes: Array<{
+    subdomain: string;
+    pathPrefix: string;
+    project: {
+      id: number;
+      deployMode: string;
+      status: string;
+      outputDir: string;
+      containerName: string | null;
+      containerPort: number;
+    } | null;
+  }>,
+  runningContainers: Set<string>,
+): ProjectRoute[] {
+  const result: ProjectRoute[] = [];
+  for (const route of routes) {
+    if (!route.project) continue;
+    const p = route.project;
+    result.push({
+      subdomain: route.subdomain,
+      pathPrefix: route.pathPrefix,
+      project: {
+        ...p,
+        containerRunning: p.containerName
+          ? runningContainers.has(p.containerName)
+          : false,
+      },
+    });
+  }
+  return result;
+}
+
+async function listRunningContainerNames(): Promise<Set<string>> {
+  try {
+    const containers = await docker.listContainers({ all: false });
+    const names = new Set<string>();
+    for (const c of containers) {
+      for (const rawName of c.Names ?? []) {
+        const normalized = rawName.replace(/^\//, "");
+        if (normalized) names.add(normalized);
+      }
+    }
+    return names;
+  } catch {
+    // If Docker is temporarily unavailable, fall back to pending behavior for server routes.
+    return new Set<string>();
+  }
+}
+
 export async function buildCaddyfile(): Promise<string> {
-  const [domains, siteUrlResolution] = await Promise.all([
+  const [domains, siteUrlResolution, runningContainers] = await Promise.all([
     db.domain.findMany({
       orderBy: { createdAt: "asc" },
       include: {
@@ -320,6 +399,7 @@ export async function buildCaddyfile(): Promise<string> {
       },
     }),
     resolvePublicSiteUrl(),
+    listRunningContainerNames(),
   ]);
 
   const lines: string[] = [];
@@ -346,16 +426,12 @@ export async function buildCaddyfile(): Promise<string> {
 
   // Collect path-prefix routes on wildcard domains that resolve to the mgmt hostname.
   // These are embedded in the management block so the sitey app still handles everything else.
-  const mgmtRoutes: ActiveRoute[] = [];
+  const mgmtRoutes: ProjectRoute[] = [];
   if (siteyNamedDomain) {
     for (const domain of domains) {
       if (!domain.hostname.startsWith("*.")) continue;
-      const activeRoutes = domain.routes.filter((r) => {
-        const p = r.project;
-        if (!p) return false;
-        return p.deployMode === "static" || !!p.containerName;
-      }) as ActiveRoute[];
-      for (const route of activeRoutes) {
+      const projectRoutes = toProjectRoutes(domain.routes, runningContainers);
+      for (const route of projectRoutes) {
         const rh = resolveRouteHostname(domain.hostname, route.subdomain);
         if (rh === siteyNamedDomain && route.pathPrefix) mgmtRoutes.push(route);
       }
@@ -383,24 +459,20 @@ export async function buildCaddyfile(): Promise<string> {
   // For wildcard domains, we emit concrete host blocks per route subdomain
   // (for example: app.example.com) instead of a raw '*.example.com' block.
   for (const domain of domains) {
-    const activeRoutes = domain.routes.filter((r) => {
-      const p = r.project;
-      if (!p) return false;
-      return p.deployMode === "static" || !!p.containerName;
-    }) as ActiveRoute[];
+    const projectRoutes = toProjectRoutes(domain.routes, runningContainers);
 
     if (!domain.hostname.startsWith("*.")) {
       appendSiteBlock(
         lines,
         domain.hostname,
         domain.letsEncryptEmail,
-        activeRoutes,
+        projectRoutes,
       );
       continue;
     }
 
-    const routesByHostname = new Map<string, ActiveRoute[]>();
-    for (const route of activeRoutes) {
+    const routesByHostname = new Map<string, ProjectRoute[]>();
+    for (const route of projectRoutes) {
       const routeHostname = resolveRouteHostname(
         domain.hostname,
         route.subdomain,

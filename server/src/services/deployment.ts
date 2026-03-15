@@ -19,8 +19,10 @@ import {
   projectLogsDir,
 } from "./git.js";
 import {
+  docker,
   buildImage,
   runOrReplaceContainer,
+  stopAndRemoveContainer,
   createNetworkIfMissing,
   generateDefaultDockerfile,
   generateServerDockerfile,
@@ -43,7 +45,7 @@ type DockerBuildSource = {
 };
 
 function containerName(project: Project): string {
-  return `sitey-${project.id}`;
+  return `sitey-project-${project.id}`;
 }
 
 function imageTag(project: Project, sha: string): string {
@@ -169,8 +171,16 @@ async function runDeployment(
     });
     await db.project.update({
       where: { id: project.id },
-      data: { status: "failed" },
+      data: { status: "failed", containerId: null, containerName: null },
     });
+    try {
+      await reloadCaddy();
+      onLog("[deploy] Caddy config reloaded after failure");
+    } catch (err) {
+      onLog(
+        `[deploy] Warning: Caddy reload failed after failure: ${(err as Error).message}`,
+      );
+    }
   }
 
   try {
@@ -309,6 +319,10 @@ async function runDeployment(
     envVars["PORT"] = String(project.containerPort);
 
     const cName = containerName(project);
+    const legacyContainerName = `sitey-${project.id}`;
+    if (legacyContainerName !== cName) {
+      await stopAndRemoveContainer(legacyContainerName, onLog);
+    }
     const containerId = await runOrReplaceContainer({
       project,
       imageTag: tag,
@@ -317,6 +331,15 @@ async function runDeployment(
       hostPort,
       onLog,
     });
+
+    // Give the app a brief window to crash fast (missing env, bad entrypoint, etc).
+    await new Promise((resolve) => setTimeout(resolve, 3000));
+    const inspected = await docker.getContainer(containerId).inspect();
+    if (!inspected.State.Running) {
+      throw new Error(
+        `Container exited right after start (state: ${inspected.State.Status}). Check container logs.`,
+      );
+    }
 
     // 7. Prune old images for this project
     await pruneProjectImages(project.id, tag);

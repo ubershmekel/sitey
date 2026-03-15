@@ -200,16 +200,22 @@ export async function getProjectContainerLogs(
   projectId: number,
   tail = 200,
 ): Promise<{ lines: string[]; container: string | null }> {
-  const containerName = `sitey-${projectId}`;
+  const containerNames = [`sitey-project-${projectId}`, `sitey-${projectId}`];
   try {
     const containers = await docker.listContainers({
       all: true,
-      filters: { name: [containerName] },
+      filters: { name: containerNames },
     });
     const found = containers.find((c) =>
-      c.Names.some((n) => n === `/${containerName}` || n === containerName),
+      c.Names.some((n) =>
+        containerNames.some((name) => n === `/${name}` || n === name),
+      ),
     );
     if (!found) return { lines: ["Container not running."], container: null };
+    const matchedName =
+      found.Names.find((n) =>
+        containerNames.some((name) => n === `/${name}` || n === name),
+      )?.replace(/^\//, "") ?? null;
     const logs = await docker.getContainer(found.Id).logs({
       stdout: true,
       stderr: true,
@@ -225,7 +231,7 @@ export async function getProjectContainerLogs(
           .trimEnd(),
       )
       .filter(Boolean);
-    return { lines, container: containerName };
+    return { lines, container: matchedName };
   } catch {
     return { lines: ["Could not fetch container logs."], container: null };
   }

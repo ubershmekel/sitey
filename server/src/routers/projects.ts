@@ -205,6 +205,7 @@ export const projectsRouter = router({
 
       // Stop & remove Docker container (best-effort)
       const noop = () => {};
+      await stopAndRemoveContainer(`sitey-project-${project.id}`, noop);
       await stopAndRemoveContainer(`sitey-${project.id}`, noop);
       await pruneProjectImages(project.id, "").catch(noop);
 
