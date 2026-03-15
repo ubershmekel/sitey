@@ -14,7 +14,7 @@
  */
 
 import Docker from "dockerode";
-import type { Project } from "@prisma/client";
+import type { Project } from "../generated/prisma/client.js";
 import { db } from "../lib/db.js";
 
 export const docker = new Docker({ socketPath: "/var/run/docker.sock" });
