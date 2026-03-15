@@ -18,12 +18,10 @@
       <div class="hero-card">
         <div class="hero-top">
           <div class="hero-name-row">
-            <h1>111{{ project.name }}</h1>
-            <span :class="`status status-${project.status}`"
-              >1111{{
-                containerLabel(project.status, project.deployMode)
-              }}</span
-            >
+            <h1>{{ project.name }}</h1>
+            <span :class="`status status-${project.status}`">{{
+              containerLabel(project.status, project.deployMode)
+            }}</span>
           </div>
           <button
             class="btn-primary"
