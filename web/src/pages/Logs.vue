@@ -80,7 +80,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from "vue";
+import { ref, computed, onMounted, nextTick } from "vue";
 import { useRoute } from "vue-router";
 import Layout from "../components/Layout.vue";
 import { trpc } from "../trpc";
@@ -91,7 +91,15 @@ type Container = Awaited<
 
 const route = useRoute();
 
-const containers = ref<Container[]>([]);
+const rawContainers = ref<Container[]>([]);
+const containers = computed(() =>
+  [...rawContainers.value].sort((a, b) => {
+    const aRunning = a.state === "running" ? 0 : 1;
+    const bRunning = b.state === "running" ? 0 : 1;
+    if (aRunning !== bRunning) return aRunning - bRunning;
+    return a.name.localeCompare(b.name);
+  }),
+);
 const containersLoading = ref(true);
 const containersError = ref("");
 
@@ -106,7 +114,7 @@ async function fetchContainers() {
   containersLoading.value = true;
   containersError.value = "";
   try {
-    containers.value = await trpc.system.listContainers.query();
+    rawContainers.value = await trpc.system.listContainers.query();
 
     // Auto-select from query param ?container=<name>
     const paramName = route.query.container as string | undefined;
