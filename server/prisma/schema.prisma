@@ -49,7 +49,7 @@ model Project {
   serverRunCommand String         @default("") // custom CMD for auto-generated server Dockerfile
   containerPort    Int            @default(3000)
   hostPort      Int?           // auto-allocated fallback port when the project has no routes
-  envVars       String         @default("{}") // JSON map
+  envVars       String         @default("") // .env format
 
   // GitHub integration
   githubMode    String         @default("webhook") // webhook | app

@@ -99,6 +99,36 @@
         </div>
       </div>
 
+      <!-- ── Environment Variables ──────────────────────────────────── -->
+      <div class="section">
+        <h2>Environment Variables</h2>
+        <p class="section-hint">
+          One per line, <code class="inline-code">KEY=value</code> format.
+          <code class="inline-code">PORT</code> is set automatically. Each
+          container gets a persistent <code class="inline-code">/data</code>
+          directory (available in code as
+          <code class="inline-code">DATA_DIR=/data</code>).
+        </p>
+        <textarea
+          v-model="envVarsText"
+          class="env-textarea"
+          rows="6"
+          placeholder="DATABASE_URL=file:/data/app.db&#10;MY_SECRET=changeme"
+          spellcheck="false"
+        ></textarea>
+        <div class="env-actions">
+          <button
+            class="btn-primary"
+            :disabled="envSaving || envVarsText === (project.envVars ?? '')"
+            @click="saveEnvVars"
+          >
+            {{ envSaving ? "Saving..." : "Save" }}
+          </button>
+          <span v-if="envSaved" class="env-saved">Saved</span>
+          <span v-if="envError" class="env-error">{{ envError }}</span>
+        </div>
+      </div>
+
       <!-- ── Routes ────────────────────────────────────────────────── -->
       <div class="section">
         <h2>Routes</h2>
@@ -351,6 +381,10 @@ const selectedDeployId = ref<string | null>(null);
 const logLines = ref<string[]>([]);
 const logBox = ref<HTMLElement | null>(null);
 const logsLoading = ref(false);
+const envVarsText = ref("");
+const envSaving = ref(false);
+const envSaved = ref(false);
+const envError = ref("");
 const LOG_POLL_MS = 3000;
 let logPollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -449,6 +483,7 @@ async function fetchProject() {
       trpc.domains.list.query(),
     ]);
     project.value = proj;
+    envVarsText.value = proj.envVars ?? "";
     domains.value = domainList.map((d) => ({ id: d.id, hostname: d.hostname }));
     if (!newRoute.value.domainId && domains.value.length === 1) {
       newRoute.value.domainId = domains.value[0].id;
@@ -473,6 +508,26 @@ async function fetchProject() {
       (e as { message?: string })?.message ?? "Failed to load project";
   } finally {
     loading.value = false;
+  }
+}
+
+async function saveEnvVars() {
+  envSaving.value = true;
+  envError.value = "";
+  envSaved.value = false;
+  try {
+    await trpc.projects.update.mutate({
+      id: projectId,
+      envVars: envVarsText.value,
+    });
+    if (project.value) project.value.envVars = envVarsText.value;
+    envSaved.value = true;
+    setTimeout(() => (envSaved.value = false), 2000);
+  } catch (e: unknown) {
+    envError.value =
+      (e as { message?: string })?.message ?? "Failed to save env vars";
+  } finally {
+    envSaving.value = false;
   }
 }
 
@@ -791,6 +846,52 @@ h1 {
 .empty-msg {
   font-size: var(--font-tiny);
   margin-bottom: 1rem;
+}
+
+/* ── Env vars ──────────────────────────────────────────────── */
+.env-textarea {
+  width: 100%;
+  background: var(--bg-code);
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  padding: 0.75rem 1rem;
+  font-family: monospace;
+  font-size: var(--font-tiny);
+  line-height: 1.6;
+  resize: vertical;
+  outline: none;
+  transition: border-color 0.15s;
+  color: inherit;
+}
+
+.env-textarea:focus {
+  border-color: var(--brand);
+}
+
+.env-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-top: 0.5rem;
+}
+
+.env-saved {
+  font-size: var(--font-tiny);
+  color: var(--status-ok-text);
+}
+
+.env-error {
+  font-size: var(--font-tiny);
+  color: var(--status-err-text);
+}
+
+.inline-code {
+  background: var(--bg-elevated);
+  padding: 0.1rem 0.35rem;
+  border-radius: 3px;
+  font-size: 0.9em;
+  display: inline;
+  flex: initial;
 }
 
 /* ── Route list ─────────────────────────────────────────────── */

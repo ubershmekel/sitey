@@ -122,6 +122,31 @@ async function resolveDockerBuildSource(
   return { contextPath: projectRoot, dockerfilePath: managedDockerfilePath };
 }
 
+// ── .env parser ──────────────────────────────────────────────────────────────
+
+function parseEnvString(raw: string): Record<string, string> {
+  const vars: Record<string, string> = {};
+  for (const line of raw.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx === -1) continue;
+    const key = trimmed
+      .slice(0, eqIdx)
+      .replace(/^export\s+/, "")
+      .trim();
+    let val = trimmed.slice(eqIdx + 1).trim();
+    if (
+      (val.startsWith('"') && val.endsWith('"')) ||
+      (val.startsWith("'") && val.endsWith("'"))
+    ) {
+      val = val.slice(1, -1);
+    }
+    if (key) vars[key] = val;
+  }
+  return vars;
+}
+
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export function enqueueDeployment(
@@ -238,8 +263,12 @@ async function runDeployment(
       const repoPath = projectRepoPath(project.id);
       const buildCmd = project.buildCommand.trim() || 'echo "No build step"';
       onLog(`[deploy] Running build: ${buildCmd}`);
+      const buildEnv = parseEnvString(project.envVars || "");
       await new Promise<void>((resolve, reject) => {
-        const proc = spawn("sh", ["-c", buildCmd], { cwd: repoPath });
+        const proc = spawn("sh", ["-c", buildCmd], {
+          cwd: repoPath,
+          env: { ...process.env, ...buildEnv },
+        });
         proc.stdout.on("data", (d: Buffer) => onLog(d.toString().trimEnd()));
         proc.stderr.on("data", (d: Buffer) => onLog(d.toString().trimEnd()));
         proc.on("close", (code: number | null) =>
@@ -310,13 +339,9 @@ async function runDeployment(
     }
 
     // 6. Run container
-    const envVars: Record<string, string> = {};
-    try {
-      Object.assign(envVars, JSON.parse(project.envVars || "{}"));
-    } catch {
-      /* ignore */
-    }
+    const envVars = parseEnvString(project.envVars || "");
     envVars["PORT"] = String(project.containerPort);
+    envVars["DATA_DIR"] = "/data";
 
     const cName = containerName(project);
     const legacyContainerName = `sitey-${project.id}`;

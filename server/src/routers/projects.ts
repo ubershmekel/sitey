@@ -133,7 +133,7 @@ export const projectsRouter = router({
         buildMode: z.enum(["auto", "dockerfile"]).default("auto"),
         dockerfilePath: z.string().default(""),
         containerPort: z.number().int().min(1).max(65535).default(3000),
-        envVars: z.record(z.string()).default({}),
+        envVars: z.string().default(""),
         githubMode: z.enum(["webhook", "app"]).default("webhook"),
       }),
     )
@@ -142,7 +142,6 @@ export const projectsRouter = router({
       const project = await db.project.create({
         data: {
           ...input,
-          envVars: JSON.stringify(input.envVars),
           webhookSecret,
         },
       });
@@ -171,20 +170,15 @@ export const projectsRouter = router({
         buildMode: z.enum(["auto", "dockerfile"]).optional(),
         dockerfilePath: z.string().optional(),
         containerPort: z.number().int().min(1).max(65535).optional(),
-        envVars: z.record(z.string()).optional(),
+        envVars: z.string().optional(),
         githubMode: z.enum(["webhook", "app"]).optional(),
       }),
     )
     .mutation(async ({ input }) => {
-      const { id, envVars, ...rest } = input;
+      const { id, ...rest } = input;
       return db.project.update({
         where: { id },
-        data: {
-          ...rest,
-          ...(envVars !== undefined
-            ? { envVars: JSON.stringify(envVars) }
-            : {}),
-        },
+        data: rest,
       });
     }),
 

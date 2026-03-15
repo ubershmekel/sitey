@@ -248,7 +248,17 @@ locally. DNS still points to the VPS, Let's Encrypt HTTP-01 challenges work
 normally, and you can iterate on code with `npm run dev` without touching the
 VPS at all.
 
-Add `-vvv` to the ssh command to debug tunnel issues.
+Add `-v` to the ssh command to debug tunnel issues.
+
+If port 80 wasn't released on the server you can use:
+
+```
+# investigate
+sudo lsof -i :80
+
+# release
+sudo fuser -k 80/tcp
+```
 
 #### Option 2 — Caddy in Docker, everything else native
 

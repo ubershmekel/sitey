@@ -123,6 +123,7 @@ export async function runOrReplaceContainer(opts: {
       NetworkMode: SITEY_NETWORK,
       RestartPolicy: { Name: "unless-stopped" },
       PortBindings: portBindings,
+      Binds: [`sitey-data-${project.id}:/data`],
     },
   });
 
