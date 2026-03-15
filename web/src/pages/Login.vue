@@ -16,79 +16,101 @@
 
       <label>
         Email
-        <input v-model="email" type="email" autocomplete="email" required placeholder="you@example.com" />
+        <input
+          v-model="email"
+          type="email"
+          autocomplete="email"
+          required
+          placeholder="you@example.com"
+        />
       </label>
 
       <label>
         Password
-        <input v-model="password" type="password" :autocomplete="isSetup ? 'new-password' : 'current-password'" required
-          :placeholder="isSetup ? 'at least 9 characters' : ''" />
+        <input
+          v-model="password"
+          type="password"
+          :autocomplete="isSetup ? 'new-password' : 'current-password'"
+          required
+          :placeholder="isSetup ? 'at least 9 characters' : ''"
+        />
       </label>
 
-      <button type="submit" :disabled="auth.loading || setupLoading" class="btn-primary">
-        <template v-if="isSetup">{{ setupLoading ? 'Creating account…' : 'Create account' }}</template>
-        <template v-else>{{ auth.loading ? 'Signing in…' : 'Sign in' }}</template>
+      <button
+        type="submit"
+        :disabled="auth.loading || setupLoading"
+        class="btn-primary"
+      >
+        <template v-if="isSetup">{{
+          setupLoading ? "Creating account…" : "Create account"
+        }}</template>
+        <template v-else>{{
+          auth.loading ? "Signing in…" : "Sign in"
+        }}</template>
       </button>
     </form>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
-import { trpc } from '../trpc'
-import SiteyLogo from '../components/SiteyLogo.vue'
+import { ref, onMounted } from "vue";
+import { useRouter } from "vue-router";
+import { useAuthStore } from "../stores/auth";
+import { trpc } from "../trpc";
+import SiteyLogo from "../components/SiteyLogo.vue";
 
-const auth = useAuthStore()
-const router = useRouter()
+const auth = useAuthStore();
+const router = useRouter();
 
-const email = ref('')
-const password = ref('')
-const isSetup = ref(false)
-const setupLoading = ref(false)
-const setupError = ref('')
+const email = ref("");
+const password = ref("");
+const isSetup = ref(false);
+const setupLoading = ref(false);
+const setupError = ref("");
 
 onMounted(async () => {
   try {
-    const status = await trpc.auth.setupStatus.query()
-    isSetup.value = !status.setupComplete
+    const status = await trpc.auth.setupStatus.query();
+    isSetup.value = !status.setupComplete;
   } catch {
     // If we can't reach the API, default to login mode
   }
-})
+});
 
 async function handleSubmit() {
   if (isSetup.value) {
-    await handleSetup()
+    await handleSetup();
   } else {
-    await handleLogin()
+    await handleLogin();
   }
 }
 
 async function handleSetup() {
-  setupError.value = ''
-  setupLoading.value = true
+  setupError.value = "";
+  setupLoading.value = true;
   try {
-    const result = await trpc.auth.setupComplete.mutate({ email: email.value, password: password.value })
-    auth.setToken(result.token)
-    await auth.fetchUser()
-    isSetup.value = false
-    router.push('/')
+    const result = await trpc.auth.setupComplete.mutate({
+      email: email.value,
+      password: password.value,
+    });
+    auth.setToken(result.token);
+    await auth.fetchUser();
+    isSetup.value = false;
+    router.push("/");
   } catch (e: any) {
-    setupError.value = e?.message ?? 'Setup failed.'
+    setupError.value = e?.message ?? "Setup failed.";
   } finally {
-    setupLoading.value = false
+    setupLoading.value = false;
   }
 }
 
 async function handleLogin() {
   try {
-    const result = await auth.login(email.value, password.value)
+    const result = await auth.login(email.value, password.value);
     if (result.mustChangePassword) {
-      router.push('/change-password')
+      router.push("/change-password");
     } else {
-      router.push('/')
+      router.push("/");
     }
   } catch {
     // error shown via auth.error

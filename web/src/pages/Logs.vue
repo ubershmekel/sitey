@@ -6,12 +6,16 @@
     </div>
 
     <div v-if="containersLoading" class="state-msg">Loading containers...</div>
-    <div v-else-if="containersError" class="alert error">{{ containersError }}</div>
+    <div v-else-if="containersError" class="alert error">
+      {{ containersError }}
+    </div>
 
     <div v-else class="logs-layout">
       <!-- Container list -->
       <div class="container-list">
-        <div v-if="containers.length === 0" class="empty-msg">No containers found.</div>
+        <div v-if="containers.length === 0" class="empty-msg">
+          No containers found.
+        </div>
         <button
           v-for="c in containers"
           :key="c.fullId"
@@ -39,7 +43,11 @@
             <div class="log-pane-actions">
               <label class="tail-label">
                 Lines
-                <select v-model.number="tailLines" class="tail-select" @change="fetchLogs">
+                <select
+                  v-model.number="tailLines"
+                  class="tail-select"
+                  @change="fetchLogs"
+                >
                   <option :value="100">100</option>
                   <option :value="300">300</option>
                   <option :value="500">500</option>
@@ -47,15 +55,23 @@
                   <option :value="2000">2000</option>
                 </select>
               </label>
-              <button class="btn-ghost btn-sm" :disabled="logsLoading" @click="fetchLogs">
-                {{ logsLoading ? 'Loading...' : 'Refresh' }}
+              <button
+                class="btn-ghost btn-sm"
+                :disabled="logsLoading"
+                @click="fetchLogs"
+              >
+                {{ logsLoading ? "Loading..." : "Refresh" }}
               </button>
             </div>
           </div>
           <div class="log-box" ref="logBox">
-            <div v-if="logsLoading && logLines.length === 0" class="log-empty">Loading...</div>
-            <div v-else-if="logLines.length === 0" class="log-empty">No log output.</div>
-            <pre v-else class="log-content">{{ logLines.join('\n') }}</pre>
+            <div v-if="logsLoading && logLines.length === 0" class="log-empty">
+              Loading...
+            </div>
+            <div v-else-if="logLines.length === 0" class="log-empty">
+              No log output.
+            </div>
+            <pre v-else class="log-content">{{ logLines.join("\n") }}</pre>
           </div>
         </template>
       </div>
@@ -64,71 +80,76 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick } from 'vue'
-import { useRoute } from 'vue-router'
-import Layout from '../components/Layout.vue'
-import { trpc } from '../trpc'
+import { ref, onMounted, nextTick } from "vue";
+import { useRoute } from "vue-router";
+import Layout from "../components/Layout.vue";
+import { trpc } from "../trpc";
 
-type Container = Awaited<ReturnType<typeof trpc.system.listContainers.query>>[number]
+type Container = Awaited<
+  ReturnType<typeof trpc.system.listContainers.query>
+>[number];
 
-const route = useRoute()
+const route = useRoute();
 
-const containers = ref<Container[]>([])
-const containersLoading = ref(true)
-const containersError = ref('')
+const containers = ref<Container[]>([]);
+const containersLoading = ref(true);
+const containersError = ref("");
 
-const selectedId = ref('')
-const selectedName = ref('')
-const logLines = ref<string[]>([])
-const logsLoading = ref(false)
-const tailLines = ref(300)
-const logBox = ref<HTMLElement | null>(null)
+const selectedId = ref("");
+const selectedName = ref("");
+const logLines = ref<string[]>([]);
+const logsLoading = ref(false);
+const tailLines = ref(300);
+const logBox = ref<HTMLElement | null>(null);
 
 async function fetchContainers() {
-  containersLoading.value = true
-  containersError.value = ''
+  containersLoading.value = true;
+  containersError.value = "";
   try {
-    containers.value = await trpc.system.listContainers.query()
+    containers.value = await trpc.system.listContainers.query();
 
     // Auto-select from query param ?container=<name>
-    const paramName = route.query.container as string | undefined
+    const paramName = route.query.container as string | undefined;
     if (paramName && !selectedId.value) {
-      const match = containers.value.find(c => c.name === paramName)
-      if (match) selectContainer(match)
+      const match = containers.value.find((c) => c.name === paramName);
+      if (match) selectContainer(match);
     }
   } catch (e: unknown) {
-    containersError.value = (e as { message?: string })?.message ?? 'Failed to load containers'
+    containersError.value =
+      (e as { message?: string })?.message ?? "Failed to load containers";
   } finally {
-    containersLoading.value = false
+    containersLoading.value = false;
   }
 }
 
 async function selectContainer(c: Container) {
-  selectedId.value = c.fullId
-  selectedName.value = c.name
-  logLines.value = []
-  await fetchLogs()
+  selectedId.value = c.fullId;
+  selectedName.value = c.name;
+  logLines.value = [];
+  await fetchLogs();
 }
 
 async function fetchLogs() {
-  if (!selectedId.value) return
-  logsLoading.value = true
+  if (!selectedId.value) return;
+  logsLoading.value = true;
   try {
     const res = await trpc.system.getContainerLogs.query({
       containerId: selectedId.value,
       tail: tailLines.value,
-    })
-    logLines.value = res.lines
-    await nextTick()
-    if (logBox.value) logBox.value.scrollTop = logBox.value.scrollHeight
+    });
+    logLines.value = res.lines;
+    await nextTick();
+    if (logBox.value) logBox.value.scrollTop = logBox.value.scrollHeight;
   } catch (e: unknown) {
-    logLines.value = [(e as { message?: string })?.message ?? 'Failed to load logs']
+    logLines.value = [
+      (e as { message?: string })?.message ?? "Failed to load logs",
+    ];
   } finally {
-    logsLoading.value = false
+    logsLoading.value = false;
   }
 }
 
-onMounted(fetchContainers)
+onMounted(fetchContainers);
 </script>
 
 <style scoped>
@@ -185,7 +206,9 @@ h1 {
   border-radius: 7px;
   padding: 0.65rem 0.75rem;
   cursor: pointer;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
@@ -224,10 +247,18 @@ h1 {
   flex-shrink: 0;
 }
 
-.state-running { background: var(--status-ok-text); }
-.state-exited { background: var(--text-dim); }
-.state-paused { background: var(--status-warn-text); }
-.state-restarting { background: var(--status-info-text); }
+.state-running {
+  background: var(--status-ok-text);
+}
+.state-exited {
+  background: var(--text-dim);
+}
+.state-paused {
+  background: var(--status-warn-text);
+}
+.state-restarting {
+  background: var(--status-info-text);
+}
 
 .container-status {
   font-size: var(--font-tiny);
@@ -294,7 +325,7 @@ h1 {
   display: flex;
   align-items: center;
   gap: 0.4rem;
-  }
+}
 
 .tail-select {
   background: var(--bg-input);
@@ -324,7 +355,6 @@ h1 {
   word-break: break-all;
 }
 
-
 /* Misc */
 
 .empty-msg {
@@ -346,7 +376,9 @@ h1 {
   padding: 0.5rem 1rem;
   font-size: var(--font-tiny);
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
 }
 
 .btn-ghost:hover {
@@ -363,8 +395,3 @@ h1 {
   font-size: var(--font-tiny);
 }
 </style>
-
-
-
-
-

@@ -1,5 +1,7 @@
 <template>
-  <span class="sitey-logo"><img src="/favicon.png" alt="" class="logo-img" />Sitey</span>
+  <span class="sitey-logo"
+    ><img src="/favicon.png" alt="" class="logo-img" />Sitey</span
+  >
 </template>
 
 <style scoped>
@@ -14,4 +16,3 @@
   display: block;
 }
 </style>
-

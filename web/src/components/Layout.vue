@@ -35,7 +35,13 @@
 
     <div class="sidebar-footer">
       <span class="user-email">{{ auth.user?.email }}</span>
-      <button class="logout-btn" @click="auth.logout(); router.push('/login')">
+      <button
+        class="logout-btn"
+        @click="
+          auth.logout();
+          router.push('/login');
+        "
+      >
         Logout
       </button>
     </div>
@@ -49,18 +55,21 @@
 </template>
 
 <script setup lang="ts">
-import { watch } from 'vue'
-import { RouterLink, useRouter } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
-import NavIcon from './NavIcon.vue'
-import SiteyLogo from './SiteyLogo.vue'
+import { watch } from "vue";
+import { RouterLink, useRouter } from "vue-router";
+import { useAuthStore } from "../stores/auth";
+import NavIcon from "./NavIcon.vue";
+import SiteyLogo from "./SiteyLogo.vue";
 
-const auth = useAuthStore()
-const router = useRouter()
+const auth = useAuthStore();
+const router = useRouter();
 
-watch(() => auth.needsPasswordChange, (needs) => {
-  if (needs) router.push('/change-password')
-})
+watch(
+  () => auth.needsPasswordChange,
+  (needs) => {
+    if (needs) router.push("/change-password");
+  },
+);
 </script>
 
 <style scoped>
@@ -84,7 +93,10 @@ watch(() => auth.needsPasswordChange, (needs) => {
   padding: 1.25rem 1.25rem 1rem;
 }
 
-.logo-link { text-decoration: none; display: block; }
+.logo-link {
+  text-decoration: none;
+  display: block;
+}
 
 .logo {
   font-size: var(--font-large);
@@ -129,9 +141,14 @@ watch(() => auth.needsPasswordChange, (needs) => {
   border-radius: 5px;
   cursor: pointer;
   font-size: var(--font-tiny);
-  transition: border-color 0.15s, color 0.15s;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
 }
-.logout-btn:hover { border-color: var(--text-muted); color: var(--text-primary); }
+.logout-btn:hover {
+  border-color: var(--text-muted);
+  color: var(--text-primary);
+}
 
 /* ── Nav items ── */
 .nav-item {
@@ -142,14 +159,26 @@ watch(() => auth.needsPasswordChange, (needs) => {
   border-radius: 6px;
   color: var(--text-secondary);
   text-decoration: none;
-  transition: background 0.15s, color 0.15s;
+  transition:
+    background 0.15s,
+    color 0.15s;
 }
-.nav-item:hover { background: var(--bg-input); color: var(--text-primary); }
-.nav-item.active { background: var(--brand-active-bg); color: var(--brand-active-text); }
+.nav-item:hover {
+  background: var(--bg-input);
+  color: var(--text-primary);
+}
+.nav-item.active {
+  background: var(--brand-active-bg);
+  color: var(--brand-active-text);
+}
 
-.icon { font-size: 16px; }
+.icon {
+  font-size: 16px;
+}
 
-.narrow-only { display: none; }
+.narrow-only {
+  display: none;
+}
 
 /* ── Main area ── */
 .main-area {
@@ -179,7 +208,9 @@ watch(() => auth.needsPasswordChange, (needs) => {
     display: none;
   }
 
-  .narrow-only { display: flex; }
+  .narrow-only {
+    display: flex;
+  }
 
   .app-nav {
     border-right: none;
@@ -204,5 +235,3 @@ watch(() => auth.needsPasswordChange, (needs) => {
   }
 }
 </style>
-
-

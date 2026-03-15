@@ -1,5 +1,5 @@
-import { defineConfig } from 'vite'
-import vue from '@vitejs/plugin-vue'
+import { defineConfig } from "vite";
+import vue from "@vitejs/plugin-vue";
 
 export default defineConfig({
   plugins: [vue()],
@@ -13,22 +13,22 @@ export default defineConfig({
       ? { clientPort: Number(process.env.VITE_HMR_CLIENT_PORT) }
       : {},
     proxy: {
-      '/trpc': {
-        target: 'http://127.0.0.1:3001',
+      "/trpc": {
+        target: "http://127.0.0.1:3001",
         changeOrigin: true,
       },
-      '/webhook': {
-        target: 'http://127.0.0.1:3001',
+      "/webhook": {
+        target: "http://127.0.0.1:3001",
         changeOrigin: true,
       },
-      '/health': {
-        target: 'http://127.0.0.1:3001',
+      "/health": {
+        target: "http://127.0.0.1:3001",
         changeOrigin: true,
       },
     },
   },
   build: {
-    outDir: 'dist',
+    outDir: "dist",
     sourcemap: false,
   },
-})
+});

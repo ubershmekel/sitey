@@ -16,7 +16,12 @@
     </div>
 
     <div v-else class="domain-grid">
-      <RouterLink v-for="d in domains" :key="d.id" :to="`/domains/${d.id}`" class="domain-card">
+      <RouterLink
+        v-for="d in domains"
+        :key="d.id"
+        :to="`/domains/${d.id}`"
+        class="domain-card"
+      >
         <div class="domain-name">{{ d.hostname }}</div>
         <div class="domain-meta">
           <div class="status-row">
@@ -25,7 +30,11 @@
               {{ d.letsEncryptStatus ?? d.status }}
             </span>
           </div>
-          <span class="projects-count">{{ d._count.routes }} project{{ d._count.routes !== 1 ? 's' : '' }}</span>
+          <span class="projects-count"
+            >{{ d._count.routes }} project{{
+              d._count.routes !== 1 ? "s" : ""
+            }}</span
+          >
         </div>
       </RouterLink>
     </div>
@@ -35,35 +44,38 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { RouterLink } from 'vue-router'
-import Layout from '../components/Layout.vue'
-import NavIcon from '../components/NavIcon.vue'
-import AddDomainModal from '../components/AddDomainModal.vue'
-import { trpc } from '../trpc'
+import { ref, onMounted } from "vue";
+import { RouterLink } from "vue-router";
+import Layout from "../components/Layout.vue";
+import NavIcon from "../components/NavIcon.vue";
+import AddDomainModal from "../components/AddDomainModal.vue";
+import { trpc } from "../trpc";
 
-type Domain = Awaited<ReturnType<typeof trpc.domains.list.query>>[number]
+type Domain = Awaited<ReturnType<typeof trpc.domains.list.query>>[number];
 
-const domains = ref<Domain[]>([])
-const loading = ref(true)
-const error = ref('')
-const showAdd = ref(false)
+const domains = ref<Domain[]>([]);
+const loading = ref(true);
+const error = ref("");
+const showAdd = ref(false);
 
-function openAddModal() { showAdd.value = true }
+function openAddModal() {
+  showAdd.value = true;
+}
 
 async function fetchDomains() {
-  loading.value = true
-  error.value = ''
+  loading.value = true;
+  error.value = "";
   try {
-    domains.value = await trpc.domains.list.query()
+    domains.value = await trpc.domains.list.query();
   } catch (e: unknown) {
-    error.value = (e as { message?: string })?.message ?? 'Failed to load domains'
+    error.value =
+      (e as { message?: string })?.message ?? "Failed to load domains";
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
-onMounted(fetchDomains)
+onMounted(fetchDomains);
 </script>
 
 <style scoped>
@@ -91,7 +103,9 @@ h1 {
   padding: 1.25rem 1.5rem;
   text-decoration: none;
   color: inherit;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
   display: block;
 }
 
@@ -103,7 +117,7 @@ h1 {
 .domain-name {
   font-weight: 600;
   margin-bottom: 0.75rem;
-  }
+}
 
 .domain-meta {
   display: flex;
@@ -120,11 +134,11 @@ h1 {
 
 .meta-label {
   font-size: var(--font-tiny);
-  }
+}
 
 .projects-count {
   font-size: var(--font-tiny);
-  }
+}
 
 .status {
   font-size: var(--font-tiny);
@@ -151,18 +165,16 @@ h1 {
 .empty-state {
   text-align: center;
   padding: 4rem 2rem;
-  }
+}
 
 .empty-icon {
   font-size: 2.5rem;
   margin-bottom: 1rem;
 }
 
-
 .hint {
   margin: 0.25rem 0 1.5rem;
 }
-
 
 .alert.error {
   background: var(--status-err-bg);
@@ -172,8 +184,4 @@ h1 {
   padding: 0.6rem 0.75rem;
   margin-bottom: 1rem;
 }
-
-
 </style>
-
-

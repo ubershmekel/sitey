@@ -6,61 +6,79 @@
       <p class="subtitle">You must set a new password before continuing.</p>
 
       <div v-if="error" class="alert error">{{ error }}</div>
-      <div v-if="success" class="alert success">Password changed! Redirecting…</div>
+      <div v-if="success" class="alert success">
+        Password changed! Redirecting…
+      </div>
 
       <label>
         Current password
-        <input v-model="current" type="password" autocomplete="current-password" required />
+        <input
+          v-model="current"
+          type="password"
+          autocomplete="current-password"
+          required
+        />
       </label>
 
       <label>
         New password <span class="hint">(min 9 chars)</span>
-        <input v-model="next" type="password" autocomplete="new-password" required minlength="9" />
+        <input
+          v-model="next"
+          type="password"
+          autocomplete="new-password"
+          required
+          minlength="9"
+        />
       </label>
 
       <label>
         Confirm new password
-        <input v-model="confirm" type="password" autocomplete="new-password" required />
+        <input
+          v-model="confirm"
+          type="password"
+          autocomplete="new-password"
+          required
+        />
       </label>
 
       <button type="submit" :disabled="loading" class="btn-primary">
-        {{ loading ? 'Saving…' : 'Set new password' }}
+        {{ loading ? "Saving…" : "Set new password" }}
       </button>
     </form>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { useRouter } from 'vue-router'
-import { useAuthStore } from '../stores/auth'
-import SiteyLogo from '../components/SiteyLogo.vue'
+import { ref } from "vue";
+import { useRouter } from "vue-router";
+import { useAuthStore } from "../stores/auth";
+import SiteyLogo from "../components/SiteyLogo.vue";
 
-const auth = useAuthStore()
-const router = useRouter()
+const auth = useAuthStore();
+const router = useRouter();
 
-const current = ref('')
-const next = ref('')
-const confirm = ref('')
-const loading = ref(false)
-const error = ref('')
-const success = ref(false)
+const current = ref("");
+const next = ref("");
+const confirm = ref("");
+const loading = ref(false);
+const error = ref("");
+const success = ref(false);
 
 async function handleSubmit() {
-  error.value = ''
+  error.value = "";
   if (next.value !== confirm.value) {
-    error.value = 'Passwords do not match'
-    return
+    error.value = "Passwords do not match";
+    return;
   }
-  loading.value = true
+  loading.value = true;
   try {
-    await auth.changePassword(current.value, next.value)
-    success.value = true
-    setTimeout(() => router.push('/'), 1000)
+    await auth.changePassword(current.value, next.value);
+    success.value = true;
+    setTimeout(() => router.push("/"), 1000);
   } catch (e: unknown) {
-    error.value = (e as { message?: string })?.message ?? 'Failed'
+    error.value = (e as { message?: string })?.message ?? "Failed";
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 </script>

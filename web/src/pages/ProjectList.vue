@@ -10,14 +10,21 @@
 
     <template v-else>
       <div v-if="userProjects.length > 0" class="project-grid">
-        <RouterLink v-for="p in userProjects" :key="p.id" :to="`/projects/${p.id}`" class="project-card">
+        <RouterLink
+          v-for="p in userProjects"
+          :key="p.id"
+          :to="`/projects/${p.id}`"
+          class="project-card"
+        >
           <div class="project-name">{{ p.name }}</div>
           <div class="project-meta">
             <span :class="`status status-${p.status}`">{{ p.status }}</span>
             <span class="deploy-mode">{{ p.deployMode }}</span>
           </div>
           <div class="project-routes">
-            <span v-if="p.routes.length === 0" class="no-routes">no routes</span>
+            <span v-if="p.routes.length === 0" class="no-routes"
+              >no routes</span
+            >
             <span v-for="r in p.routes" :key="r.id" class="route-tag">
               {{ routeLabel(r) }}
             </span>
@@ -33,61 +40,68 @@
       </div>
     </template>
 
-    <AddProjectModal v-model="showAdd" title="New project" :domains="domains" @created="handleProjectCreated" />
+    <AddProjectModal
+      v-model="showAdd"
+      title="New project"
+      :domains="domains"
+      @created="handleProjectCreated"
+    />
   </Layout>
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { RouterLink } from 'vue-router'
-import AddProjectModal from '../components/AddProjectModal.vue'
-import Layout from '../components/Layout.vue'
-import NavIcon from '../components/NavIcon.vue'
-import { trpc } from '../trpc'
+import { computed, onMounted, ref } from "vue";
+import { RouterLink } from "vue-router";
+import AddProjectModal from "../components/AddProjectModal.vue";
+import Layout from "../components/Layout.vue";
+import NavIcon from "../components/NavIcon.vue";
+import { trpc } from "../trpc";
 
-type Project = Awaited<ReturnType<typeof trpc.projects.list.query>>[number]
-type Route = Project['routes'][number]
-type Domain = Awaited<ReturnType<typeof trpc.domains.list.query>>[number]
+type Project = Awaited<ReturnType<typeof trpc.projects.list.query>>[number];
+type Route = Project["routes"][number];
+type Domain = Awaited<ReturnType<typeof trpc.domains.list.query>>[number];
 
-const projects = ref<Project[]>([])
-const loading = ref(true)
-const error = ref('')
-const showAdd = ref(false)
-const domains = ref<Pick<Domain, 'id' | 'hostname'>[]>([])
+const projects = ref<Project[]>([]);
+const loading = ref(true);
+const error = ref("");
+const showAdd = ref(false);
+const domains = ref<Pick<Domain, "id" | "hostname">[]>([]);
 
-const userProjects = computed(() => projects.value.filter((p) => !p.protected))
+const userProjects = computed(() => projects.value.filter((p) => !p.protected));
 
 function routeLabel(r: Route): string {
   const host = (() => {
-    if (!r.domain?.hostname) return '<server>'
-    if (!r.domain.hostname.startsWith('*.')) return r.domain.hostname
-    return r.subdomain ? `${r.subdomain}.${r.domain.hostname.slice(2)}` : r.domain.hostname
-  })()
-  return r.pathPrefix ? `${host}${r.pathPrefix}` : host
+    if (!r.domain?.hostname) return "<server>";
+    if (!r.domain.hostname.startsWith("*.")) return r.domain.hostname;
+    return r.subdomain
+      ? `${r.subdomain}.${r.domain.hostname.slice(2)}`
+      : r.domain.hostname;
+  })();
+  return r.pathPrefix ? `${host}${r.pathPrefix}` : host;
 }
 
 async function fetchAll() {
-  loading.value = true
-  error.value = ''
+  loading.value = true;
+  error.value = "";
   try {
     const [projectList, domainList] = await Promise.all([
       trpc.projects.list.query(),
       trpc.domains.list.query(),
-    ])
-    projects.value = projectList
-    domains.value = domainList.map((d) => ({ id: d.id, hostname: d.hostname }))
+    ]);
+    projects.value = projectList;
+    domains.value = domainList.map((d) => ({ id: d.id, hostname: d.hostname }));
   } catch (e: unknown) {
-    error.value = (e as { message?: string })?.message ?? 'Failed to load'
+    error.value = (e as { message?: string })?.message ?? "Failed to load";
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 async function handleProjectCreated() {
-  await fetchAll()
+  await fetchAll();
 }
 
-onMounted(fetchAll)
+onMounted(fetchAll);
 </script>
 
 <style scoped>
@@ -115,7 +129,9 @@ h1 {
   padding: 1.25rem 1.5rem;
   text-decoration: none;
   color: inherit;
-  transition: border-color 0.15s, background 0.15s;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -200,7 +216,6 @@ h1 {
   color: var(--status-warn-text);
 }
 
-
 .empty-state {
   text-align: center;
   padding: 4rem 2rem;
@@ -210,7 +225,6 @@ h1 {
   font-size: 2.5rem;
   margin-bottom: 1rem;
 }
-
 
 .hint {
   margin: 0.25rem 0 1.5rem;

@@ -5,45 +5,45 @@
  */
 
 type Job = {
-  id: string
-  projectId: number
-  deploymentId: string
-  run: () => Promise<void>
-}
+  id: string;
+  projectId: number;
+  deploymentId: string;
+  run: () => Promise<void>;
+};
 
 class DeploymentQueue {
-  private queue: Job[] = []
-  private running = new Set<number>() // projectIds currently building
+  private queue: Job[] = [];
+  private running = new Set<number>(); // projectIds currently building
 
   enqueue(job: Job) {
-    this.queue.push(job)
-    this.processNext()
+    this.queue.push(job);
+    this.processNext();
   }
 
   private async processNext() {
-    const pending = this.queue.find(j => !this.running.has(j.projectId))
-    if (!pending) return
+    const pending = this.queue.find((j) => !this.running.has(j.projectId));
+    if (!pending) return;
 
-    this.queue = this.queue.filter(j => j.id !== pending.id)
-    this.running.add(pending.projectId)
+    this.queue = this.queue.filter((j) => j.id !== pending.id);
+    this.running.add(pending.projectId);
 
     try {
-      await pending.run()
+      await pending.run();
     } catch (err) {
-      console.error(`[queue] Job ${pending.id} failed:`, err)
+      console.error(`[queue] Job ${pending.id} failed:`, err);
     } finally {
-      this.running.delete(pending.projectId)
-      this.processNext()
+      this.running.delete(pending.projectId);
+      this.processNext();
     }
   }
 
   isRunning(projectId: number) {
-    return this.running.has(projectId)
+    return this.running.has(projectId);
   }
 
   queuedFor(projectId: number) {
-    return this.queue.filter(j => j.projectId === projectId).length
+    return this.queue.filter((j) => j.projectId === projectId).length;
   }
 }
 
-export const deployQueue = new DeploymentQueue()
+export const deployQueue = new DeploymentQueue();

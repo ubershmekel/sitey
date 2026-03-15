@@ -5,65 +5,65 @@
 
 :root {
   /* ── Brand ──────────────────────────────────────────────── */
-  --brand:              #7c6cfc;   /* primary purple */
-  --brand-glow:         rgba(124, 108, 252, 0.12);
-  --brand-active-bg:    #1e1b3a;
-  --brand-active-text:  #a89cff;
+  --brand: #7c6cfc; /* primary purple */
+  --brand-glow: rgba(124, 108, 252, 0.12);
+  --brand-active-bg: #1e1b3a;
+  --brand-active-text: #a89cff;
 
-  --pink:               #FF89D0;   /* logo / accent pink */
-  --pink-glow:          rgba(255, 137, 208, 0.12);
+  --pink: #ff89d0; /* logo / accent pink */
+  --pink-glow: rgba(255, 137, 208, 0.12);
 
   /* ── Backgrounds ─────────────────────────────────────────── */
-  --bg-page:    #0f0f0f;   /* page background */
-  --bg-card:    #161616;   /* cards, panels, sidebar */
-  --bg-elevated:#1a1a1a;   /* slightly raised surfaces */
-  --bg-input:   #1f1f1f;   /* form inputs */
-  --bg-code:    #0a0a0a;   /* code / log boxes */
-  --bg-hover:   #1a1a28;   /* card hover (purple tint) */
+  --bg-page: #0f0f0f; /* page background */
+  --bg-card: #161616; /* cards, panels, sidebar */
+  --bg-elevated: #1a1a1a; /* slightly raised surfaces */
+  --bg-input: #1f1f1f; /* form inputs */
+  --bg-code: #0a0a0a; /* code / log boxes */
+  --bg-hover: #1a1a28; /* card hover (purple tint) */
 
   /* ── Borders ──────────────────────────────────────────────── */
-  --border-subtle:  #1e1e1e;   /* very subtle dividers */
-  --border-default: #2a2a2a;   /* standard card/panel borders */
-  --border-strong:  #333333;   /* input borders, stronger lines */
+  --border-subtle: #1e1e1e; /* very subtle dividers */
+  --border-default: #2a2a2a; /* standard card/panel borders */
+  --border-strong: #333333; /* input borders, stronger lines */
 
   /* ── Text (WCAG-improved contrast on dark backgrounds) ────── */
-  --text-primary:   #e8e8e8;   /* headings, body — always readable */
-  --text-secondary: #aaaaaa;   /* labels, secondary info */
-  --text-muted:     #888888;   /* hints, timestamps — min WCAG on #161616 */
-  --text-dim:       #777777;   /* use sparingly for non-critical decorations */
+  --text-primary: #e8e8e8; /* headings, body — always readable */
+  --text-secondary: #aaaaaa; /* labels, secondary info */
+  --text-muted: #888888; /* hints, timestamps — min WCAG on #161616 */
+  --text-dim: #777777; /* use sparingly for non-critical decorations */
 
   /* ── Status: success ─────────────────────────────────────── */
-  --status-ok-bg:     #0e2a14;
+  --status-ok-bg: #0e2a14;
   --status-ok-border: #1a5a1e;
-  --status-ok-text:   #40c060;
+  --status-ok-text: #40c060;
 
   /* ── Status: error ───────────────────────────────────────── */
-  --status-err-bg:     #2d1414;
+  --status-err-bg: #2d1414;
   --status-err-border: #5a1a1a;
-  --status-err-text:   #ff7070;
+  --status-err-text: #ff7070;
 
   /* ── Status: warning ─────────────────────────────────────── */
-  --status-warn-bg:     #1e1800;
+  --status-warn-bg: #1e1800;
   --status-warn-border: #3a3000;
-  --status-warn-text:   #c09a30;
+  --status-warn-text: #c09a30;
 
   /* ── Status: building / info ─────────────────────────────── */
-  --status-info-bg:     #1a2a38;
+  --status-info-bg: #1a2a38;
   --status-info-border: #1e3a5f;
-  --status-info-text:   #60b4ff;
+  --status-info-text: #60b4ff;
   --status-info-bright: #a8caee;
 
   /* ── Status: queued ──────────────────────────────────────── */
-  --status-queued-bg:   #1a1a2a;
+  --status-queued-bg: #1a1a2a;
   --status-queued-text: #9090ff;
 
   /* ── Status: idle / stopped ──────────────────────────────── */
-  --status-idle-bg:   #1a1a1a;
+  --status-idle-bg: #1a1a1a;
   --status-idle-text: #888888;
 
   /* ── Typography ──────────────────────────────────────────── */
-  --font-tiny:   14px;   /* hints, labels, badges, secondary text */
-  --font-medium: 16px;   /* body text, inputs, buttons */
-  --font-large:  18px;   /* sub-headings, modal titles */
-  --font-huge:   24px;   /* page headings, brand */
+  --font-tiny: 14px; /* hints, labels, badges, secondary text */
+  --font-medium: 16px; /* body text, inputs, buttons */
+  --font-large: 18px; /* sub-headings, modal titles */
+  --font-huge: 24px; /* page headings, brand */
 }

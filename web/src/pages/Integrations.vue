@@ -11,21 +11,35 @@
           <NavIcon name="integrations" class="integration-icon" />
           <div>
             <h2>GitHub App</h2>
-            <p class="section-hint">Connect a GitHub App to clone repos and receive push webhooks for auto-deploy.</p>
+            <p class="section-hint">
+              Connect a GitHub App to clone repos and receive push webhooks for
+              auto-deploy.
+            </p>
           </div>
         </div>
-        <span v-if="repoStatusLoading && appConfig?.configured" class="badge badge-idle">Checking install status</span>
+        <span
+          v-if="repoStatusLoading && appConfig?.configured"
+          class="badge badge-idle"
+          >Checking install status</span
+        >
         <span v-else-if="isInstallReady" class="badge badge-ok">Connected</span>
-        <span v-else-if="appConfig?.configured" class="badge badge-idle">Install pending</span>
+        <span v-else-if="appConfig?.configured" class="badge badge-idle"
+          >Install pending</span
+        >
         <span v-else class="badge badge-idle">Not connected</span>
       </div>
 
-      <div v-if="appCreated && appConfig?.configured" class="alert success" style="margin-bottom:1.25rem">
+      <div
+        v-if="appCreated && appConfig?.configured"
+        class="alert success"
+        style="margin-bottom: 1.25rem"
+      >
         <template v-if="isInstallReady">
           GitHub App created and installed successfully.
         </template>
         <template v-else>
-          GitHub App created. Final step: install it on a GitHub account or organization.
+          GitHub App created. Final step: install it on a GitHub account or
+          organization.
         </template>
       </div>
 
@@ -40,15 +54,22 @@
             <span class="setup-step-check">1</span>
             <div class="setup-step-body">
               <p class="setup-step-title">GitHub App created</p>
-              <p class="section-hint">The app credentials are connected to Sitey.</p>
+              <p class="section-hint">
+                The app credentials are connected to Sitey.
+              </p>
             </div>
           </div>
           <div class="setup-step" :class="{ done: isInstallReady }">
             <span class="setup-step-check">2</span>
             <div class="setup-step-body">
-              <p class="setup-step-title">Install GitHub App on at least one account or organization</p>
+              <p class="setup-step-title">
+                Install GitHub App on at least one account or organization
+              </p>
               <p class="section-hint" v-if="isInstallReady">
-                {{ installations.length }} installation{{ installations.length === 1 ? '' : 's' }} found.
+                {{ installations.length }} installation{{
+                  installations.length === 1 ? "" : "s"
+                }}
+                found.
               </p>
               <p class="section-hint" v-else>
                 Required before project autocomplete can see repositories.
@@ -57,26 +78,43 @@
           </div>
         </div>
 
-        <div v-if="repoStatusLoading" class="section-hint">Checking installations...</div>
+        <div v-if="repoStatusLoading" class="section-hint">
+          Checking installations...
+        </div>
         <template v-else-if="!repoStatusError">
           <!-- Installation list -->
           <div class="installations-section">
             <div class="installations-header">
               <span class="meta-label">Installed on</span>
-              <span class="meta-value" v-if="installations.length === 0">-</span>
+              <span class="meta-value" v-if="installations.length === 0"
+                >-</span
+              >
             </div>
 
             <div v-if="installations.length === 0" class="pending-box">
-              App is created but not installed on any account or organization yet.
-              Project autocomplete will not see repositories until this is done.
+              App is created but not installed on any account or organization
+              yet. Project autocomplete will not see repositories until this is
+              done.
             </div>
 
             <ul v-else class="installation-list">
-              <li v-for="inst in installations" :key="inst.id" class="installation-item">
-                <span class="install-avatar">{{ inst.accountType === 'Organization' ? 'Org' : 'User' }}</span>
+              <li
+                v-for="inst in installations"
+                :key="inst.id"
+                class="installation-item"
+              >
+                <span class="install-avatar">{{
+                  inst.accountType === "Organization" ? "Org" : "User"
+                }}</span>
                 <span class="install-login">{{ inst.accountLogin }}</span>
-                <span class="install-type">{{ inst.accountType === 'Organization' ? 'org' : 'user' }}</span>
-                <span class="install-repos">{{ inst.repoCount }} repo{{ inst.repoCount !== 1 ? 's' : '' }}</span>
+                <span class="install-type">{{
+                  inst.accountType === "Organization" ? "org" : "user"
+                }}</span>
+                <span class="install-repos"
+                  >{{ inst.repoCount }} repo{{
+                    inst.repoCount !== 1 ? "s" : ""
+                  }}</span
+                >
               </li>
             </ul>
           </div>
@@ -88,46 +126,84 @@
                 Install on another personal account or organization.
               </template>
               <template v-else>
-                Finish setup by installing on a personal account or organization.
+                Finish setup by installing on a personal account or
+                organization.
               </template>
-              On the GitHub page, use the <strong>account switcher</strong> at the top to select a personal account or org.
+              On the GitHub page, use the <strong>account switcher</strong> at
+              the top to select a personal account or org.
             </p>
-            <a :href="installUrl" target="_blank" rel="noopener" class="btn-primary install-hero-btn">
-              {{ isInstallReady ? 'Install on another account or organization ->' : 'Open GitHub install page ->' }}
+            <a
+              :href="installUrl"
+              target="_blank"
+              rel="noopener"
+              class="btn-primary install-hero-btn"
+            >
+              {{
+                isInstallReady
+                  ? "Install on another account or organization ->"
+                  : "Open GitHub install page ->"
+              }}
             </a>
             <div class="install-link-share">
               <span class="meta-label">Shareable install link</span>
               <code class="install-link-url">{{ installUrl }}</code>
-              <button class="btn-ghost btn-sm install-copy-btn" @click="copyInstallUrl">{{ copied ? 'Copied!' : 'Copy link' }}</button>
+              <button
+                class="btn-ghost btn-sm install-copy-btn"
+                @click="copyInstallUrl"
+              >
+                {{ copied ? "Copied!" : "Copy link" }}
+              </button>
             </div>
           </div>
         </template>
         <p v-else class="section-hint warn">{{ repoStatusError }}</p>
 
         <div class="action-row">
-          <button class="btn-danger btn-sm" @click="clearAppConfig">Disconnect</button>
+          <button class="btn-danger btn-sm" @click="clearAppConfig">
+            Disconnect
+          </button>
         </div>
       </div>
 
       <template v-else>
         <p class="section-hint">
-          Click below to create and connect a GitHub App in one step.
-          Sitey will open GitHub with everything pre-filled - just click <strong>Create GitHub App</strong>.
+          Click below to create and connect a GitHub App in one step. Sitey will
+          open GitHub with everything pre-filled - just click
+          <strong>Create GitHub App</strong>.
         </p>
 
         <div v-if="manifestDomains.length > 1" class="domain-select-row">
-          <label class="domain-label" for="manifest-domain">Domain for GitHub App</label>
-          <select id="manifest-domain" v-model="selectedDomainId" @change="fetchManifest" class="domain-select">
-            <option v-for="d in manifestDomains" :key="d.id" :value="d.id">{{ d.hostname }}</option>
+          <label class="domain-label" for="manifest-domain"
+            >Domain for GitHub App</label
+          >
+          <select
+            id="manifest-domain"
+            v-model="selectedDomainId"
+            @change="fetchManifest"
+            class="domain-select"
+          >
+            <option v-for="d in manifestDomains" :key="d.id" :value="d.id">
+              {{ d.hostname }}
+            </option>
           </select>
         </div>
 
         <p v-if="manifest?.effectiveSiteUrl" class="section-hint">
-          Callback base URL: <code>{{ manifest.effectiveSiteUrl }}</code> (source: {{ manifest.effectiveSiteUrlSource }})
+          Callback base URL:
+          <code>{{ manifest.effectiveSiteUrl }}</code> (source:
+          {{ manifest.effectiveSiteUrlSource }})
         </p>
-        <p class="section-hint warn" v-if="manifestError">{{ manifestError }}</p>
+        <p class="section-hint warn" v-if="manifestError">
+          {{ manifestError }}
+        </p>
 
-        <form v-if="manifest" :action="manifest.actionUrl" method="post" target="_blank" class="auto-form">
+        <form
+          v-if="manifest"
+          :action="manifest.actionUrl"
+          method="post"
+          target="_blank"
+          class="auto-form"
+        >
           <input type="hidden" name="manifest" :value="manifest.manifest" />
           <button type="submit" class="btn-primary">
             Create GitHub App ->
@@ -136,23 +212,37 @@
 
         <details class="manual-details">
           <summary>Manual setup (advanced)</summary>
-          <form @submit.prevent="saveAppConfig" class="settings-form" style="margin-top:1rem">
+          <form
+            @submit.prevent="saveAppConfig"
+            class="settings-form"
+            style="margin-top: 1rem"
+          >
             <div v-if="appError" class="alert error">{{ appError }}</div>
-            <div v-if="appSuccess" class="alert success">GitHub App config saved.</div>
+            <div v-if="appSuccess" class="alert success">
+              GitHub App config saved.
+            </div>
             <label>
               GitHub App ID
               <input v-model="app.appId" type="text" placeholder="123456" />
             </label>
             <label>
               Private key (PEM)
-              <textarea v-model="app.privateKey" rows="6" placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;..." />
+              <textarea
+                v-model="app.privateKey"
+                rows="6"
+                placeholder="-----BEGIN RSA PRIVATE KEY-----&#10;..."
+              />
             </label>
             <label>
               Webhook secret
-              <input v-model="app.webhookSecret" type="password" placeholder="your-webhook-secret" />
+              <input
+                v-model="app.webhookSecret"
+                type="password"
+                placeholder="your-webhook-secret"
+              />
             </label>
             <button type="submit" class="btn-primary" :disabled="app.saving">
-              {{ app.saving ? 'Saving...' : 'Save' }}
+              {{ app.saving ? "Saving..." : "Save" }}
             </button>
           </form>
         </details>
@@ -162,137 +252,158 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import Layout from '../components/Layout.vue'
-import NavIcon from '../components/NavIcon.vue'
-import { trpc } from '../trpc'
+import { ref, reactive, computed, onMounted } from "vue";
+import { useRoute } from "vue-router";
+import Layout from "../components/Layout.vue";
+import NavIcon from "../components/NavIcon.vue";
+import { trpc } from "../trpc";
 
-type AppConfig = Awaited<ReturnType<typeof trpc.github.getAppConfig.query>>
-type Manifest = Awaited<ReturnType<typeof trpc.github.getManifest.query>>
-type AppRepoInfo = Awaited<ReturnType<typeof trpc.github.listAppRepos.query>>
-type Installation = Extract<AppRepoInfo, { configured: true }>['installations'][number]
+type AppConfig = Awaited<ReturnType<typeof trpc.github.getAppConfig.query>>;
+type Manifest = Awaited<ReturnType<typeof trpc.github.getManifest.query>>;
+type AppRepoInfo = Awaited<ReturnType<typeof trpc.github.listAppRepos.query>>;
+type Installation = Extract<
+  AppRepoInfo,
+  { configured: true }
+>["installations"][number];
 
-const route = useRoute()
-const appConfig = ref<AppConfig | null>(null)
-const manifest = ref<Manifest | null>(null)
-const manifestDomains = ref<{ id: number; hostname: string }[]>([])
-const manifestError = ref('')
-const selectedDomainId = ref<number | null>(null)
-const app = reactive({ appId: '', privateKey: '', webhookSecret: '', saving: false })
-const appError = ref('')
-const appSuccess = ref(false)
-const repoStatusLoading = ref(false)
-const repoStatusError = ref('')
-const installations = ref<Installation[]>([])
-const installUrl = ref<string | null>(null)
-const copied = ref(false)
-const appCreated = computed(() => route.query.app_created === '1')
+const route = useRoute();
+const appConfig = ref<AppConfig | null>(null);
+const manifest = ref<Manifest | null>(null);
+const manifestDomains = ref<{ id: number; hostname: string }[]>([]);
+const manifestError = ref("");
+const selectedDomainId = ref<number | null>(null);
+const app = reactive({
+  appId: "",
+  privateKey: "",
+  webhookSecret: "",
+  saving: false,
+});
+const appError = ref("");
+const appSuccess = ref(false);
+const repoStatusLoading = ref(false);
+const repoStatusError = ref("");
+const installations = ref<Installation[]>([]);
+const installUrl = ref<string | null>(null);
+const copied = ref(false);
+const appCreated = computed(() => route.query.app_created === "1");
 const isInstallReady = computed(
   () => !!appConfig.value?.configured && installations.value.length > 0,
-)
+);
 
 async function copyInstallUrl() {
-  if (!installUrl.value) return
-  await navigator.clipboard.writeText(installUrl.value)
-  copied.value = true
-  setTimeout(() => { copied.value = false }, 2000)
+  if (!installUrl.value) return;
+  await navigator.clipboard.writeText(installUrl.value);
+  copied.value = true;
+  setTimeout(() => {
+    copied.value = false;
+  }, 2000);
 }
 
 async function fetchManifest() {
-  manifestError.value = ''
+  manifestError.value = "";
   try {
     const mf = await trpc.github.getManifest.query(
       selectedDomainId.value ? { domainId: selectedDomainId.value } : {},
-    )
-    manifest.value = mf
-    manifestDomains.value = mf.domains
+    );
+    manifest.value = mf;
+    manifestDomains.value = mf.domains;
   } catch (e: unknown) {
-    manifest.value = null
-    manifestError.value = (e as { message?: string })?.message ?? 'Could not generate GitHub App manifest.'
+    manifest.value = null;
+    manifestError.value =
+      (e as { message?: string })?.message ??
+      "Could not generate GitHub App manifest.";
   }
 }
 
 async function fetchRepoInfo() {
-  repoStatusLoading.value = true
-  repoStatusError.value = ''
+  repoStatusLoading.value = true;
+  repoStatusError.value = "";
   try {
-    const info: AppRepoInfo = await trpc.github.listAppRepos.query()
+    const info: AppRepoInfo = await trpc.github.listAppRepos.query();
     if (info.configured) {
-      installations.value = info.installations
-      installUrl.value = info.app.installUrl
+      installations.value = info.installations;
+      installUrl.value = info.app.installUrl;
     } else {
-      installations.value = []
-      installUrl.value = null
+      installations.value = [];
+      installUrl.value = null;
     }
   } catch (e: unknown) {
-    const msg = (e as { message?: string })?.message ?? ''
+    const msg = (e as { message?: string })?.message ?? "";
     // If the app no longer exists on GitHub, clear the stale credentials automatically
-    if (msg.includes('Integration not found') || msg.includes('"status":"404"') || msg.includes('404')) {
-      await trpc.github.clearAppConfig.mutate()
-      appConfig.value = null
-      app.appId = ''; app.privateKey = ''; app.webhookSecret = ''
-      installations.value = []
-      installUrl.value = null
-      repoStatusError.value = ''
-      await fetchManifest()
-      return
+    if (
+      msg.includes("Integration not found") ||
+      msg.includes('"status":"404"') ||
+      msg.includes("404")
+    ) {
+      await trpc.github.clearAppConfig.mutate();
+      appConfig.value = null;
+      app.appId = "";
+      app.privateKey = "";
+      app.webhookSecret = "";
+      installations.value = [];
+      installUrl.value = null;
+      repoStatusError.value = "";
+      await fetchManifest();
+      return;
     }
-    installations.value = []
-    repoStatusError.value = msg || 'Could not read GitHub App installation status.'
+    installations.value = [];
+    repoStatusError.value =
+      msg || "Could not read GitHub App installation status.";
   } finally {
-    repoStatusLoading.value = false
+    repoStatusLoading.value = false;
   }
 }
 
 async function fetchAppConfig() {
   try {
-    const config = await trpc.github.getAppConfig.query()
-    appConfig.value = config
-    if (config.appId) app.appId = config.appId
+    const config = await trpc.github.getAppConfig.query();
+    appConfig.value = config;
+    if (config.appId) app.appId = config.appId;
     if (config.configured) {
-      await fetchRepoInfo()
+      await fetchRepoInfo();
     } else {
-      installations.value = []
-      installUrl.value = null
-      repoStatusError.value = ''
+      installations.value = [];
+      installUrl.value = null;
+      repoStatusError.value = "";
     }
   } catch {
     // ignore
   }
-  await fetchManifest()
+  await fetchManifest();
 }
 
 async function saveAppConfig() {
-  appError.value = ''
-  appSuccess.value = false
-  app.saving = true
+  appError.value = "";
+  appSuccess.value = false;
+  app.saving = true;
   try {
     await trpc.github.setAppConfig.mutate({
       appId: app.appId,
       privateKey: app.privateKey,
       webhookSecret: app.webhookSecret,
-    })
-    appSuccess.value = true
-    await fetchAppConfig()
+    });
+    appSuccess.value = true;
+    await fetchAppConfig();
   } catch (e: unknown) {
-    appError.value = (e as { message?: string })?.message ?? 'Failed'
+    appError.value = (e as { message?: string })?.message ?? "Failed";
   } finally {
-    app.saving = false
+    app.saving = false;
   }
 }
 
 async function clearAppConfig() {
-  if (!confirm('Clear GitHub App configuration?')) return
-  await trpc.github.clearAppConfig.mutate()
-  appConfig.value = null
-  app.appId = ''; app.privateKey = ''; app.webhookSecret = ''
-  installations.value = []
-  installUrl.value = null
-  repoStatusError.value = ''
+  if (!confirm("Clear GitHub App configuration?")) return;
+  await trpc.github.clearAppConfig.mutate();
+  appConfig.value = null;
+  app.appId = "";
+  app.privateKey = "";
+  app.webhookSecret = "";
+  installations.value = [];
+  installUrl.value = null;
+  repoStatusError.value = "";
 }
 
-onMounted(fetchAppConfig)
+onMounted(fetchAppConfig);
 </script>
 
 <style scoped>
@@ -638,7 +749,9 @@ textarea {
   text-decoration: none;
   display: inline-flex;
   align-items: center;
-  transition: border-color 0.15s, color 0.15s;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
 }
 
 .btn-ghost:hover {

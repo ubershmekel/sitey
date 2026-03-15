@@ -1,32 +1,51 @@
 <template>
-  <div v-if="modelValue" class="modal-backdrop" @click.self="$emit('update:modelValue', false)">
+  <div
+    v-if="modelValue"
+    class="modal-backdrop"
+    @click.self="$emit('update:modelValue', false)"
+  >
     <form class="modal" @submit.prevent="addDomain">
       <h2>Add domain</h2>
 
       <div v-if="addError" class="alert error">{{ addError }}</div>
 
       <div class="tip">
-        <strong>Tip: wildcard subdomain setup</strong><br>
+        <strong>Tip: wildcard subdomain setup</strong><br />
         Point a wildcard DNS A record
-        <code>*.yourdomain.com → {{ serverIp || 'your server IP' }}</code>
-        <template v-if="serverIp"> is the detected IP address but it might be wrong.</template>
-        After this step, every new project automatically gets a
-        random subdomain like <code>happy-fox-3k2.yourdomain.com</code> — just like Netlify
-        or Vercel — with no extra DNS steps per project.
+        <code>*.yourdomain.com → {{ serverIp || "your server IP" }}</code>
+        <template v-if="serverIp">
+          is the detected IP address but it might be wrong.</template
+        >
+        After this step, every new project automatically gets a random subdomain
+        like <code>happy-fox-3k2.yourdomain.com</code> — just like Netlify or
+        Vercel — with no extra DNS steps per project.
       </div>
 
       <label>
         Hostname <span class="hint">(e.g. myapp.com or *.myapp.com)</span>
-        <input v-model="newHostname" type="text" required placeholder="myapp.com" @blur="checkDns" />
+        <input
+          v-model="newHostname"
+          type="text"
+          required
+          placeholder="myapp.com"
+          @blur="checkDns"
+        />
       </label>
       <div v-if="dnsResult !== null" class="dns-check">
         <span v-if="dnsResult.resolves && !dnsResult.wildcard" class="dns-ok">
-          Resolves: {{ dnsResult.addresses.join(', ') }}
+          Resolves: {{ dnsResult.addresses.join(", ") }}
         </span>
-        <span v-else-if="dnsResult.resolves && dnsResult.wildcard" class="dns-ok">
-          Wildcard test resolves ({{ dnsResult.checkedHostname }}): {{ dnsResult.addresses.join(', ') }}
+        <span
+          v-else-if="dnsResult.resolves && dnsResult.wildcard"
+          class="dns-ok"
+        >
+          Wildcard test resolves ({{ dnsResult.checkedHostname }}):
+          {{ dnsResult.addresses.join(", ") }}
         </span>
-        <span v-else-if="!dnsResult.resolves && dnsResult.wildcard" class="dns-fail">
+        <span
+          v-else-if="!dnsResult.resolves && dnsResult.wildcard"
+          class="dns-fail"
+        >
           Wildcard test host {{ dnsResult.checkedHostname }} is not resolving.
         </span>
         <span v-else class="dns-fail">
@@ -34,9 +53,15 @@
         </span>
       </div>
       <div class="modal-actions">
-        <button type="button" class="btn-ghost" @click="$emit('update:modelValue', false)">Cancel</button>
+        <button
+          type="button"
+          class="btn-ghost"
+          @click="$emit('update:modelValue', false)"
+        >
+          Cancel
+        </button>
         <button type="submit" class="btn-primary" :disabled="adding">
-          {{ adding ? 'Adding…' : 'Add domain' }}
+          {{ adding ? "Adding…" : "Add domain" }}
         </button>
       </div>
     </form>
@@ -44,57 +69,69 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-import { trpc } from '../trpc'
+import { ref, watch } from "vue";
+import { trpc } from "../trpc";
 
-const props = defineProps<{ modelValue: boolean }>()
+const props = defineProps<{ modelValue: boolean }>();
 const emit = defineEmits<{
-  'update:modelValue': [value: boolean]
-  created: []
-}>()
+  "update:modelValue": [value: boolean];
+  created: [];
+}>();
 
-const serverIp = ref('')
-const newHostname = ref('')
-const adding = ref(false)
-const addError = ref('')
+const serverIp = ref("");
+const newHostname = ref("");
+const adding = ref(false);
+const addError = ref("");
 type DnsResult = {
-  resolves: boolean
-  addresses: string[]
-  checkedHostname: string
-  wildcard: boolean
-} | null
-const dnsResult = ref<DnsResult>(null)
+  resolves: boolean;
+  addresses: string[];
+  checkedHostname: string;
+  wildcard: boolean;
+} | null;
+const dnsResult = ref<DnsResult>(null);
 
-watch(() => props.modelValue, async (open) => {
-  if (open && !serverIp.value) {
-    trpc.system.getServerIp.query().then(r => { serverIp.value = r.ip ?? '' }).catch(() => { })
-  }
-  if (!open) {
-    newHostname.value = ''
-    dnsResult.value = null
-    addError.value = ''
-    adding.value = false
-  }
-})
+watch(
+  () => props.modelValue,
+  async (open) => {
+    if (open && !serverIp.value) {
+      trpc.system.getServerIp
+        .query()
+        .then((r) => {
+          serverIp.value = r.ip ?? "";
+        })
+        .catch(() => {});
+    }
+    if (!open) {
+      newHostname.value = "";
+      dnsResult.value = null;
+      addError.value = "";
+      adding.value = false;
+    }
+  },
+);
 
 async function checkDns() {
-  const h = newHostname.value.trim().toLowerCase()
-  if (!h) { dnsResult.value = null; return }
-  dnsResult.value = await trpc.domains.checkDns.query({ hostname: h })
+  const h = newHostname.value.trim().toLowerCase();
+  if (!h) {
+    dnsResult.value = null;
+    return;
+  }
+  dnsResult.value = await trpc.domains.checkDns.query({ hostname: h });
 }
 
 async function addDomain() {
-  addError.value = ''
-  adding.value = true
+  addError.value = "";
+  adding.value = true;
   try {
-    const hostname = newHostname.value.trim().toLowerCase()
-    await trpc.domains.create.mutate({ hostname })
-    emit('update:modelValue', false)
-    emit('created')
+    const hostname = newHostname.value.trim().toLowerCase();
+    await trpc.domains.create.mutate({ hostname });
+    emit("update:modelValue", false);
+    emit("created");
   } catch (e: unknown) {
-    addError.value = (e as { message?: string })?.message ?? 'Failed to add domain'
+    addError.value =
+      (e as { message?: string })?.message ?? "Failed to add domain";
   } finally {
-    adding.value = false
+    adding.value = false;
   }
 }
 </script>
@@ -131,7 +168,6 @@ label {
   gap: 0.4rem;
 }
 
-
 input {
   background: var(--bg-input);
   border: 1px solid var(--border-strong);
@@ -158,7 +194,9 @@ input:focus {
   border-radius: 6px;
   padding: 0.6rem 1.25rem;
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
 }
 
 .btn-ghost:hover {

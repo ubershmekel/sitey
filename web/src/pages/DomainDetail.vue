@@ -10,10 +10,17 @@
       <h1>{{ domain.hostname }}</h1>
 
       <div class="page-actions">
-        <button v-if="isWildcard" class="btn-primary" :disabled="editSaving" @click="saveEdit">
-          {{ editSaving ? 'Saving…' : 'Save changes' }}
+        <button
+          v-if="isWildcard"
+          class="btn-primary"
+          :disabled="editSaving"
+          @click="saveEdit"
+        >
+          {{ editSaving ? "Saving…" : "Save changes" }}
         </button>
-        <button class="btn-primary" @click="showAddProject = true">+ Add project</button>
+        <button class="btn-primary" @click="showAddProject = true">
+          + Add project
+        </button>
       </div>
 
       <div v-if="editError" class="alert error">{{ editError }}</div>
@@ -22,23 +29,34 @@
       <div class="domain-section">
         <div class="field-row">
           <span class="field-label">HTTPS</span>
-          <span :class="`status status-${domain.status}`">{{ tlsLabel(domain.status) }}</span>
+          <span :class="`status status-${domain.status}`">{{
+            tlsLabel(domain.status)
+          }}</span>
         </div>
         <p v-if="domain.status === 'error'" class="tls-hint">
-          Caddy could not load TLS config. Look at the Caddy logs below and review the generated Caddyfile in
-          Settings.
+          Caddy could not load TLS config. Look at the Caddy logs below and
+          review the generated Caddyfile in Settings.
         </p>
         <div v-if="domain.status === 'error'" class="caddy-logs">
           <div class="caddy-logs-header">
             <span>Caddy logs</span>
-            <button type="button" class="btn-ghost-sm" :disabled="caddyLogsLoading" @click="loadCaddyLogs">
-              {{ caddyLogsLoading ? 'Loading...' : 'Refresh' }}
+            <button
+              type="button"
+              class="btn-ghost-sm"
+              :disabled="caddyLogsLoading"
+              @click="loadCaddyLogs"
+            >
+              {{ caddyLogsLoading ? "Loading..." : "Refresh" }}
             </button>
           </div>
-          <div v-if="caddyLogsError" class="alert error caddy-logs-error">{{ caddyLogsError }}</div>
+          <div v-if="caddyLogsError" class="alert error caddy-logs-error">
+            {{ caddyLogsError }}
+          </div>
           <div class="log-box">
-            <div v-if="caddyLogLines.length === 0" class="log-empty">No logs yet.</div>
-            <pre v-else class="log-content">{{ caddyLogLines.join('\n') }}</pre>
+            <div v-if="caddyLogLines.length === 0" class="log-empty">
+              No logs yet.
+            </div>
+            <pre v-else class="log-content">{{ caddyLogLines.join("\n") }}</pre>
           </div>
         </div>
 
@@ -47,8 +65,13 @@
             <input v-model="editSiteySubdomains" type="checkbox" />
             Enable Sitey subdomains
           </label>
-          <a v-if="editSiteySubdomains" :href="`https://sitey.${domain.hostname.slice(2)}`" target="_blank"
-            rel="noopener" class="sitey-subdomain-link">
+          <a
+            v-if="editSiteySubdomains"
+            :href="`https://sitey.${domain.hostname.slice(2)}`"
+            target="_blank"
+            rel="noopener"
+            class="sitey-subdomain-link"
+          >
             sitey.{{ domain.hostname.slice(2) }} ↗
           </a>
         </div>
@@ -56,14 +79,20 @@
         <div class="dns-check">
           <div class="dns-row">
             <span class="dns-label">{{ domain.hostname }}</span>
-            <span v-if="dnsResult === null" class="dns-status dns-checking">checking…</span>
+            <span v-if="dnsResult === null" class="dns-status dns-checking"
+              >checking…</span
+            >
             <span v-else-if="dnsResult.resolves" class="dns-status dns-ok">
-              resolves → {{ dnsResult.addresses.join(', ') }}
+              resolves → {{ dnsResult.addresses.join(", ") }}
             </span>
             <span v-else class="dns-status dns-fail">DNS not resolving</span>
-            <button type="button" class="btn-recheck" @click="checkDns">↻</button>
+            <button type="button" class="btn-recheck" @click="checkDns">
+              ↻
+            </button>
           </div>
-          <p class="dns-hint">DNS must point to this server before deploying.</p>
+          <p class="dns-hint">
+            DNS must point to this server before deploying.
+          </p>
         </div>
       </div>
 
@@ -71,13 +100,22 @@
 
       <div v-if="domainProjects.length === 0" class="empty-state">
         <p>No projects yet. Add one to deploy an app to this domain.</p>
-        <button class="btn-primary mt-1" @click="showAddProject = true">Add project</button>
+        <button class="btn-primary mt-1" @click="showAddProject = true">
+          Add project
+        </button>
       </div>
       <div v-else class="project-list">
-        <RouterLink v-for="p in domainProjects" :key="p.id" :to="`/projects/${p.id}`" class="project-card">
+        <RouterLink
+          v-for="p in domainProjects"
+          :key="p.id"
+          :to="`/projects/${p.id}`"
+          class="project-card"
+        >
           <div class="project-left">
             <div class="project-name">{{ p.name }}</div>
-            <div class="project-repo">{{ p.repoOwner }}/{{ p.repoName }}:{{ p.branch }}</div>
+            <div class="project-repo">
+              {{ p.repoOwner }}/{{ p.repoName }}:{{ p.branch }}
+            </div>
           </div>
           <div class="project-right">
             <span :class="`status status-${p.status}`">{{ p.status }}</span>
@@ -90,9 +128,15 @@
 
       <div class="danger-zone">
         <h2>Danger zone</h2>
-        <p class="danger-desc">Deleting this domain removes all its routes. This cannot be undone.</p>
-        <button class="btn-danger" :disabled="deletingDomain" @click="deleteDomain">
-          {{ deletingDomain ? 'Deleting…' : 'Delete domain' }}
+        <p class="danger-desc">
+          Deleting this domain removes all its routes. This cannot be undone.
+        </p>
+        <button
+          class="btn-danger"
+          :disabled="deletingDomain"
+          @click="deleteDomain"
+        >
+          {{ deletingDomain ? "Deleting…" : "Delete domain" }}
         </button>
       </div>
     </template>
@@ -107,168 +151,185 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter, RouterLink } from 'vue-router'
-import AddProjectModal from '../components/AddProjectModal.vue'
-import Layout from '../components/Layout.vue'
-import { trpc } from '../trpc'
+import { ref, computed, onMounted } from "vue";
+import { useRoute, useRouter, RouterLink } from "vue-router";
+import AddProjectModal from "../components/AddProjectModal.vue";
+import Layout from "../components/Layout.vue";
+import { trpc } from "../trpc";
 
-type Domain = Awaited<ReturnType<typeof trpc.domains.get.query>>
+type Domain = Awaited<ReturnType<typeof trpc.domains.get.query>>;
 
-const route = useRoute()
-const router = useRouter()
-const domainId = Number(route.params.id)
+const route = useRoute();
+const router = useRouter();
+const domainId = Number(route.params.id);
 
-const domain = ref<Domain | null>(null)
-const loading = ref(true)
-const error = ref('')
+const domain = ref<Domain | null>(null);
+const loading = ref(true);
+const error = ref("");
 
-const showAddProject = ref(false)
+const showAddProject = ref(false);
 
-const editSiteySubdomains = ref(false)
-const editSaving = ref(false)
-const editError = ref('')
-const saveSucceeded = ref(false)
-const deletingDomain = ref(false)
-const caddyLogLines = ref<string[]>([])
-const caddyLogsLoading = ref(false)
-const caddyLogsError = ref('')
+const editSiteySubdomains = ref(false);
+const editSaving = ref(false);
+const editError = ref("");
+const saveSucceeded = ref(false);
+const deletingDomain = ref(false);
+const caddyLogLines = ref<string[]>([]);
+const caddyLogsLoading = ref(false);
+const caddyLogsError = ref("");
 
-const isWildcard = computed(() => domain.value?.hostname.startsWith('*.') ?? false)
-type DnsResult = { resolves: boolean; addresses: string[] } | null
-const dnsResult = ref<DnsResult>(null)
+const isWildcard = computed(
+  () => domain.value?.hostname.startsWith("*.") ?? false,
+);
+type DnsResult = { resolves: boolean; addresses: string[] } | null;
+const dnsResult = ref<DnsResult>(null);
 
 async function checkDns() {
-  if (!domain.value) return
-  dnsResult.value = null
-  dnsResult.value = await trpc.domains.checkDns.query({ hostname: domain.value.hostname })
+  if (!domain.value) return;
+  dnsResult.value = null;
+  dnsResult.value = await trpc.domains.checkDns.query({
+    hostname: domain.value.hostname,
+  });
 }
 
 async function saveEdit() {
-  editError.value = ''
-  saveSucceeded.value = false
-  editSaving.value = true
+  editError.value = "";
+  saveSucceeded.value = false;
+  editSaving.value = true;
   try {
     await trpc.domains.update.mutate({
       id: domainId,
-      ...(isWildcard.value ? { siteySubdomainsEnabled: editSiteySubdomains.value } : {}),
-    })
-    saveSucceeded.value = true
+      ...(isWildcard.value
+        ? { siteySubdomainsEnabled: editSiteySubdomains.value }
+        : {}),
+    });
+    saveSucceeded.value = true;
     setTimeout(() => {
-      saveSucceeded.value = false
-    }, 3000)
-    await fetchDomain()
+      saveSucceeded.value = false;
+    }, 3000);
+    await fetchDomain();
   } catch (e: unknown) {
-    editError.value = (e as { message?: string })?.message ?? 'Failed to save'
+    editError.value = (e as { message?: string })?.message ?? "Failed to save";
   } finally {
-    editSaving.value = false
+    editSaving.value = false;
   }
 }
 
 async function loadCaddyLogs() {
-  if (!domain.value || domain.value.status !== 'error') return
-  caddyLogsLoading.value = true
-  caddyLogsError.value = ''
+  if (!domain.value || domain.value.status !== "error") return;
+  caddyLogsLoading.value = true;
+  caddyLogsError.value = "";
   try {
-    const res = await trpc.domains.getCaddyLogs.query({ tail: 200 })
-    caddyLogLines.value = res.lines
+    const res = await trpc.domains.getCaddyLogs.query({ tail: 200 });
+    caddyLogLines.value = res.lines;
   } catch (e: unknown) {
-    caddyLogsError.value = (e as { message?: string })?.message ?? 'Failed to load Caddy logs'
+    caddyLogsError.value =
+      (e as { message?: string })?.message ?? "Failed to load Caddy logs";
   } finally {
-    caddyLogsLoading.value = false
+    caddyLogsLoading.value = false;
   }
 }
 
 function normalizeHostnameInput(hostname: string): string {
-  return hostname.trim().toLowerCase().replace(/\.$/, '')
+  return hostname.trim().toLowerCase().replace(/\.$/, "");
 }
 
 function wildcardMatches(pattern: string, hostname: string): boolean {
-  if (!pattern.startsWith('*.')) return false
-  const suffix = pattern.slice(2)
-  if (!hostname.endsWith(`.${suffix}`)) return false
-  const hostLabels = hostname.split('.').length
-  const suffixLabels = suffix.split('.').length
-  return hostLabels === suffixLabels + 1
+  if (!pattern.startsWith("*.")) return false;
+  const suffix = pattern.slice(2);
+  if (!hostname.endsWith(`.${suffix}`)) return false;
+  const hostLabels = hostname.split(".").length;
+  const suffixLabels = suffix.split(".").length;
+  return hostLabels === suffixLabels + 1;
 }
 
 function deletingCurrentSiteDomain(hostname: string): boolean {
-  const target = normalizeHostnameInput(hostname)
-  const currentHost = normalizeHostnameInput(window.location.hostname)
-  return target === currentHost || wildcardMatches(target, currentHost)
+  const target = normalizeHostnameInput(hostname);
+  const currentHost = normalizeHostnameInput(window.location.hostname);
+  return target === currentHost || wildcardMatches(target, currentHost);
 }
 
 async function deleteDomain() {
-  if (!domain.value || deletingDomain.value) return
-  const hostname = domain.value.hostname
+  if (!domain.value || deletingDomain.value) return;
+  const hostname = domain.value.hostname;
   const inUseWarning = deletingCurrentSiteDomain(hostname)
-    ? '\n\nWARNING: You are currently using this domain to access Sitey. Deleting it may break this URL immediately.'
-    : ''
+    ? "\n\nWARNING: You are currently using this domain to access Sitey. Deleting it may break this URL immediately."
+    : "";
 
-  if (!confirm(`Delete domain "${hostname}"? This will remove all its routes.${inUseWarning}`)) return
+  if (
+    !confirm(
+      `Delete domain "${hostname}"? This will remove all its routes.${inUseWarning}`,
+    )
+  )
+    return;
 
-  deletingDomain.value = true
-  error.value = ''
+  deletingDomain.value = true;
+  error.value = "";
   try {
-    await trpc.domains.delete.mutate({ id: domainId })
-    await router.push('/')
+    await trpc.domains.delete.mutate({ id: domainId });
+    await router.push("/");
   } catch (e: unknown) {
-    error.value = (e as { message?: string })?.message ?? 'Failed to delete domain'
+    error.value =
+      (e as { message?: string })?.message ?? "Failed to delete domain";
   } finally {
-    deletingDomain.value = false
+    deletingDomain.value = false;
   }
 }
 
 const domainProjects = computed(() =>
-  (domain.value?.routes ?? []).map((r) => r.project).filter((p) => !p.protected),
-)
+  (domain.value?.routes ?? [])
+    .map((r) => r.project)
+    .filter((p) => !p.protected),
+);
 
 async function fetchDomain() {
-  loading.value = true
-  error.value = ''
+  loading.value = true;
+  error.value = "";
   try {
-    domain.value = await trpc.domains.get.query({ id: domainId })
-    editSiteySubdomains.value = (domain.value as any).siteySubdomainsEnabled ?? false
-    if (domain.value.status === 'error') {
-      await loadCaddyLogs()
+    domain.value = await trpc.domains.get.query({ id: domainId });
+    editSiteySubdomains.value =
+      (domain.value as any).siteySubdomainsEnabled ?? false;
+    if (domain.value.status === "error") {
+      await loadCaddyLogs();
     } else {
-      caddyLogLines.value = []
-      caddyLogsError.value = ''
+      caddyLogLines.value = [];
+      caddyLogsError.value = "";
     }
   } catch (e: unknown) {
-    error.value = (e as { message?: string })?.message ?? 'Failed to load domain'
+    error.value =
+      (e as { message?: string })?.message ?? "Failed to load domain";
   } finally {
-    loading.value = false
+    loading.value = false;
   }
 }
 
 async function handleProjectCreated() {
-  await fetchDomain()
+  await fetchDomain();
 }
 
 function tlsLabel(status: string) {
   const labels: Record<string, string> = {
-    pending: 'Obtaining certificate...',
-    active: 'HTTPS active',
-    error: 'Certificate error',
-  }
-  return labels[status] ?? status
+    pending: "Obtaining certificate...",
+    active: "HTTPS active",
+    error: "Certificate error",
+  };
+  return labels[status] ?? status;
 }
 
 function relativeTime(ts: string | Date) {
-  const diff = Date.now() - new Date(ts).getTime()
-  const m = Math.floor(diff / 60000)
-  if (m < 1) return 'just now'
-  if (m < 60) return `${m}m ago`
-  const h = Math.floor(m / 60)
-  if (h < 24) return `${h}h ago`
-  return `${Math.floor(h / 24)}d ago`
+  const diff = Date.now() - new Date(ts).getTime();
+  const m = Math.floor(diff / 60000);
+  if (m < 1) return "just now";
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
 }
 
 onMounted(async () => {
-  await fetchDomain()
-  checkDns()
-})
+  await fetchDomain();
+  checkDns();
+});
 </script>
 
 <style scoped>
@@ -364,7 +425,7 @@ h1 {
 
 .last-deploy {
   font-size: var(--font-tiny);
-  }
+}
 
 .danger-zone {
   margin-top: 3rem;
@@ -439,7 +500,6 @@ h1 {
   margin-top: 1rem;
 }
 
-
 .alert.error {
   background: var(--status-err-bg);
   border: 1px solid var(--status-err-border);
@@ -458,7 +518,6 @@ h1 {
   margin-bottom: 1rem;
 }
 
-
 .btn-danger {
   background: var(--status-err-bg);
   color: var(--status-err-text);
@@ -467,7 +526,9 @@ h1 {
   padding: 0.6rem 1.25rem;
   font-weight: 600;
   cursor: pointer;
-  transition: opacity 0.15s, border-color 0.15s;
+  transition:
+    opacity 0.15s,
+    border-color 0.15s;
 }
 
 .btn-danger:hover:not(:disabled) {
@@ -537,7 +598,6 @@ h1 {
   white-space: nowrap;
 }
 
-
 .dns-ok {
   color: var(--status-ok-text);
 }
@@ -554,7 +614,9 @@ h1 {
   font-size: var(--font-tiny);
   cursor: pointer;
   line-height: 1.4;
-  transition: border-color 0.15s, color 0.15s;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
 }
 
 .btn-recheck:hover {
@@ -582,7 +644,7 @@ h1 {
   justify-content: space-between;
   margin-bottom: 0.45rem;
   font-size: var(--font-tiny);
-  }
+}
 
 .caddy-logs-error {
   margin-bottom: 0.5rem;
@@ -606,7 +668,6 @@ h1 {
   word-break: break-all;
 }
 
-
 .btn-ghost-sm {
   background: none;
   border: 1px solid var(--border-strong);
@@ -614,7 +675,9 @@ h1 {
   padding: 0.25rem 0.55rem;
   font-size: var(--font-tiny);
   cursor: pointer;
-  transition: border-color 0.15s, color 0.15s;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
 }
 
 .btn-ghost-sm:hover:not(:disabled) {
@@ -626,12 +689,3 @@ h1 {
   cursor: not-allowed;
 }
 </style>
-
-
-
-
-
-
-
-
-

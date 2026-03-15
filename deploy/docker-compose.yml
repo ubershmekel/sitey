@@ -8,11 +8,10 @@ networks:
 
 # ─── Volumes ──────────────────────────────────────────────────────────────────
 volumes:
-  caddy_data:   # TLS certs + Caddy state
+  caddy_data: # TLS certs + Caddy state
 
 # ─── Services ─────────────────────────────────────────────────────────────────
 services:
-
   # ── Caddy (TLS termination + reverse proxy + static file server) ───────────
   # The sitey-web SPA is baked into this image at /srv/web.
   # User static sites are served from /srv/projects/<id>/repo/<outputDir>.
