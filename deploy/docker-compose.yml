@@ -54,6 +54,8 @@ services:
       SITEY_EMAIL: ${SITEY_EMAIL:-}
       # Where to reach the Caddy admin API (default works in Docker)
       CADDY_ADMIN_URL: http://caddy:2019
+      # Host-side path to the data directory (for build containers that need bind mounts)
+      HOST_DATA_ROOT: ${HOST_DATA_ROOT:-}
     volumes:
       - ${DATA_ROOT:-./data}:/data
       - /var/run/docker.sock:/var/run/docker.sock

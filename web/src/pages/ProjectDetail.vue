@@ -99,6 +99,13 @@
           <div class="info-label">Container port</div>
           <div class="info-value mono">{{ project.containerPort }}</div>
         </div>
+        <div
+          v-if="project.deployMode === 'static' && project.buildImage"
+          class="info-card"
+        >
+          <div class="info-label">Build image</div>
+          <div class="info-value mono">{{ project.buildImage }}</div>
+        </div>
         <div class="info-card">
           <div class="info-label">GitHub</div>
           <div class="info-value">

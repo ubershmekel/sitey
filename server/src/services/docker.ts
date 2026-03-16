@@ -13,6 +13,7 @@
  * Containers no longer carry caddy-docker-proxy labels.
  */
 
+import path from "node:path";
 import Docker from "dockerode";
 import type { Project } from "../generated/prisma/client.js";
 import { db } from "../lib/db.js";
@@ -236,6 +237,134 @@ export async function getProjectContainerLogs(
   } catch {
     return { lines: ["Could not fetch container logs."], container: null };
   }
+}
+
+// ── Build container for static sites ──────────────────────────────────────────
+
+let cachedHostDataRoot: string | null = null;
+
+/**
+ * Resolve the host-side path for the /data mount.
+ * In production (Docker), we auto-detect from the container's own mounts.
+ * In dev, DATA_ROOT is already a host path.
+ */
+async function resolveHostDataRoot(): Promise<string> {
+  if (cachedHostDataRoot) return cachedHostDataRoot;
+
+  if (process.env.HOST_DATA_ROOT) {
+    cachedHostDataRoot = process.env.HOST_DATA_ROOT;
+    return cachedHostDataRoot;
+  }
+
+  // Dev mode: DATA_ROOT is already a host path
+  if (process.env.NODE_ENV !== "production") {
+    cachedHostDataRoot = process.env.DATA_ROOT || "./data";
+    return cachedHostDataRoot;
+  }
+
+  // Auto-detect from container mount inspection
+  try {
+    const hostname = process.env.HOSTNAME;
+    if (hostname) {
+      const info = await docker.getContainer(hostname).inspect();
+      const dataMount = info.Mounts?.find(
+        (m: { Destination?: string }) => m.Destination === "/data",
+      );
+      if (dataMount?.Source) {
+        cachedHostDataRoot = dataMount.Source;
+        return cachedHostDataRoot;
+      }
+    }
+  } catch {
+    // fall through to fallback
+  }
+
+  cachedHostDataRoot = process.env.DATA_ROOT || "/data";
+  return cachedHostDataRoot;
+}
+
+export async function hostProjectRepoPath(projectId: number): Promise<string> {
+  const root = await resolveHostDataRoot();
+  return path.posix.join(root, "projects", String(projectId), "repo");
+}
+
+/**
+ * Pull a Docker image if not already present locally.
+ */
+async function ensureImage(
+  image: string,
+  onLog: (line: string) => void,
+): Promise<void> {
+  try {
+    await docker.getImage(image).inspect();
+    onLog(`[docker] Image ${image} already present`);
+    return;
+  } catch {
+    // not found — pull it
+  }
+
+  onLog(`[docker] Pulling image ${image}...`);
+  const stream = await docker.pull(image);
+  await new Promise<void>((resolve, reject) => {
+    docker.modem.followProgress(
+      stream,
+      (err: Error | null) => (err ? reject(err) : resolve()),
+      (event: { status?: string; progress?: string }) => {
+        const line = [event.status, event.progress].filter(Boolean).join(" ");
+        if (line) onLog(`[docker] ${line}`);
+      },
+    );
+  });
+  onLog(`[docker] Image ${image} pulled`);
+}
+
+/**
+ * Run a static-site build command inside a throwaway Docker container.
+ * The repo is bind-mounted at /app so build output lands on the host.
+ */
+export async function runBuildContainer(opts: {
+  projectId: number;
+  buildImage: string;
+  buildCommand: string;
+  envVars: Record<string, string>;
+  onLog: (line: string) => void;
+}): Promise<void> {
+  const { projectId, buildImage: image, buildCommand, envVars, onLog } = opts;
+
+  await ensureImage(image, onLog);
+
+  const hostRepo = await hostProjectRepoPath(projectId);
+  onLog(`[docker] Running build in ${image}: ${buildCommand}`);
+
+  const container = await docker.createContainer({
+    Image: image,
+    Cmd: ["sh", "-c", buildCommand],
+    WorkingDir: "/app",
+    Env: Object.entries(envVars).map(([k, v]) => `${k}=${v}`),
+    HostConfig: {
+      Binds: [`${hostRepo}:/app`],
+      AutoRemove: true,
+    },
+  });
+
+  await container.start();
+
+  // Stream logs
+  const logStream = await container.logs({
+    follow: true,
+    stdout: true,
+    stderr: true,
+  });
+  logStream.on("data", (chunk: Buffer) => {
+    const text = chunk.toString("utf8").trimEnd();
+    if (text) onLog(text);
+  });
+
+  const { StatusCode } = await container.wait();
+  if (StatusCode !== 0) {
+    throw new Error(`Build container exited with code ${StatusCode}`);
+  }
+  onLog("[docker] Build container finished successfully");
 }
 
 // ── Dockerfile generators ─────────────────────────────────────────────────────

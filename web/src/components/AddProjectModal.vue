@@ -123,6 +123,15 @@
           Output directory <span class="hint">(relative to repo root)</span>
           <input v-model="form.outputDir" type="text" placeholder="dist" />
         </label>
+        <label>
+          Build image
+          <span class="hint">(optional, e.g. <code>oven/bun:1</code>)</span>
+          <input
+            v-model="form.buildImage"
+            type="text"
+            placeholder="Leave empty to use Node.js 22"
+          />
+        </label>
       </template>
 
       <template v-else-if="deployType === 'server'">
@@ -266,6 +275,7 @@ function emptyForm() {
     branch: "main",
     buildCommand: "",
     outputDir: "dist",
+    buildImage: "",
     serverRunCommand: "",
     dockerfilePath: "",
     containerPort: 3000,
@@ -371,6 +381,7 @@ async function addProject() {
       deployMode: isStatic ? "static" : "server",
       buildCommand: form.value.buildCommand.trim(),
       outputDir: isStatic ? form.value.outputDir.trim() || "dist" : "",
+      buildImage: isStatic ? form.value.buildImage.trim() : "",
       serverRunCommand:
         isStatic || isDockerfile ? "" : form.value.serverRunCommand.trim(),
       buildMode: isDockerfile ? "dockerfile" : "auto",

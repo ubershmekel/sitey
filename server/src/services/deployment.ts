@@ -28,6 +28,7 @@ import {
   generateServerDockerfile,
   pruneProjectImages,
   allocateHostPort,
+  runBuildContainer,
 } from "./docker.js";
 import { reloadCaddy } from "./caddy.js";
 import { getInstallationToken } from "./github.js";
@@ -259,25 +260,38 @@ async function runDeployment(
     });
 
     if (project.deployMode === "static") {
-      // 3. Run build command in the repo directory (node/npm available in this container)
+      // 3. Run build command
       const repoPath = projectRepoPath(project.id);
       const buildCmd = project.buildCommand.trim() || 'echo "No build step"';
       onLog(`[deploy] Running build: ${buildCmd}`);
       const buildEnv = parseEnvString(project.envVars || "");
-      await new Promise<void>((resolve, reject) => {
-        const proc = spawn("sh", ["-c", buildCmd], {
-          cwd: repoPath,
-          env: { ...process.env, ...buildEnv },
+
+      if (project.buildImage) {
+        // Run build inside a Docker container (e.g. oven/bun:1)
+        await runBuildContainer({
+          projectId: project.id,
+          buildImage: project.buildImage,
+          buildCommand: buildCmd,
+          envVars: buildEnv,
+          onLog,
         });
-        proc.stdout.on("data", (d: Buffer) => onLog(d.toString().trimEnd()));
-        proc.stderr.on("data", (d: Buffer) => onLog(d.toString().trimEnd()));
-        proc.on("close", (code: number | null) =>
-          code === 0
-            ? resolve()
-            : reject(new Error(`Build exited with code ${code}`)),
-        );
-        proc.on("error", reject);
-      });
+      } else {
+        // Run build directly in the sitey-api container (node/npm available)
+        await new Promise<void>((resolve, reject) => {
+          const proc = spawn("sh", ["-c", buildCmd], {
+            cwd: repoPath,
+            env: { ...process.env, ...buildEnv },
+          });
+          proc.stdout.on("data", (d: Buffer) => onLog(d.toString().trimEnd()));
+          proc.stderr.on("data", (d: Buffer) => onLog(d.toString().trimEnd()));
+          proc.on("close", (code: number | null) =>
+            code === 0
+              ? resolve()
+              : reject(new Error(`Build exited with code ${code}`)),
+          );
+          proc.on("error", reject);
+        });
+      }
 
       // 4. Push updated Caddy config (serves repo/<outputDir> directly)
       try {
