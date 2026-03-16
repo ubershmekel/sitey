@@ -117,24 +117,36 @@
           directory (available in code as
           <code class="inline-code">DATA_DIR=/data</code>).
         </p>
-        <textarea
-          v-model="envVarsText"
-          class="env-textarea"
-          rows="6"
-          placeholder="DATABASE_URL=file:/data/app.db&#10;MY_SECRET=changeme"
-          spellcheck="false"
-        ></textarea>
-        <div class="env-actions">
-          <button
-            class="btn-primary"
-            :disabled="envSaving || envVarsText === (project.envVars ?? '')"
-            @click="saveEnvVars"
-          >
-            {{ envSaving ? "Saving..." : "Save" }}
-          </button>
-          <span v-if="envSaved" class="env-saved">Saved</span>
-          <span v-if="envError" class="env-error">{{ envError }}</span>
-        </div>
+        <button
+          type="button"
+          class="btn-ghost-sm env-toggle"
+          @click="envEditorExpanded = !envEditorExpanded"
+        >
+          {{ envEditorExpanded ? "Hide env vars" : "Show env vars" }}
+        </button>
+        <p v-if="!envEditorExpanded" class="env-collapsed-note">
+          Hidden by default because values may contain secrets.
+        </p>
+        <template v-else>
+          <textarea
+            v-model="envVarsText"
+            class="env-textarea"
+            rows="6"
+            placeholder="DATABASE_URL=file:/data/app.db&#10;MY_SECRET=changeme"
+            spellcheck="false"
+          ></textarea>
+          <div class="env-actions">
+            <button
+              class="btn-primary"
+              :disabled="envSaving || envVarsText === (project.envVars ?? '')"
+              @click="saveEnvVars"
+            >
+              {{ envSaving ? "Saving..." : "Save" }}
+            </button>
+            <span v-if="envSaved" class="env-saved">Saved</span>
+            <span v-if="envError" class="env-error">{{ envError }}</span>
+          </div>
+        </template>
       </div>
 
       <!-- ── Routes ────────────────────────────────────────────────── -->
@@ -436,6 +448,7 @@ const logLines = ref<string[]>([]);
 const logBox = ref<HTMLElement | null>(null);
 const logsLoading = ref(false);
 const envVarsText = ref("");
+const envEditorExpanded = ref(false);
 const envSaving = ref(false);
 const envSaved = ref(false);
 const envError = ref("");
@@ -957,6 +970,16 @@ h1 {
 
 .env-textarea:focus {
   border-color: var(--brand);
+}
+
+.env-toggle {
+  width: fit-content;
+}
+
+.env-collapsed-note {
+  font-size: var(--font-tiny);
+  margin: 0.5rem 0 0;
+  color: var(--text-muted);
 }
 
 .env-actions {
