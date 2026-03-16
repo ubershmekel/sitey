@@ -78,11 +78,13 @@
           </div>
         </div>
 
-        <div v-if="repoStatusLoading && hasInstallStatus" class="section-hint">
-          Refreshing installations...
-        </div>
-        <div v-if="checkedAtLabel" class="section-hint">
-          Last checked: {{ checkedAtLabel }}
+        <div v-if="checkedAtLabel || repoStatusLoading" class="section-hint">
+          <template v-if="repoStatusLoading && hasInstallStatus"
+            >Refreshing installations...</template
+          >
+          <template v-else-if="checkedAtLabel"
+            >Last checked: {{ checkedAtLabel }}</template
+          >
         </div>
         <template v-if="!repoStatusError">
           <!-- Installation list -->
@@ -327,12 +329,14 @@ async function fetchManifest() {
   }
 }
 
-async function fetchRepoInfo() {
+async function fetchRepoInfo(silent = false) {
   if (repoRefreshRetryTimer) {
     clearTimeout(repoRefreshRetryTimer);
     repoRefreshRetryTimer = null;
   }
-  repoStatusLoading.value = true;
+  if (!silent) {
+    repoStatusLoading.value = true;
+  }
   repoStatusError.value = "";
   try {
     const info: AppRepoInfo = await trpc.github.listAppRepos.query();
@@ -343,8 +347,8 @@ async function fetchRepoInfo() {
       hasInstallStatus.value = true;
       if (info.refreshing) {
         repoRefreshRetryTimer = setTimeout(() => {
-          void fetchRepoInfo();
-        }, 1500);
+          void fetchRepoInfo(true);
+        }, 3000);
       }
     } else {
       installations.value = [];
