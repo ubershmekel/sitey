@@ -3,9 +3,19 @@
 The easiest way to auto-deploy from GitHub to your server. Designed for vibe
 coders, coders, and kids who can't read good.
 
-## Install with one line (tested on Hetzner Ubuntu VPS)
+You'll get a dashboard with a list of your projects, domains, deployments, and
+an easy way to control everything.
 
-SSH into your server and run:
+## How to self-host
+
+New to self-hosting? Start with the
+[Guide to self-hosting](docs/guides/README.md) for a step-by-step path from
+server setup (on Hetzner, or AWS EC2) to live DNS (on Namecheap, Route 53, or
+GoDaddy).
+
+## Install Sitey with one line
+
+If you have a domain and server ready, just SSH into your server and run:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ubershmekel/sitey/main/deploy/install-ubuntu.sh | bash
@@ -19,8 +29,8 @@ the stack, then print:
 
 Works on standard Ubuntu VPS hosts (for example: Hetzner, DigitalOcean, Linode).
 
-You'll get a **self-hosted, domain-first PaaS.** Deploy Node.js apps from GitHub
-to your own VM with automatic HTTPS.
+You'll get a **self-hosted, domain-first PaaS.** Deploy Node.js apps (or any
+docker really) from GitHub to your own VM with automatic HTTPS.
 
 ---
 
@@ -66,10 +76,3 @@ other operational tasks, see [docs/ops.md](docs/ops.md).
 
 See [docs/development.md](docs/development.md) for local setup, DB scripts, and
 how to keep migrations in sync with `schema.prisma`.
-
-## Onboarding guides
-
-New to self-hosting? Start with the
-[Guide to self-hosting](docs/guides/README.md) for a step-by-step path from
-server setup (on Hetzner, or AWS EC2) to live DNS (on Namecheap, Route 53, or
-GoDaddy).
