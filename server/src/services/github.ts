@@ -7,8 +7,9 @@ import jwt from "jsonwebtoken";
 import { db } from "../lib/db.js";
 
 const GITHUB_API_BASE = "https://api.github.com";
+const GITHUB_INTEGRATION_ID = 1;
 
-export const GITHUB_CONFIG_KEYS = {
+export const LEGACY_GITHUB_CONFIG_KEYS = {
   APP_ID: "github_app_id",
   PRIVATE_KEY: "github_app_private_key",
   WEBHOOK_SECRET: "github_app_webhook_secret",
@@ -26,6 +27,75 @@ export async function setConfig(key: string, value: string) {
     create: { key, value },
     update: { value },
   });
+}
+
+export async function getGithubIntegrationConfig() {
+  const [
+    row,
+    legacyAppId,
+    legacyPrivateKey,
+    legacyWebhookSecret,
+    legacyAppSlug,
+  ] = await Promise.all([
+    db.githubIntegration.findUnique({
+      where: { id: GITHUB_INTEGRATION_ID },
+    }),
+    getConfig(LEGACY_GITHUB_CONFIG_KEYS.APP_ID),
+    getConfig(LEGACY_GITHUB_CONFIG_KEYS.PRIVATE_KEY),
+    getConfig(LEGACY_GITHUB_CONFIG_KEYS.WEBHOOK_SECRET),
+    getConfig(LEGACY_GITHUB_CONFIG_KEYS.APP_SLUG),
+  ]);
+
+  return {
+    appId: row?.appId ?? legacyAppId,
+    privateKey: row?.privateKey ?? legacyPrivateKey,
+    webhookSecret: row?.webhookSecret ?? legacyWebhookSecret,
+    appSlug: row?.appSlug ?? legacyAppSlug,
+  };
+}
+
+export async function upsertGithubIntegrationConfig(input: {
+  appId: string;
+  privateKey: string;
+  webhookSecret: string;
+  appSlug?: string | null;
+}) {
+  return db.githubIntegration.upsert({
+    where: { id: GITHUB_INTEGRATION_ID },
+    create: {
+      id: GITHUB_INTEGRATION_ID,
+      appId: input.appId,
+      privateKey: input.privateKey,
+      webhookSecret: input.webhookSecret,
+      appSlug: input.appSlug ?? null,
+    },
+    update: {
+      appId: input.appId,
+      privateKey: input.privateKey,
+      webhookSecret: input.webhookSecret,
+      appSlug: input.appSlug ?? null,
+    },
+  });
+}
+
+export async function setGithubIntegrationSlug(appSlug: string) {
+  await db.githubIntegration.upsert({
+    where: { id: GITHUB_INTEGRATION_ID },
+    create: {
+      id: GITHUB_INTEGRATION_ID,
+      appSlug,
+    },
+    update: { appSlug },
+  });
+}
+
+export async function clearGithubIntegrationConfig() {
+  await Promise.all([
+    db.githubIntegration.deleteMany({ where: { id: GITHUB_INTEGRATION_ID } }),
+    db.systemConfig.deleteMany({
+      where: { key: { in: Object.values(LEGACY_GITHUB_CONFIG_KEYS) } },
+    }),
+  ]);
 }
 
 export function toPem(key: string) {
@@ -63,8 +133,7 @@ export async function getInstallationToken(
   repoOwner: string,
   repoName: string,
 ): Promise<string | null> {
-  const appId = await getConfig(GITHUB_CONFIG_KEYS.APP_ID);
-  const privateKey = await getConfig(GITHUB_CONFIG_KEYS.PRIVATE_KEY);
+  const { appId, privateKey } = await getGithubIntegrationConfig();
   if (!appId || !privateKey) return null;
 
   const appJwt = createAppJwt(appId, privateKey);

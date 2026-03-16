@@ -18,7 +18,7 @@
           </div>
         </div>
         <span
-          v-if="repoStatusLoading && appConfig?.configured"
+          v-if="repoStatusLoading && appConfig?.configured && !hasInstallStatus"
           class="badge badge-idle"
           >Checking install status</span
         >
@@ -78,10 +78,13 @@
           </div>
         </div>
 
-        <div v-if="repoStatusLoading" class="section-hint">
-          Checking installations...
+        <div v-if="repoStatusLoading && hasInstallStatus" class="section-hint">
+          Refreshing installations...
         </div>
-        <template v-else-if="!repoStatusError">
+        <div v-if="checkedAtLabel" class="section-hint">
+          Last checked: {{ checkedAtLabel }}
+        </div>
+        <template v-if="!repoStatusError">
           <!-- Installation list -->
           <div class="installations-section">
             <div class="installations-header">
@@ -252,7 +255,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from "vue";
+import { ref, reactive, computed, onMounted, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import Layout from "../components/Layout.vue";
 import NavIcon from "../components/NavIcon.vue";
@@ -282,13 +285,22 @@ const appError = ref("");
 const appSuccess = ref(false);
 const repoStatusLoading = ref(false);
 const repoStatusError = ref("");
+const hasInstallStatus = ref(false);
+const repoStatusCheckedAt = ref<string | null>(null);
 const installations = ref<Installation[]>([]);
 const installUrl = ref<string | null>(null);
 const copied = ref(false);
+let repoRefreshRetryTimer: ReturnType<typeof setTimeout> | null = null;
 const appCreated = computed(() => route.query.app_created === "1");
 const isInstallReady = computed(
   () => !!appConfig.value?.configured && installations.value.length > 0,
 );
+const checkedAtLabel = computed(() => {
+  if (!repoStatusCheckedAt.value) return "";
+  const d = new Date(repoStatusCheckedAt.value);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleString();
+});
 
 async function copyInstallUrl() {
   if (!installUrl.value) return;
@@ -316,6 +328,10 @@ async function fetchManifest() {
 }
 
 async function fetchRepoInfo() {
+  if (repoRefreshRetryTimer) {
+    clearTimeout(repoRefreshRetryTimer);
+    repoRefreshRetryTimer = null;
+  }
   repoStatusLoading.value = true;
   repoStatusError.value = "";
   try {
@@ -323,9 +339,18 @@ async function fetchRepoInfo() {
     if (info.configured) {
       installations.value = info.installations;
       installUrl.value = info.app.installUrl;
+      repoStatusCheckedAt.value = info.statusCheckedAt ?? null;
+      hasInstallStatus.value = true;
+      if (info.refreshing) {
+        repoRefreshRetryTimer = setTimeout(() => {
+          void fetchRepoInfo();
+        }, 1500);
+      }
     } else {
       installations.value = [];
       installUrl.value = null;
+      repoStatusCheckedAt.value = null;
+      hasInstallStatus.value = false;
     }
   } catch (e: unknown) {
     const msg = (e as { message?: string })?.message ?? "";
@@ -342,11 +367,13 @@ async function fetchRepoInfo() {
       app.webhookSecret = "";
       installations.value = [];
       installUrl.value = null;
+      repoStatusCheckedAt.value = null;
+      hasInstallStatus.value = false;
       repoStatusError.value = "";
       await fetchManifest();
       return;
     }
-    installations.value = [];
+    hasInstallStatus.value = true;
     repoStatusError.value =
       msg || "Could not read GitHub App installation status.";
   } finally {
@@ -365,6 +392,8 @@ async function fetchAppConfig() {
       installations.value = [];
       installUrl.value = null;
       repoStatusError.value = "";
+      repoStatusCheckedAt.value = null;
+      hasInstallStatus.value = false;
     }
   } catch {
     // ignore
@@ -401,9 +430,14 @@ async function clearAppConfig() {
   installations.value = [];
   installUrl.value = null;
   repoStatusError.value = "";
+  repoStatusCheckedAt.value = null;
+  hasInstallStatus.value = false;
 }
 
 onMounted(fetchAppConfig);
+onUnmounted(() => {
+  if (repoRefreshRetryTimer) clearTimeout(repoRefreshRetryTimer);
+});
 </script>
 
 <style scoped>
