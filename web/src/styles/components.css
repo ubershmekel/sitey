@@ -216,3 +216,62 @@ img {
 .btn-primary:hover:not(:disabled) {
   opacity: 0.85;
 }
+
+.text-option-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.text-option-label {
+  font-size: var(--font-tiny);
+  color: var(--text-secondary);
+}
+
+.text-option-row {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.text-option-row button {
+  flex: 1;
+  background: var(--bg-input);
+  border: none;
+  border-right: 1px solid var(--border-strong);
+  font-size: var(--font-tiny);
+  padding: 0.5rem 0.25rem;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+}
+
+.text-option-row button:last-child {
+  border-right: none;
+}
+
+.text-option-row button.active {
+  background: var(--brand-active-bg);
+  color: var(--brand-active-text);
+  font-weight: 600;
+}
+
+.text-option-row button:hover:not(.active) {
+  background: var(--bg-elevated);
+}
+
+.text-option-help {
+  font-size: var(--font-tiny);
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+.text-option-help code {
+  background: var(--bg-input);
+  border-radius: 3px;
+  padding: 0.1em 0.35em;
+  color: var(--status-info-text);
+}

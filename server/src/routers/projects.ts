@@ -163,6 +163,12 @@ export const projectsRouter = router({
     .input(
       z.object({
         id: z.number().int(),
+        name: z
+          .string()
+          .min(1)
+          .max(40)
+          .regex(/^[a-z0-9-]+$/, "Lowercase alphanumeric and hyphens only")
+          .optional(),
         branch: z.string().optional(),
         deployMode: z.enum(["server", "static"]).optional(),
         buildCommand: z.string().optional(),

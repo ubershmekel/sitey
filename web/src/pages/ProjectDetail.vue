@@ -19,6 +19,13 @@
         <div class="hero-top">
           <div class="hero-name-row">
             <h1>{{ project.name }}</h1>
+            <button
+              type="button"
+              class="btn-ghost-sm title-edit-btn"
+              @click="startTitleEdit"
+            >
+              Edit name
+            </button>
             <span v-if="!project.active" class="status status-inactive"
               >Inactive</span
             >
@@ -34,6 +41,38 @@
             {{ deploying ? "Deploying..." : "Deploy now" }}
           </button>
         </div>
+        <form
+          v-if="titleEditing"
+          class="title-edit-form"
+          @submit.prevent="saveTitleEdit"
+        >
+          <label>
+            Project name
+            <input
+              v-model="titleDraft"
+              type="text"
+              required
+              pattern="^[a-z0-9-]+$"
+              maxlength="40"
+              placeholder="my-project"
+            />
+          </label>
+          <div class="title-edit-actions">
+            <button
+              type="submit"
+              class="btn-primary"
+              :disabled="titleSaving || !titleDirty"
+            >
+              {{ titleSaving ? "Saving..." : "Save name" }}
+            </button>
+            <button type="button" class="btn-ghost-sm" @click="cancelTitleEdit">
+              Cancel
+            </button>
+            <span v-if="titleError" class="settings-error">{{
+              titleError
+            }}</span>
+          </div>
+        </form>
 
         <div v-if="projectUrl" class="hero-url">
           <a
@@ -361,6 +400,135 @@
       </div>
 
       <!-- ── Danger zone ───────────────────────────────────────────── -->
+      <div class="section">
+        <h2>Project Settings</h2>
+        <p class="section-hint">
+          Change deploy/build mode and related runtime/build fields.
+        </p>
+        <form class="settings-form" @submit.prevent="saveProjectSettings">
+          <div class="text-option-group">
+            <div class="text-option-label">Deploy type</div>
+            <div class="text-option-row">
+              <button
+                type="button"
+                :class="{ active: editDeployType === 'static' }"
+                @click="editDeployType = 'static'"
+              >
+                Static site
+              </button>
+              <button
+                type="button"
+                :class="{ active: editDeployType === 'server' }"
+                @click="editDeployType = 'server'"
+              >
+                Server app
+              </button>
+              <button
+                type="button"
+                :class="{ active: editDeployType === 'dockerfile' }"
+                @click="editDeployType = 'dockerfile'"
+              >
+                Dockerfile
+              </button>
+            </div>
+            <div class="text-option-help">
+              <span v-if="editDeployType === 'static'"
+                >Build your site and serve the output as static files via
+                Caddy.</span
+              >
+              <span v-else-if="editDeployType === 'server'"
+                >Sitey generates a Dockerfile from your run command and runs it
+                in a container.</span
+              >
+              <span v-else
+                >Use your own <code>Dockerfile</code> from the repository.</span
+              >
+            </div>
+          </div>
+
+          <label v-if="editDeployType === 'static'">
+            Build command <span class="hint">(optional)</span>
+            <input
+              v-model="editBuildCommand"
+              type="text"
+              placeholder="npm run build"
+            />
+          </label>
+          <label v-if="editDeployType === 'static'">
+            Output directory <span class="hint">(relative to repo root)</span>
+            <input v-model="editOutputDir" type="text" placeholder="dist" />
+          </label>
+          <label v-if="editDeployType === 'static'">
+            Build image
+            <span class="hint">(optional, e.g. <code>oven/bun:1</code>)</span>
+            <input
+              v-model="editBuildImage"
+              type="text"
+              placeholder="Leave empty to use Node.js 22"
+            />
+          </label>
+
+          <label v-if="editDeployType === 'server'">
+            Build command <span class="hint">(optional)</span>
+            <input
+              v-model="editBuildCommand"
+              type="text"
+              placeholder="npm run build"
+            />
+          </label>
+          <label v-if="editDeployType === 'server'">
+            Start command <span class="hint">(e.g. node server.js)</span>
+            <input
+              v-model="editServerRunCommand"
+              type="text"
+              required
+              placeholder="node server.js"
+            />
+          </label>
+          <label v-if="editDeployType === 'server'">
+            Container port
+            <input
+              v-model.number="editContainerPort"
+              type="number"
+              min="1"
+              max="65535"
+              required
+            />
+          </label>
+
+          <label v-if="editDeployType === 'dockerfile'">
+            Dockerfile path <span class="hint">(relative to repo root)</span>
+            <input
+              v-model="editDockerfilePath"
+              type="text"
+              placeholder="Dockerfile"
+            />
+          </label>
+          <label v-if="editDeployType === 'dockerfile'">
+            Container port
+            <input
+              v-model.number="editContainerPort"
+              type="number"
+              min="1"
+              max="65535"
+              required
+            />
+          </label>
+
+          <button
+            class="btn-primary"
+            type="submit"
+            :disabled="!settingsDirty || settingsSaving"
+          >
+            {{ settingsSaving ? "Saving..." : "Save changes" }}
+          </button>
+          <div v-if="settingsSaved" class="settings-saved">Saved</div>
+          <div v-if="settingsError" class="settings-error">
+            {{ settingsError }}
+          </div>
+        </form>
+      </div>
+
       <div class="danger-zone">
         <h2>Danger zone</h2>
 
@@ -459,6 +627,20 @@ const envEditorExpanded = ref(false);
 const envSaving = ref(false);
 const envSaved = ref(false);
 const envError = ref("");
+const titleEditing = ref(false);
+const titleDraft = ref("");
+const titleSaving = ref(false);
+const titleError = ref("");
+const editDeployType = ref<"static" | "server" | "dockerfile">("server");
+const editBuildCommand = ref("");
+const editOutputDir = ref("");
+const editBuildImage = ref("");
+const editServerRunCommand = ref("");
+const editDockerfilePath = ref("");
+const editContainerPort = ref(3000);
+const settingsSaving = ref(false);
+const settingsSaved = ref(false);
+const settingsError = ref("");
 const LOG_POLL_MS = 3000;
 let logPollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -517,6 +699,36 @@ const deployTypeLabel = computed(() => {
   return "Server app";
 });
 
+const titleDirty = computed(() => {
+  if (!project.value) return false;
+  return titleDraft.value.trim() !== project.value.name;
+});
+
+const settingsDirty = computed(() => {
+  if (!project.value) return false;
+  const modeDirty =
+    (editDeployType.value === "static" &&
+      (project.value.deployMode !== "static" ||
+        project.value.buildMode !== "auto")) ||
+    (editDeployType.value === "server" &&
+      (project.value.deployMode !== "server" ||
+        project.value.buildMode !== "auto")) ||
+    (editDeployType.value === "dockerfile" &&
+      (project.value.deployMode !== "server" ||
+        project.value.buildMode !== "dockerfile"));
+
+  return (
+    modeDirty ||
+    editBuildCommand.value.trim() !== (project.value.buildCommand ?? "") ||
+    editOutputDir.value.trim() !== (project.value.outputDir ?? "") ||
+    editBuildImage.value.trim() !== (project.value.buildImage ?? "") ||
+    editServerRunCommand.value.trim() !==
+      (project.value.serverRunCommand ?? "") ||
+    editDockerfilePath.value.trim() !== (project.value.dockerfilePath ?? "") ||
+    Number(editContainerPort.value) !== Number(project.value.containerPort)
+  );
+});
+
 const selectedDeployment = computed(
   () =>
     project.value?.deployments.find((d) => d.id === selectedDeployId.value) ??
@@ -548,6 +760,22 @@ function routeIsHttps(r: ProjectRoute): boolean {
   return !!r.domain?.hostname;
 }
 
+function applyProjectToEditors(proj: Project) {
+  titleDraft.value = proj.name;
+  editBuildCommand.value = proj.buildCommand ?? "";
+  editOutputDir.value = proj.outputDir ?? "";
+  editBuildImage.value = proj.buildImage ?? "";
+  editServerRunCommand.value = proj.serverRunCommand ?? "";
+  editDockerfilePath.value = proj.dockerfilePath ?? "";
+  editContainerPort.value = proj.containerPort;
+  editDeployType.value =
+    proj.deployMode === "static"
+      ? "static"
+      : proj.buildMode === "dockerfile"
+        ? "dockerfile"
+        : "server";
+}
+
 async function fetchProject() {
   loading.value = true;
   error.value = "";
@@ -557,6 +785,7 @@ async function fetchProject() {
       trpc.domains.list.query(),
     ]);
     project.value = proj;
+    applyProjectToEditors(proj);
     envVarsText.value = proj.envVars ?? "";
     domains.value = domainList.map((d) => ({ id: d.id, hostname: d.hostname }));
     if (!newRoute.value.domainId && domains.value.length === 1) {
@@ -582,6 +811,77 @@ async function fetchProject() {
       (e as { message?: string })?.message ?? "Failed to load project";
   } finally {
     loading.value = false;
+  }
+}
+
+async function saveProjectSettings() {
+  if (!project.value) return;
+  settingsSaving.value = true;
+  settingsError.value = "";
+  settingsSaved.value = false;
+  try {
+    const deployMode = editDeployType.value === "static" ? "static" : "server";
+    const buildMode =
+      editDeployType.value === "dockerfile" ? "dockerfile" : "auto";
+    const updated = await trpc.projects.update.mutate({
+      id: projectId,
+      deployMode,
+      buildMode,
+      buildCommand: editBuildCommand.value.trim(),
+      outputDir: editOutputDir.value.trim(),
+      buildImage: editBuildImage.value.trim(),
+      serverRunCommand: editServerRunCommand.value.trim(),
+      dockerfilePath: editDockerfilePath.value.trim(),
+      containerPort: Number(editContainerPort.value),
+    });
+    project.value = {
+      ...project.value,
+      ...updated,
+    };
+    applyProjectToEditors(project.value);
+    settingsSaved.value = true;
+    setTimeout(() => (settingsSaved.value = false), 2000);
+  } catch (e: unknown) {
+    settingsError.value =
+      (e as { message?: string })?.message ?? "Failed to save settings";
+  } finally {
+    settingsSaving.value = false;
+  }
+}
+
+function startTitleEdit() {
+  if (!project.value) return;
+  titleDraft.value = project.value.name;
+  titleError.value = "";
+  titleEditing.value = true;
+}
+
+function cancelTitleEdit() {
+  if (project.value) titleDraft.value = project.value.name;
+  titleError.value = "";
+  titleEditing.value = false;
+}
+
+async function saveTitleEdit() {
+  if (!project.value) return;
+  titleSaving.value = true;
+  titleError.value = "";
+  try {
+    const updated = await trpc.projects.update.mutate({
+      id: projectId,
+      name: titleDraft.value.trim(),
+    });
+    project.value = {
+      ...project.value,
+      name: updated.name,
+    };
+    titleDraft.value = updated.name;
+    titleEditing.value = false;
+  } catch (e: unknown) {
+    titleError.value =
+      (e as { message?: string })?.message ?? "Failed to save name";
+  } finally {
+    titleSaving.value = false;
   }
 }
 
@@ -858,6 +1158,25 @@ onUnmounted(stopLogPolling);
   flex-wrap: wrap;
 }
 
+.title-edit-btn {
+  --btn-primary-padding: 0.3rem 0.6rem;
+}
+
+.title-edit-form {
+  margin-bottom: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 680px;
+}
+
+.title-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
 h1 {
   font-weight: 600;
 }
@@ -1002,6 +1321,23 @@ h1 {
 }
 
 .env-error {
+  font-size: var(--font-tiny);
+  color: var(--status-err-text);
+}
+
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  max-width: 680px;
+}
+
+.settings-saved {
+  font-size: var(--font-tiny);
+  color: var(--status-ok-text);
+}
+
+.settings-error {
   font-size: var(--font-tiny);
   color: var(--status-err-text);
 }

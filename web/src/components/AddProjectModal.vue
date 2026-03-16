@@ -70,9 +70,9 @@
       </label>
 
       <!-- Deploy type -->
-      <div class="field-group">
-        <div class="field-group-label">Deploy type</div>
-        <div class="type-selector">
+      <div class="text-option-group">
+        <div class="text-option-label">Deploy type</div>
+        <div class="text-option-row">
           <button
             type="button"
             :class="{ active: deployType === 'static' }"
@@ -95,7 +95,7 @@
             Dockerfile
           </button>
         </div>
-        <div class="type-desc">
+        <div class="text-option-help">
           <span v-if="deployType === 'static'"
             >Build your site and serve the output as static files via
             Caddy.</span
@@ -464,63 +464,6 @@ label {
 
 .hint a {
   color: var(--brand);
-}
-
-.field-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.field-group-label {
-  font-size: var(--font-tiny);
-}
-
-.type-selector {
-  display: flex;
-  gap: 0;
-  border: 1px solid var(--border-strong);
-  border-radius: 7px;
-  overflow: hidden;
-}
-
-.type-selector button {
-  flex: 1;
-  background: var(--bg-input);
-  border: none;
-  border-right: 1px solid var(--border-strong);
-  font-size: var(--font-tiny);
-  padding: 0.5rem 0.25rem;
-  cursor: pointer;
-  transition:
-    background 0.15s,
-    color 0.15s;
-}
-
-.type-selector button:last-child {
-  border-right: none;
-}
-
-.type-selector button.active {
-  background: var(--brand-active-bg);
-  color: var(--brand-active-text);
-  font-weight: 600;
-}
-
-.type-selector button:hover:not(.active) {
-  background: var(--bg-elevated);
-}
-
-.type-desc {
-  font-size: var(--font-tiny);
-  line-height: 1.5;
-}
-
-.type-desc code {
-  background: var(--bg-input);
-  border-radius: 3px;
-  padding: 0.1em 0.35em;
-  color: var(--status-info-text);
 }
 
 input,
