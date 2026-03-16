@@ -204,6 +204,7 @@ type ProjectRoute = {
     id: number;
     deployMode: string;
     status: string;
+    hasSuccessfulDeployment: boolean;
     outputDir: string;
     containerName: string | null;
     containerRunning?: boolean;
@@ -225,7 +226,10 @@ function resolveRouteHostname(
 function appendRouteHandler(lines: string[], route: ProjectRoute): void {
   const project = route.project!;
   const staticReady =
-    project.deployMode === "static" && project.status === "running";
+    project.deployMode === "static" &&
+    (project.status === "running" ||
+      ((project.status === "building" || project.status === "queued") &&
+        project.hasSuccessfulDeployment));
   const serverReady =
     project.deployMode !== "static" &&
     !!project.containerName &&
@@ -349,6 +353,7 @@ function toProjectRoutes(
       containerName: string | null;
       containerPort: number;
       active: boolean;
+      deployments: Array<{ id: string }>;
     } | null;
   }>,
   runningContainers: Set<string>,
@@ -363,6 +368,7 @@ function toProjectRoutes(
       pathPrefix: route.pathPrefix,
       project: {
         ...p,
+        hasSuccessfulDeployment: p.deployments.length > 0,
         containerRunning: p.containerName
           ? runningContainers.has(p.containerName)
           : false,
@@ -396,7 +402,18 @@ export async function buildCaddyfile(): Promise<string> {
       include: {
         routes: {
           orderBy: { createdAt: "asc" },
-          include: { project: true },
+          include: {
+            project: {
+              include: {
+                deployments: {
+                  where: { status: "success" },
+                  orderBy: { createdAt: "desc" },
+                  take: 1,
+                  select: { id: true },
+                },
+              },
+            },
+          },
         },
       },
     }),
