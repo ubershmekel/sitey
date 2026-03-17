@@ -79,17 +79,31 @@
             :href="projectUrl"
             target="_blank"
             rel="noopener"
-            class="url-https"
+            :class="
+              primaryDomainRoute?.domain?.status === 'active'
+                ? 'url-https'
+                : 'url-http-primary'
+            "
             >{{ projectUrl }}</a
           >
-          <span class="url-sep">·</span>
-          <a
-            :href="projectUrl.replace('https://', 'http://')"
-            target="_blank"
-            rel="noopener"
-            class="url-http"
-            >http</a
-          >
+          <template v-if="primaryDomainRoute?.domain?.status === 'active'">
+            <span class="url-sep">·</span>
+            <a
+              :href="projectUrl.replace('https://', 'http://')"
+              target="_blank"
+              rel="noopener"
+              class="url-http"
+              >http</a
+            >
+          </template>
+          <template v-if="primaryDomainRoute?.domain?.status === 'pending'">
+            <span class="url-sep">·</span>
+            <span class="tls-badge tls-pending">TLS pending</span>
+          </template>
+          <template v-if="primaryDomainRoute?.domain?.status === 'error'">
+            <span class="url-sep">·</span>
+            <span class="tls-badge tls-error">TLS error</span>
+          </template>
         </div>
         <div v-else-if="fallbackUrl" class="hero-url hint">
           No domain route yet — fallback: <code>{{ fallbackUrl }}</code>
@@ -225,6 +239,16 @@
                 >wildcard</span
               >
               <span v-if="r.pathPrefix" class="route-badge">path</span>
+              <span
+                v-if="r.domain && r.domain.status === 'pending'"
+                class="route-badge route-badge-warn"
+                >TLS pending</span
+              >
+              <span
+                v-if="r.domain && r.domain.status === 'error'"
+                class="route-badge route-badge-err"
+                >TLS error</span
+              >
             </div>
             <button
               class="btn-ghost-sm"
@@ -681,7 +705,8 @@ function routeHostname(r: ProjectRoute): string {
 const projectUrl = computed(() => {
   const r = primaryDomainRoute.value;
   if (!r?.domain) return "";
-  return `https://${routeHostname(r)}${r.pathPrefix || ""}`;
+  const scheme = r.domain.status === "active" ? "https" : "http";
+  return `${scheme}://${routeHostname(r)}${r.pathPrefix || ""}`;
 });
 
 const fallbackUrl = computed(() => {
@@ -751,7 +776,8 @@ function routeLabel(r: ProjectRoute): string {
   const pathPrefix = r.pathPrefix || "";
   const hostname = routeHostname(r);
   if (hostname) {
-    return `https://${hostname}${pathPrefix}`;
+    const scheme = r.domain?.status === "active" ? "https" : "http";
+    return `${scheme}://${hostname}${pathPrefix}`;
   }
   return pathPrefix ? `<server>${pathPrefix}` : "<server>";
 }
@@ -1208,6 +1234,33 @@ h1 {
   text-decoration: underline;
 }
 
+.url-http-primary {
+  color: var(--brand);
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.url-http-primary:hover {
+  text-decoration: underline;
+}
+
+.tls-badge {
+  font-size: var(--font-tiny);
+  padding: 0.15rem 0.45rem;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.tls-pending {
+  background: var(--status-warn-bg);
+  color: var(--status-warn-text);
+}
+
+.tls-error {
+  background: var(--status-err-bg);
+  color: var(--status-err-text);
+}
+
 .deploy-notice {
   font-size: var(--font-tiny);
   margin-top: 0.5rem;
@@ -1407,6 +1460,18 @@ h1 {
   border-radius: 3px;
   background: var(--bg-elevated);
   border: 1px solid var(--border-subtle);
+}
+
+.route-badge-warn {
+  background: var(--status-warn-bg);
+  color: var(--status-warn-text);
+  border-color: transparent;
+}
+
+.route-badge-err {
+  background: var(--status-err-bg);
+  color: var(--status-err-text);
+  border-color: transparent;
 }
 
 /* ── Add route box ──────────────────────────────────────────── */

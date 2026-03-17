@@ -298,14 +298,7 @@ function appendTlsDirective(lines: string[], email?: string): void {
   }
 }
 
-function appendSiteBlock(
-  lines: string[],
-  hostname: string,
-  email: string,
-  routes: ProjectRoute[],
-): void {
-  lines.push(`${hostname} {`);
-  appendTlsDirective(lines, email);
+function appendSiteBlockBody(lines: string[], routes: ProjectRoute[]): void {
   if (routes.length > 0) {
     for (const route of routes) appendRouteHandler(lines, route);
     // If every route is path-prefix only, nothing handles unmatched paths.
@@ -325,6 +318,36 @@ function appendSiteBlock(
   } else {
     appendAdminHandlers(lines);
   }
+}
+
+/**
+ * Emit a site block for the given hostname.
+ *
+ * When `httpFallback` is true an extra `http://hostname` block is emitted so
+ * that plain-HTTP requests are served directly (no redirect to HTTPS) while
+ * Caddy provisions the TLS certificate in the background.  Once the cert is
+ * ready the next Caddy reload drops the fallback and the default HTTP→HTTPS
+ * redirect kicks in.
+ */
+function appendSiteBlock(
+  lines: string[],
+  hostname: string,
+  email: string,
+  routes: ProjectRoute[],
+  options?: { httpFallback?: boolean },
+): void {
+  // Plain-HTTP fallback — keeps the site reachable while cert is pending.
+  if (options?.httpFallback) {
+    lines.push(`http://${hostname} {`);
+    appendSiteBlockBody(lines, routes);
+    lines.push("}");
+    lines.push("");
+  }
+
+  // Main (HTTPS) block — Caddy provisions the cert in the background.
+  lines.push(`${hostname} {`);
+  appendTlsDirective(lines, email);
+  appendSiteBlockBody(lines, routes);
   lines.push("}");
   lines.push("");
 }
@@ -480,12 +503,15 @@ export async function buildCaddyfile(): Promise<string> {
   for (const domain of domains) {
     const projectRoutes = toProjectRoutes(domain.routes, runningContainers);
 
+    const httpFallback = domain.status !== "active";
+
     if (!domain.hostname.startsWith("*.")) {
       appendSiteBlock(
         lines,
         domain.hostname,
         domain.letsEncryptEmail,
         projectRoutes,
+        { httpFallback },
       );
       continue;
     }
@@ -518,13 +544,17 @@ export async function buildCaddyfile(): Promise<string> {
         siteyDomain &&
         sanitizeDnsName(siteyDomain) === sanitizeDnsName(siteySubdomain);
       if (!mgmtOwnsIt && !routesByHostname.has(siteySubdomain)) {
-        appendSiteBlock(lines, siteySubdomain, domain.letsEncryptEmail, []);
+        appendSiteBlock(lines, siteySubdomain, domain.letsEncryptEmail, [], {
+          httpFallback,
+        });
       }
     }
 
     for (const [hostname, hostRoutes] of routesByHostname.entries()) {
       if (hostname === siteyNamedDomain) continue; // management block already owns this hostname
-      appendSiteBlock(lines, hostname, domain.letsEncryptEmail, hostRoutes);
+      appendSiteBlock(lines, hostname, domain.letsEncryptEmail, hostRoutes, {
+        httpFallback,
+      });
     }
   }
 
@@ -557,11 +587,29 @@ export function scheduleDomainStatusRefresh(domain: {
 
   getLetsEncryptStatusFromCaddy(probeHostname)
     .then(
-      (status) =>
-        db.domain.update({
+      async (newStatus) => {
+        const current = await db.domain.findUnique({
           where: { id: domain.id },
-          data: { status, statusCheckedAt: new Date() },
-        }),
+          select: { status: true },
+        });
+        await db.domain.update({
+          where: { id: domain.id },
+          data: { status: newStatus, statusCheckedAt: new Date() },
+        });
+        // When status changes (e.g. cert obtained, or cert lost) reload Caddy
+        // so HTTP fallback blocks are added or removed accordingly.
+        if (current && current.status !== newStatus) {
+          console.log(
+            `[caddy] Domain ${domain.hostname} TLS status: ${current.status} → ${newStatus}, reloading`,
+          );
+          await reloadCaddy().catch((err) =>
+            console.error(
+              "[caddy] Reload after TLS status change failed:",
+              err,
+            ),
+          );
+        }
+      },
       (err) => {
         console.error(
           `[caddy] Background status refresh failed for ${domain.hostname}:`,

@@ -5,7 +5,11 @@ import { customAlphabet } from "nanoid";
 import { router, settledProcedure } from "../trpc.js";
 import { db } from "../lib/db.js";
 import { generateWebhookSecret } from "../services/crypto.js";
-import { reloadCaddy } from "../services/caddy.js";
+import {
+  reloadCaddy,
+  isDomainStatusStale,
+  scheduleDomainStatusRefresh,
+} from "../services/caddy.js";
 import { enqueueDeployment } from "../services/deployment.js";
 import {
   stopAndRemoveContainer,
@@ -112,6 +116,15 @@ export const projectsRouter = router({
           code: "NOT_FOUND",
           message: "Project not found",
         });
+
+      // Trigger background TLS status refresh for stale domains so the
+      // frontend gets an up-to-date status on the next fetch.
+      for (const route of project.routes) {
+        if (route.domain && isDomainStatusStale(route.domain.statusCheckedAt)) {
+          scheduleDomainStatusRefresh(route.domain);
+        }
+      }
+
       return project;
     }),
 
