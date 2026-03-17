@@ -70,9 +70,12 @@ export async function cloneOrPull(opts: {
     const git = simpleGit(repoPath);
     // Update the remote URL in case the token changed (tokens are short-lived)
     await git.remote(["set-url", "origin", repoUrl]);
-    await git.fetch("origin");
-    await git.checkout(branch);
-    await git.pull("origin", branch, { "--ff-only": null });
+    await git.fetch("origin", branch);
+    // Always align repo state to remote branch tip.
+    // This keeps deploy checkouts reproducible even if a previous build modified
+    // tracked files (for example lockfiles such as bun.lock).
+    await git.raw(["checkout", "-B", branch, `origin/${branch}`]);
+    await git.reset(["--hard", `origin/${branch}`]);
   } else {
     onLog(`[git] Cloning ${publicUrl} (${branch}) → ${repoPath}`);
     fs.mkdirSync(repoPath, { recursive: true });
