@@ -245,11 +245,6 @@
               <span v-else class="route-url mono">{{ routeLabel(r) }}</span>
             </div>
             <div class="route-meta">
-              <span
-                v-if="r.domain?.hostname.startsWith('*.')"
-                class="route-badge"
-                >wildcard</span
-              >
               <span v-if="r.pathPrefix" class="route-badge">path</span>
               <span
                 v-if="r.domain && r.tlsStatus === 'unchecked'"
