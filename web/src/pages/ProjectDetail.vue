@@ -115,6 +115,13 @@
                   : "TLS pending"
               }}</span
             >
+            <button
+              class="btn-ghost-sm tls-retry-btn"
+              :disabled="tlsRetrying"
+              @click="retryRouteTls(primaryDomainRoute!.id)"
+            >
+              {{ tlsRetrying ? "Checking..." : "Retry" }}
+            </button>
           </template>
         </div>
         <div v-else-if="fallbackUrl" class="hero-url hint">
@@ -246,16 +253,33 @@
             </div>
             <div class="route-meta">
               <span v-if="r.pathPrefix" class="route-badge">path</span>
-              <span
-                v-if="r.domain && r.tlsStatus === 'unchecked'"
-                class="route-badge route-badge-warn"
-                >TLS pending</span
+              <template v-if="r.domain && r.tlsStatus === 'active'">
+                <span class="route-badge route-badge-tls">https</span>
+              </template>
+              <template
+                v-else-if="
+                  r.domain &&
+                  (r.tlsStatus === 'unchecked' || r.tlsStatus === 'error')
+                "
               >
-              <span
-                v-if="r.domain && r.tlsStatus === 'error'"
-                class="route-badge route-badge-err"
-                >TLS error</span
-              >
+                <span
+                  :class="
+                    r.tlsStatus === 'error'
+                      ? 'route-badge route-badge-err'
+                      : 'route-badge route-badge-warn'
+                  "
+                  >{{
+                    r.tlsStatus === "error" ? "HTTPS error" : "HTTPS pending"
+                  }}</span
+                >
+                <button
+                  class="btn-ghost-sm tls-retry-btn"
+                  :disabled="tlsRetrying"
+                  @click="retryRouteTls(r.id)"
+                >
+                  Retry
+                </button>
+              </template>
             </div>
             <button
               class="btn-ghost-sm"
@@ -616,6 +640,42 @@
         </div>
       </div>
     </template>
+
+    <!-- TLS troubleshooting modal -->
+    <div v-if="tlsModal" class="modal-overlay" @click.self="tlsModal = false">
+      <div class="modal">
+        <h3>HTTPS certificate not ready</h3>
+        <p>
+          HTTPS isn't working for <code>{{ tlsModalHostname }}</code> yet. Caddy
+          is still trying to obtain a Let's Encrypt certificate.
+        </p>
+        <p>Common causes:</p>
+        <ul>
+          <li>
+            <strong>DNS not pointing here</strong> — the domain must resolve to
+            this server's public IP before Let's Encrypt can verify it.
+          </li>
+          <li>
+            <strong>Ports 80/443 blocked</strong> — Let's Encrypt needs to reach
+            port 80 for the HTTP-01 challenge.
+          </li>
+          <li>
+            <strong>Rate limits</strong> — Let's Encrypt has per-domain rate
+            limits. If you've been testing a lot, wait an hour and retry.
+          </li>
+          <li>
+            <strong>Caddy error</strong> — check the Caddy logs for details:<br />
+            <code>docker compose logs caddy --tail 50</code>
+          </li>
+        </ul>
+        <p>
+          The site is still reachable over plain HTTP while HTTPS is pending.
+        </p>
+        <div class="modal-actions">
+          <button class="btn-primary" @click="tlsModal = false">OK</button>
+        </div>
+      </div>
+    </div>
   </Layout>
 </template>
 
@@ -672,6 +732,9 @@ const editContainerPort = ref(3000);
 const settingsSaving = ref(false);
 const settingsSaved = ref(false);
 const settingsError = ref("");
+const tlsRetrying = ref(false);
+const tlsModal = ref(false);
+const tlsModalHostname = ref("");
 const LOG_POLL_MS = 3000;
 let logPollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -972,6 +1035,27 @@ async function removeRoute(routeId: string) {
       (e as { message?: string })?.message ?? "Failed to remove route";
   } finally {
     routeSaving.value = false;
+  }
+}
+
+async function retryRouteTls(routeId: string) {
+  tlsRetrying.value = true;
+  try {
+    const res = await trpc.projects.retryRouteTls.mutate({ routeId });
+    // Update the route's tlsStatus in-place so the UI reacts immediately.
+    const route = project.value?.routes.find((r) => r.id === routeId);
+    if (route) route.tlsStatus = res.tlsStatus;
+    // If still not active, show the troubleshooting modal.
+    if (res.tlsStatus !== "active") {
+      tlsModalHostname.value = route ? routeHostname(route) : "";
+      tlsModal.value = true;
+    }
+  } catch (e: unknown) {
+    const route = project.value?.routes.find((r) => r.id === routeId);
+    tlsModalHostname.value = route ? routeHostname(route) : "";
+    tlsModal.value = true;
+  } finally {
+    tlsRetrying.value = false;
   }
 }
 

@@ -420,6 +420,24 @@ export const projectsRouter = router({
       return { ok: true };
     }),
 
+  retryRouteTls: settledProcedure
+    .input(z.object({ routeId: z.string() }))
+    .mutation(async ({ input }) => {
+      const route = await db.projectRoute.findUnique({
+        where: { id: input.routeId },
+        include: { domain: true },
+      });
+      if (!route)
+        throw new TRPCError({ code: "NOT_FOUND", message: "Route not found" });
+      if (!route.domain)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Route has no domain",
+        });
+      const tlsStatus = await probeRouteTls(route);
+      return { tlsStatus };
+    }),
+
   // ── Webhook ────────────────────────────────────────────────────────────────
 
   rotateWebhookSecret: settledProcedure
