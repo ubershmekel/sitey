@@ -9,6 +9,8 @@ import {
   reloadCaddy,
   isDomainStatusStale,
   scheduleDomainStatusRefresh,
+  probeRouteTls,
+  scheduleRouteTlsProbe,
 } from "../services/caddy.js";
 import { enqueueDeployment } from "../services/deployment.js";
 import {
@@ -122,6 +124,11 @@ export const projectsRouter = router({
       for (const route of project.routes) {
         if (route.domain && isDomainStatusStale(route.domain.statusCheckedAt)) {
           scheduleDomainStatusRefresh(route.domain);
+        }
+        // Probe unchecked route TLS in the background so the next
+        // fetch returns a verified status.
+        if (route.domain && route.tlsStatus === "unchecked") {
+          scheduleRouteTlsProbe(route);
         }
       }
 
@@ -361,6 +368,7 @@ export const projectsRouter = router({
             pathPrefix: input.pathPrefix,
             subdomain,
           },
+          include: { domain: true },
         });
       } catch (err) {
         const code = (err as { code?: string }).code;
@@ -372,9 +380,23 @@ export const projectsRouter = router({
         }
         throw err;
       }
-      reloadCaddy().catch((err) =>
-        console.error("[projects] Caddy reload failed after addRoute:", err),
-      );
+
+      // Await Caddy reload so the new hostname is served before we probe TLS.
+      try {
+        await reloadCaddy();
+      } catch (err) {
+        console.error("[projects] Caddy reload failed after addRoute:", err);
+      }
+
+      // Probe TLS for the new route's hostname and persist the result.
+      if (route.domain) {
+        try {
+          route.tlsStatus = await probeRouteTls(route);
+        } catch (err) {
+          console.error("[projects] TLS probe failed after addRoute:", err);
+        }
+      }
+
       return route;
     }),
 

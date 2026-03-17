@@ -80,13 +80,13 @@
             target="_blank"
             rel="noopener"
             :class="
-              primaryDomainRoute?.domain?.status === 'active'
+              primaryDomainRoute?.tlsStatus === 'active'
                 ? 'url-https'
                 : 'url-http-primary'
             "
             >{{ projectUrl }}</a
           >
-          <template v-if="primaryDomainRoute?.domain?.status === 'active'">
+          <template v-if="primaryDomainRoute?.tlsStatus === 'active'">
             <span class="url-sep">·</span>
             <a
               :href="projectUrl.replace('https://', 'http://')"
@@ -96,13 +96,25 @@
               >http</a
             >
           </template>
-          <template v-if="primaryDomainRoute?.domain?.status === 'pending'">
+          <template
+            v-if="
+              primaryDomainRoute?.domain &&
+              primaryDomainRoute.tlsStatus !== 'active'
+            "
+          >
             <span class="url-sep">·</span>
-            <span class="tls-badge tls-pending">TLS pending</span>
-          </template>
-          <template v-if="primaryDomainRoute?.domain?.status === 'error'">
-            <span class="url-sep">·</span>
-            <span class="tls-badge tls-error">TLS error</span>
+            <span
+              :class="
+                primaryDomainRoute.tlsStatus === 'error'
+                  ? 'tls-badge tls-error'
+                  : 'tls-badge tls-pending'
+              "
+              >{{
+                primaryDomainRoute.tlsStatus === "error"
+                  ? "TLS error"
+                  : "TLS pending"
+              }}</span
+            >
           </template>
         </div>
         <div v-else-if="fallbackUrl" class="hero-url hint">
@@ -131,8 +143,8 @@
           v-if="!project.active"
           class="deploy-notice deploy-notice-inactive"
         >
-          This project is inactive. Routes are not served and the container is
-          stopped. Activate it from the danger zone below to resume.
+          This project was deactivated. Routes are not served and the container
+          is stopped. Activate it from the danger zone below to resume.
         </div>
       </div>
 
@@ -223,7 +235,7 @@
           <div v-for="r in project.routes" :key="r.id" class="route-row">
             <div class="route-url-wrap">
               <a
-                v-if="routeIsHttps(r)"
+                v-if="routeHasLink(r)"
                 :href="routeLabel(r)"
                 target="_blank"
                 rel="noopener"
@@ -240,12 +252,12 @@
               >
               <span v-if="r.pathPrefix" class="route-badge">path</span>
               <span
-                v-if="r.domain && r.domain.status === 'pending'"
+                v-if="r.domain && r.tlsStatus === 'unchecked'"
                 class="route-badge route-badge-warn"
                 >TLS pending</span
               >
               <span
-                v-if="r.domain && r.domain.status === 'error'"
+                v-if="r.domain && r.tlsStatus === 'error'"
                 class="route-badge route-badge-err"
                 >TLS error</span
               >
@@ -705,7 +717,7 @@ function routeHostname(r: ProjectRoute): string {
 const projectUrl = computed(() => {
   const r = primaryDomainRoute.value;
   if (!r?.domain) return "";
-  const scheme = r.domain.status === "active" ? "https" : "http";
+  const scheme = r.tlsStatus === "active" ? "https" : "http";
   return `${scheme}://${routeHostname(r)}${r.pathPrefix || ""}`;
 });
 
@@ -776,13 +788,13 @@ function routeLabel(r: ProjectRoute): string {
   const pathPrefix = r.pathPrefix || "";
   const hostname = routeHostname(r);
   if (hostname) {
-    const scheme = r.domain?.status === "active" ? "https" : "http";
+    const scheme = r.tlsStatus === "active" ? "https" : "http";
     return `${scheme}://${hostname}${pathPrefix}`;
   }
   return pathPrefix ? `<server>${pathPrefix}` : "<server>";
 }
 
-function routeIsHttps(r: ProjectRoute): boolean {
+function routeHasLink(r: ProjectRoute): boolean {
   return !!r.domain?.hostname;
 }
 

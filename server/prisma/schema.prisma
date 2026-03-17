@@ -95,6 +95,10 @@ model ProjectRoute {
   // Protected routes cannot be deleted (used for the sitey root route)
   protected   Boolean  @default(false)
 
+  // TLS certificate status for this specific route hostname.
+  // "unchecked" until a probe confirms the cert is live.
+  tlsStatus   String   @default("unchecked") // unchecked | active | error
+
   createdAt   DateTime @default(now())
 
   @@unique([domainId, subdomain, pathPrefix])

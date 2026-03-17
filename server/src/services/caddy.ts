@@ -212,7 +212,7 @@ type ProjectRoute = {
   } | null;
 };
 
-function resolveRouteHostname(
+export function resolveRouteHostname(
   domainHostname: string,
   routeSubdomain: string,
 ): string | null {
@@ -221,6 +221,40 @@ function resolveRouteHostname(
   const label = routeSubdomain.trim().toLowerCase();
   if (!label) return null;
   return `${label}.${base}`;
+}
+
+/**
+ * Probe TLS for a specific route's hostname and persist the result.
+ * Returns the new status.
+ */
+export async function probeRouteTls(route: {
+  id: string;
+  subdomain: string;
+  domain: { hostname: string } | null;
+}): Promise<"unchecked" | "active" | "error"> {
+  if (!route.domain) return "unchecked";
+  const hostname = resolveRouteHostname(route.domain.hostname, route.subdomain);
+  if (!hostname) return "unchecked";
+  const status = await getLetsEncryptStatusFromCaddy(hostname);
+  const tlsStatus = status === "active" ? "active" : "error";
+  await db.projectRoute.update({
+    where: { id: route.id },
+    data: { tlsStatus },
+  });
+  return tlsStatus;
+}
+
+/**
+ * Fire-and-forget background TLS probe for a route.
+ */
+export function scheduleRouteTlsProbe(route: {
+  id: string;
+  subdomain: string;
+  domain: { hostname: string } | null;
+}): void {
+  probeRouteTls(route).catch((err) =>
+    console.error(`[caddy] Route TLS probe failed for ${route.id}:`, err),
+  );
 }
 
 function appendRouteHandler(lines: string[], route: ProjectRoute): void {

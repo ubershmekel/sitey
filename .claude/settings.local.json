@@ -23,7 +23,11 @@
       "Bash(ls e:/dev/2026/sitey/server/src/generated/prisma/index.*)",
       "Bash(find /e/dev/2026/sitey/web/src -type f -name *.ts)",
       "Bash(DATABASE_URL=\"file:../../deploy/data/sitey.db\" npm run db:push)",
-      "Bash(xargs grep:*)"
+      "Bash(xargs grep:*)",
+      "Bash(DATABASE_URL=\"file:../../deploy/data/sitey.db\" npx prisma migrate dev --name add-route-tls-status)",
+      "Bash(dotenv -e .env -- npx prisma db push)",
+      "Bash(DATABASE_URL=\"file:../../deploy/data/sitey.db\" npx prisma db push)",
+      "Bash(DATABASE_URL=\"file:../../deploy/data/sitey.db\" npx prisma generate)"
     ]
   }
 }
