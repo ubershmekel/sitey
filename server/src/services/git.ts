@@ -71,6 +71,9 @@ export async function cloneOrPull(opts: {
     // Update the remote URL in case the token changed (tokens are short-lived)
     await git.remote(["set-url", "origin", repoUrl]);
     await git.fetch("origin", branch);
+    // First discard tracked local edits on the currently checked-out branch.
+    // Without this, checkout can fail before we get a chance to align to origin.
+    await git.reset(["--hard"]);
     // Always align repo state to remote branch tip.
     // This keeps deploy checkouts reproducible even if a previous build modified
     // tracked files (for example lockfiles such as bun.lock).
