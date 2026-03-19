@@ -1,5 +1,6 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import cookie from "@fastify/cookie";
 import { Readable } from "node:stream";
 import {
   fastifyTRPCPlugin,
@@ -72,9 +73,12 @@ async function main() {
     return Readable.from([raw]);
   });
 
+  await app.register(cookie);
+
   await app.register(cors, {
     origin: true, // reflect request origin — no domain required at boot
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    credentials: true,
   });
 
   // ── tRPC ──────────────────────────────────────────────────────────────────

@@ -33,40 +33,26 @@ function isUnauthorizedError(error: unknown): boolean {
   if (code === "UNAUTHORIZED") return true;
   const message = e.message?.toLowerCase() ?? "";
   return (
-    message.includes("not authenticated") ||
-    message.includes("unauthorized") ||
-    message.includes("jwt expired")
+    message.includes("not authenticated") || message.includes("unauthorized")
   );
 }
 
 export const useAuthStore = defineStore("auth", () => {
-  const token = ref<string | null>(localStorage.getItem("sitey_token"));
   const user = ref<User | null>(null);
   const loading = ref(false);
   const error = ref<string | null>(null);
 
-  const isAuthenticated = computed(() => !!token.value);
+  const isAuthenticated = computed(() => !!user.value);
   const needsPasswordChange = computed(
     () => user.value?.mustChangePassword ?? false,
   );
 
-  function setToken(t: string | null) {
-    token.value = t;
-    if (t) {
-      localStorage.setItem("sitey_token", t);
-    } else {
-      localStorage.removeItem("sitey_token");
-    }
-  }
-
   async function fetchUser() {
-    if (!token.value) return;
     try {
       const me = await trpc.auth.whoami.query();
       user.value = me;
     } catch (e: unknown) {
       if (isUnauthorizedError(e)) {
-        setToken(null);
         user.value = null;
       }
     }
@@ -77,7 +63,6 @@ export const useAuthStore = defineStore("auth", () => {
     loading.value = true;
     try {
       const res = await trpc.auth.login.mutate({ email, password });
-      setToken(res.token);
       user.value = {
         id: res.id,
         email: res.email,
@@ -97,11 +82,7 @@ export const useAuthStore = defineStore("auth", () => {
     error.value = null;
     loading.value = true;
     try {
-      const res = await trpc.auth.changePassword.mutate({
-        currentPassword,
-        newPassword,
-      });
-      setToken(res.token);
+      await trpc.auth.changePassword.mutate({ currentPassword, newPassword });
       await fetchUser();
     } catch (e: unknown) {
       const msg =
@@ -113,13 +94,12 @@ export const useAuthStore = defineStore("auth", () => {
     }
   }
 
-  function logout() {
-    setToken(null);
+  async function logout() {
+    await trpc.auth.logout.mutate().catch(() => {});
     user.value = null;
   }
 
   return {
-    token,
     user,
     loading,
     error,
@@ -129,6 +109,5 @@ export const useAuthStore = defineStore("auth", () => {
     changePassword,
     logout,
     fetchUser,
-    setToken,
   };
 });

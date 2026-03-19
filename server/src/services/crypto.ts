@@ -1,13 +1,5 @@
 import crypto from "node:crypto";
 import argon2 from "argon2";
-import jwt from "jsonwebtoken";
-
-// Initialised by bootstrap() before the HTTP server starts
-let jwtSecret = "";
-
-export function initJwtSecret(secret: string) {
-  jwtSecret = secret;
-}
 
 // ── Password helpers ──────────────────────────────────────────────────────────
 
@@ -32,22 +24,16 @@ export async function verifyPassword(
   return argon2.verify(hash, password);
 }
 
-// ── JWT helpers ───────────────────────────────────────────────────────────────
+// ── Session / API key token helpers ──────────────────────────────────────────
 
-export type JwtPayload = {
-  sub: string; // user id
-  email: string;
-  mustChangePassword: boolean;
-};
-
-export function signToken(payload: JwtPayload, expiresIn = "7d"): string {
-  if (!jwtSecret) throw new Error("JWT secret not initialised");
-  return jwt.sign(payload, jwtSecret, { expiresIn } as jwt.SignOptions);
+/** Generates a cryptographically random raw token (64 hex chars). */
+export function generateToken(): string {
+  return crypto.randomBytes(32).toString("hex");
 }
 
-export function verifyToken(token: string): JwtPayload {
-  if (!jwtSecret) throw new Error("JWT secret not initialised");
-  return jwt.verify(token, jwtSecret) as JwtPayload;
+/** SHA-256 hash of a raw token — stored in DB, never the raw value. */
+export function hashToken(raw: string): string {
+  return crypto.createHash("sha256").update(raw).digest("hex");
 }
 
 // ── Webhook secret helpers ────────────────────────────────────────────────────

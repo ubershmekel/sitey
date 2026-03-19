@@ -13,3 +13,4 @@ web/dist/
 .DS_Store
 *.log
 test-results/
+.claude/settings.local.json

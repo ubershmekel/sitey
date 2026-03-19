@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
+import type { FastifyReply } from "fastify";
+import "@fastify/cookie";
 import {
   router,
   publicProcedure,
@@ -10,13 +12,43 @@ import { db } from "../lib/db.js";
 import {
   verifyPassword,
   hashPassword,
-  signToken,
   generatePassword,
+  generateToken,
+  hashToken,
 } from "../services/crypto.js";
+
+const SESSION_TTL_DAYS = 7;
+const SESSION_MAX_AGE = SESSION_TTL_DAYS * 24 * 60 * 60; // seconds
 
 const passwordSchema = z
   .string()
   .min(9, "Password must be at least 9 characters");
+
+function cookieOptions() {
+  return {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax" as const,
+    path: "/",
+    maxAge: SESSION_MAX_AGE,
+  };
+}
+
+async function createSession(userId: string, res: FastifyReply): Promise<void> {
+  const raw = generateToken();
+  const expiresAt = new Date(
+    Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
+  );
+  await db.token.create({
+    data: {
+      userId,
+      tokenHash: hashToken(raw),
+      type: "session",
+      expiresAt,
+    },
+  });
+  res.setCookie("sitey_session", raw, cookieOptions());
+}
 
 async function upsertUser(
   email: string,
@@ -48,7 +80,7 @@ export const authRouter = router({
         password: passwordSchema,
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const alreadyDone = await db.systemConfig.findUnique({
         where: { key: "setup_complete" },
       });
@@ -75,12 +107,8 @@ export const authRouter = router({
         update: {},
       });
 
-      const token = signToken({
-        sub: user.id,
-        email: user.email,
-        mustChangePassword: false,
-      });
-      return { token };
+      await createSession(user.id, ctx.res as FastifyReply);
+      return { ok: true };
     }),
 
   login: publicProcedure
@@ -90,7 +118,7 @@ export const authRouter = router({
         password: z.string().min(1),
       }),
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const existingUser = await db.user.findUnique({
         where: { email: input.email },
       });
@@ -102,13 +130,8 @@ export const authRouter = router({
           existingUser.passwordHash,
         );
         if (valid) {
-          const token = signToken({
-            sub: existingUser.id,
-            email: existingUser.email,
-            mustChangePassword: existingUser.mustChangePassword,
-          });
+          await createSession(existingUser.id, ctx.res as FastifyReply);
           return {
-            token,
             mustChangePassword: existingUser.mustChangePassword,
             email: existingUser.email,
             id: existingUser.id,
@@ -131,13 +154,8 @@ export const authRouter = router({
           await db.systemConfig.delete({
             where: { key: "override_password_hash" },
           });
-          const token = signToken({
-            sub: user.id,
-            email: user.email,
-            mustChangePassword: true,
-          });
+          await createSession(user.id, ctx.res as FastifyReply);
           return {
-            token,
             mustChangePassword: true,
             email: user.email,
             id: user.id,
@@ -150,6 +168,19 @@ export const authRouter = router({
         message: "Invalid credentials",
       });
     }),
+
+  logout: protectedProcedure.mutation(async ({ ctx }) => {
+    const raw: string | undefined = (
+      ctx.req as unknown as { cookies: Record<string, string> }
+    ).cookies?.sitey_session;
+    if (raw) {
+      await db.token
+        .deleteMany({ where: { tokenHash: hashToken(raw) } })
+        .catch(() => {});
+    }
+    (ctx.res as FastifyReply).clearCookie("sitey_session", { path: "/" });
+    return { ok: true };
+  }),
 
   changePassword: protectedProcedure
     .input(
@@ -180,13 +211,13 @@ export const authRouter = router({
         data: { passwordHash: hash, mustChangePassword: false },
       });
 
-      const token = signToken({
-        sub: user.id,
-        email: user.email,
-        mustChangePassword: false,
+      // Invalidate all existing sessions for this user
+      await db.token.deleteMany({
+        where: { userId: user.id, type: "session" },
       });
 
-      return { token };
+      await createSession(user.id, ctx.res as FastifyReply);
+      return { ok: true };
     }),
 
   whoami: protectedProcedure.query(({ ctx }) => ({
@@ -276,6 +307,11 @@ export const authRouter = router({
           passwordHash,
           mustChangePassword: true,
         },
+      });
+
+      // Invalidate all sessions for the reset user
+      await db.token.deleteMany({
+        where: { userId: input.userId, type: "session" },
       });
 
       return {

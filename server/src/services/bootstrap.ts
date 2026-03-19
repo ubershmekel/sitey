@@ -7,25 +7,10 @@
  */
 
 import os from "node:os";
-import crypto from "node:crypto";
 import { db } from "../lib/db.js";
-import { initJwtSecret } from "./crypto.js";
 
 export async function bootstrap() {
   await db.$connect();
-
-  // ── JWT secret ─────────────────────────────────────────────────────────────
-  let secretRow = await db.systemConfig.findUnique({
-    where: { key: "jwt_secret" },
-  });
-  if (!secretRow) {
-    const generated = crypto.randomBytes(32).toString("hex");
-    secretRow = await db.systemConfig.create({
-      data: { key: "jwt_secret", value: generated },
-    });
-    console.log("[bootstrap] Generated new JWT secret.");
-  }
-  initJwtSecret(secretRow.value);
 
   // ── Sitey built-in project + root route ────────────────────────────────────
   // The sitey UI is itself a protected project with the catch-all root route
