@@ -23,6 +23,22 @@ function toAuthErrorMessage(error: unknown, fallback: string) {
   return message;
 }
 
+function isUnauthorizedError(error: unknown): boolean {
+  const e = error as {
+    data?: { code?: string };
+    shape?: { data?: { code?: string } };
+    message?: string;
+  };
+  const code = e.data?.code ?? e.shape?.data?.code;
+  if (code === "UNAUTHORIZED") return true;
+  const message = e.message?.toLowerCase() ?? "";
+  return (
+    message.includes("not authenticated") ||
+    message.includes("unauthorized") ||
+    message.includes("jwt expired")
+  );
+}
+
 export const useAuthStore = defineStore("auth", () => {
   const token = ref<string | null>(localStorage.getItem("sitey_token"));
   const user = ref<User | null>(null);
@@ -48,9 +64,11 @@ export const useAuthStore = defineStore("auth", () => {
     try {
       const me = await trpc.auth.whoami.query();
       user.value = me;
-    } catch {
-      setToken(null);
-      user.value = null;
+    } catch (e: unknown) {
+      if (isUnauthorizedError(e)) {
+        setToken(null);
+        user.value = null;
+      }
     }
   }
 

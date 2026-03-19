@@ -1,3 +1,9 @@
+/*
+This is our style reset.
+Generally prefer classless so all html looks nice without too much customization.
+This will help have a consistent look across all our components.
+*
+
 /* --------------------------------------------------
    Document defaults
 -------------------------------------------------- */
@@ -170,6 +176,19 @@ input,
 select,
 textarea {
   color: var(--text-primary);
+}
+
+select {
+  background: var(--bg-input);
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 0.6rem 0.75rem;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+select:focus {
+  border-color: var(--brand);
 }
 
 ::placeholder {

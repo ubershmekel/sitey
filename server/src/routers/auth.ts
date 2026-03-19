@@ -1,8 +1,18 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, publicProcedure, protectedProcedure } from "../trpc.js";
+import {
+  router,
+  publicProcedure,
+  protectedProcedure,
+  settledProcedure,
+} from "../trpc.js";
 import { db } from "../lib/db.js";
-import { verifyPassword, hashPassword, signToken } from "../services/crypto.js";
+import {
+  verifyPassword,
+  hashPassword,
+  signToken,
+  generatePassword,
+} from "../services/crypto.js";
 
 const passwordSchema = z
   .string()
@@ -184,4 +194,125 @@ export const authRouter = router({
     email: ctx.user.email,
     mustChangePassword: ctx.user.mustChangePassword,
   })),
+
+  listUsers: settledProcedure.query(async () => {
+    const users = await db.user.findMany({
+      orderBy: { createdAt: "asc" },
+      select: {
+        id: true,
+        email: true,
+        mustChangePassword: true,
+        createdAt: true,
+      },
+    });
+    return users;
+  }),
+
+  createUser: settledProcedure
+    .input(
+      z.object({
+        email: z.string().email(),
+        password: passwordSchema.optional(),
+        mustChangePassword: z.boolean().default(true),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const existing = await db.user.findUnique({
+        where: { email: input.email },
+        select: { id: true },
+      });
+      if (existing) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "User already exists",
+        });
+      }
+
+      const plainPassword = input.password ?? generatePassword(16);
+      const passwordHash = await hashPassword(plainPassword);
+      const user = await db.user.create({
+        data: {
+          email: input.email,
+          passwordHash,
+          mustChangePassword: input.mustChangePassword,
+        },
+        select: {
+          id: true,
+          email: true,
+          mustChangePassword: true,
+          createdAt: true,
+        },
+      });
+
+      return {
+        ...user,
+        generatedPassword: input.password ? null : plainPassword,
+      };
+    }),
+
+  resetUserPassword: settledProcedure
+    .input(
+      z.object({
+        userId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const existing = await db.user.findUnique({
+        where: { id: input.userId },
+        select: { id: true, email: true },
+      });
+      if (!existing) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "User not found",
+        });
+      }
+
+      const plainPassword = generatePassword(16);
+      const passwordHash = await hashPassword(plainPassword);
+      await db.user.update({
+        where: { id: input.userId },
+        data: {
+          passwordHash,
+          mustChangePassword: true,
+        },
+      });
+
+      return {
+        userId: existing.id,
+        email: existing.email,
+        generatedPassword: plainPassword,
+      };
+    }),
+
+  deleteUser: settledProcedure
+    .input(
+      z.object({
+        userId: z.string().min(1),
+      }),
+    )
+    .mutation(async ({ ctx, input }) => {
+      if (ctx.user.sub === input.userId) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "You cannot delete your own user",
+        });
+      }
+
+      const existing = await db.user.findUnique({
+        where: { id: input.userId },
+        select: { id: true },
+      });
+      if (!existing) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "User not found",
+        });
+      }
+
+      await db.user.delete({
+        where: { id: input.userId },
+      });
+      return { userId: input.userId };
+    }),
 });

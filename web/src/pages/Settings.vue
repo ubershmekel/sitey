@@ -72,47 +72,125 @@
       </form>
     </section>
 
-    <!-- Change Password -->
     <section class="settings-section">
-      <h2>Change password</h2>
-      <form @submit.prevent="changePassword" class="settings-form">
-        <div v-if="pwError" class="alert error">{{ pwError }}</div>
-        <div v-if="pwSuccess" class="alert success">
-          Password changed successfully.
+      <h2>Users</h2>
+      <p class="section-hint">
+        Reset generates a temporary password and copies it to your clipboard.
+        The user will be required to change it on next sign-in.
+      </p>
+
+      <div v-if="usersError" class="alert error">{{ usersError }}</div>
+      <div v-if="usersSuccess" class="alert success">{{ usersSuccess }}</div>
+      <div v-if="generatedPassword" class="alert success">
+        {{ generatedPassword.message }}
+        <code>{{ generatedPassword.password }}</code>
+        <div class="generated-password-actions">
+          <button
+            type="button"
+            class="btn-ghost"
+            @click="copyGeneratedPassword"
+          >
+            {{ generatedPasswordCopied ? "Copied" : "Copy password" }}
+          </button>
         </div>
-        <label>
-          Current password
-          <input
-            v-model="pw.current"
-            type="password"
-            required
-            autocomplete="current-password"
-          />
-        </label>
-        <label>
-          New password <span class="hint">(min 9 chars)</span>
-          <input
-            v-model="pw.next"
-            type="password"
-            required
-            minlength="9"
-            autocomplete="new-password"
-          />
-        </label>
-        <label>
-          Confirm new password
-          <input
-            v-model="pw.confirm"
-            type="password"
-            required
-            autocomplete="new-password"
-          />
-        </label>
-        <button type="submit" class="btn-primary" :disabled="pw.saving">
-          {{ pw.saving ? "Saving…" : "Change password" }}
+      </div>
+
+      <div class="users-toolbar">
+        <button
+          type="button"
+          class="btn-primary"
+          @click="addUserOpen = true"
+          :disabled="addUserOpen || addUserLoading"
+        >
+          Add user
         </button>
+      </div>
+
+      <form
+        v-if="addUserOpen"
+        @submit.prevent="createUser"
+        class="settings-form users-add-form"
+      >
+        <label>
+          New user email
+          <input
+            v-model="addUserEmail"
+            type="email"
+            required
+            autocomplete="email"
+          />
+        </label>
+        <div class="button-row">
+          <button type="submit" class="btn-primary" :disabled="addUserLoading">
+            {{ addUserLoading ? "Creating..." : "Create user" }}
+          </button>
+          <button
+            type="button"
+            class="btn-ghost"
+            :disabled="addUserLoading"
+            @click="cancelAddUser"
+          >
+            Cancel
+          </button>
+        </div>
       </form>
+
+      <div class="user-table" v-if="users.length > 0">
+        <div class="user-table-head">
+          <span>Email</span>
+          <span>Actions</span>
+        </div>
+        <div v-for="u in users" :key="u.id" class="user-table-row">
+          <div class="user-cell">
+            <span class="user-row-email">{{ u.email }}</span>
+            <span v-if="u.id === auth.user?.id" class="user-row-hint">
+              current user
+            </span>
+            <span v-else-if="u.mustChangePassword" class="user-row-hint">
+              password reset required
+            </span>
+          </div>
+          <div class="user-actions">
+            <button
+              type="button"
+              class="btn-ghost"
+              :disabled="userActionLoadingId === u.id"
+              @click="openResetConfirm(u)"
+            >
+              {{
+                userActionLoadingId === u.id && userActionKind === "reset"
+                  ? "Resetting..."
+                  : "Reset password"
+              }}
+            </button>
+            <button
+              type="button"
+              class="btn-danger"
+              v-if="u.id !== auth.user?.id"
+              :disabled="userActionLoadingId === u.id"
+              @click="openDeleteConfirm(u)"
+            >
+              {{
+                userActionLoadingId === u.id && userActionKind === "delete"
+                  ? "Deleting..."
+                  : "Delete user"
+              }}
+            </button>
+          </div>
+        </div>
+      </div>
+      <p v-else class="section-hint compact">No users yet.</p>
     </section>
+
+    <ConfirmActionModal
+      v-model="confirmModalOpen"
+      :title="confirmModalTitle"
+      :message="confirmModalMessage"
+      :confirm-label="confirmModalLabel"
+      :danger="confirmAction === 'delete'"
+      :loading="confirmModalLoading"
+      @confirm="confirmUserAction"
+    />
 
     <!-- Caddy config debug -->
     <section class="settings-section">
@@ -160,6 +238,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from "vue";
 import Layout from "../components/Layout.vue";
+import ConfirmActionModal from "../components/ConfirmActionModal.vue";
 import { trpc } from "../trpc";
 import { useAuthStore } from "../stores/auth";
 
@@ -167,6 +246,8 @@ const auth = useAuthStore();
 type PublicSiteUrlInfo = Awaited<
   ReturnType<typeof trpc.system.getPublicSiteUrl.query>
 >;
+type AuthUserList = Awaited<ReturnType<typeof trpc.auth.listUsers.query>>;
+type AuthUser = AuthUserList[number];
 
 const publicSiteUrlInfo = ref<PublicSiteUrlInfo | null>(null);
 const publicSiteUrl = reactive({ value: "", saving: false });
@@ -224,44 +305,210 @@ async function clearPublicSiteUrl() {
   }
 }
 
-// ── Install date ─────────────────────────────────────────────────────────────
 const installedAt = ref<string | null>(null);
 async function loadInstalledAt() {
   try {
     const status = await trpc.auth.setupStatus.query();
     installedAt.value = status.installedAt ?? null;
   } catch {
-    /* non-critical */
+    // non-critical
   }
 }
 
-// ── Password change ───────────────────────────────────────────────────────────
-const pw = reactive({ current: "", next: "", confirm: "", saving: false });
-const pwError = ref("");
-const pwSuccess = ref(false);
+const users = ref<AuthUser[]>([]);
+const usersError = ref("");
+const usersSuccess = ref("");
+const addUserOpen = ref(false);
+const addUserLoading = ref(false);
+const addUserEmail = ref("");
+const userActionLoadingId = ref<string | null>(null);
+const userActionKind = ref<"reset" | "delete" | null>(null);
+const generatedPassword = ref<{
+  email: string;
+  password: string;
+  message: string;
+} | null>(null);
+const generatedPasswordCopied = ref(false);
+const confirmModalOpen = ref(false);
+const confirmAction = ref<"reset" | "delete" | null>(null);
+const confirmTargetUser = ref<AuthUser | null>(null);
 
-async function changePassword() {
-  pwError.value = "";
-  pwSuccess.value = false;
-  if (pw.next !== pw.confirm) {
-    pwError.value = "Passwords do not match";
+const confirmModalTitle = computed(() => {
+  if (confirmAction.value === "reset") return "Reset user password?";
+  if (confirmAction.value === "delete") return "Delete user?";
+  return "Confirm action";
+});
+
+const confirmModalMessage = computed(() => {
+  const email = confirmTargetUser.value?.email ?? "this user";
+  if (confirmAction.value === "reset") {
+    return `A new temporary password will be generated for ${email}. Continue?`;
+  }
+  if (confirmAction.value === "delete") {
+    return `${email} will be permanently removed. Continue?`;
+  }
+  return "Continue?";
+});
+
+const confirmModalLabel = computed(() => {
+  if (confirmAction.value === "reset") return "Reset password";
+  if (confirmAction.value === "delete") return "Delete user";
+  return "Confirm";
+});
+
+const confirmModalLoading = computed(() => {
+  return (
+    !!confirmTargetUser.value &&
+    userActionLoadingId.value === confirmTargetUser.value.id
+  );
+});
+
+async function loadUsers() {
+  usersError.value = "";
+  try {
+    users.value = await trpc.auth.listUsers.query();
+  } catch (e: unknown) {
+    usersError.value =
+      (e as { message?: string })?.message ?? "Failed to load users";
+  }
+}
+
+async function copyPassword(password: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(password);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function copyGeneratedPassword() {
+  if (!generatedPassword.value) return;
+  const copied = await copyPassword(generatedPassword.value.password);
+  generatedPasswordCopied.value = copied;
+}
+
+function cancelAddUser() {
+  addUserOpen.value = false;
+  addUserEmail.value = "";
+}
+
+function openResetConfirm(user: AuthUser) {
+  confirmAction.value = "reset";
+  confirmTargetUser.value = user;
+  confirmModalOpen.value = true;
+}
+
+function openDeleteConfirm(user: AuthUser) {
+  if (user.id === auth.user?.id) {
+    usersError.value = "You cannot delete your own user.";
     return;
   }
-  pw.saving = true;
+  confirmAction.value = "delete";
+  confirmTargetUser.value = user;
+  confirmModalOpen.value = true;
+}
+
+async function confirmUserAction() {
+  const user = confirmTargetUser.value;
+  const action = confirmAction.value;
+  if (!user || !action) return;
+
+  if (action === "reset") {
+    await resetUserPassword(user);
+  } else {
+    await deleteUser(user);
+  }
+
+  confirmModalOpen.value = false;
+  confirmTargetUser.value = null;
+  confirmAction.value = null;
+}
+
+async function createUser() {
+  usersError.value = "";
+  usersSuccess.value = "";
+  generatedPassword.value = null;
+  generatedPasswordCopied.value = false;
+  const email = addUserEmail.value.trim();
+  if (!email) {
+    usersError.value = "Email is required";
+    return;
+  }
+
+  addUserLoading.value = true;
   try {
-    await auth.changePassword(pw.current, pw.next);
-    pwSuccess.value = true;
-    pw.current = "";
-    pw.next = "";
-    pw.confirm = "";
+    const result = await trpc.auth.createUser.mutate({
+      email,
+      mustChangePassword: true,
+    });
+    generatedPassword.value = result.generatedPassword
+      ? {
+          email: result.email,
+          password: result.generatedPassword,
+          message: `User added for ${result.email}. Temporary password:`,
+        }
+      : null;
+    generatedPasswordCopied.value = false;
+    usersSuccess.value = "";
+    cancelAddUser();
+    await loadUsers();
   } catch (e: unknown) {
-    pwError.value = (e as { message?: string })?.message ?? "Failed";
+    usersError.value =
+      (e as { message?: string })?.message ?? "Failed to add user";
   } finally {
-    pw.saving = false;
+    addUserLoading.value = false;
   }
 }
 
-// ── Caddy debug ───────────────────────────────────────────────────────────────
+async function resetUserPassword(user: AuthUser) {
+  usersError.value = "";
+  usersSuccess.value = "";
+  generatedPassword.value = null;
+  generatedPasswordCopied.value = false;
+  userActionLoadingId.value = user.id;
+  userActionKind.value = "reset";
+  try {
+    const result = await trpc.auth.resetUserPassword.mutate({
+      userId: user.id,
+    });
+    generatedPassword.value = {
+      email: result.email,
+      password: result.generatedPassword,
+      message: `Password reset for ${result.email}. Temporary password:`,
+    };
+    generatedPasswordCopied.value = false;
+    usersSuccess.value = "";
+    await loadUsers();
+  } catch (e: unknown) {
+    usersError.value =
+      (e as { message?: string })?.message ?? "Failed to reset password";
+  } finally {
+    userActionLoadingId.value = null;
+    userActionKind.value = null;
+  }
+}
+
+async function deleteUser(user: AuthUser) {
+  usersError.value = "";
+  usersSuccess.value = "";
+  generatedPassword.value = null;
+  generatedPasswordCopied.value = false;
+  userActionLoadingId.value = user.id;
+  userActionKind.value = "delete";
+  try {
+    await trpc.auth.deleteUser.mutate({ userId: user.id });
+    usersSuccess.value = `Deleted ${user.email}.`;
+    await loadUsers();
+  } catch (e: unknown) {
+    usersError.value =
+      (e as { message?: string })?.message ?? "Failed to delete user";
+  } finally {
+    userActionLoadingId.value = null;
+    userActionKind.value = null;
+  }
+}
+
 const caddyfile = ref("");
 const caddyfileLoading = ref(false);
 
@@ -277,6 +524,7 @@ async function loadCaddyfile() {
 onMounted(() => {
   loadPublicSiteUrl();
   loadInstalledAt();
+  loadUsers();
 });
 </script>
 
@@ -377,6 +625,75 @@ textarea {
 
 .settings-form > .btn-primary {
   align-self: flex-start;
+}
+
+.users-toolbar {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+}
+
+.generated-password-actions {
+  margin-top: 0.75rem;
+}
+
+.users-add-form {
+  margin-bottom: 1rem;
+}
+
+.user-table {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.user-table-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  padding: 0.65rem 0.75rem;
+  background: var(--bg-elevated);
+  border-bottom: 1px solid var(--border-default);
+  font-size: var(--font-tiny);
+  color: var(--text-muted);
+}
+
+.user-table-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 1rem;
+  padding: 0.75rem;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.user-table-row:last-child {
+  border-bottom: none;
+}
+
+.user-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.user-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.user-row-email {
+  color: var(--text-primary);
+  font-size: var(--font-medium);
+  word-break: break-all;
+}
+
+.user-row-hint {
+  font-size: var(--font-tiny);
+  color: var(--status-warn-text);
 }
 
 .app-status {
