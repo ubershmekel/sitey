@@ -209,9 +209,7 @@
             <div class="disk-bar" :style="diskBarStyle" />
           </div>
           <p class="disk-bar-label">
-            {{
-              formatBytes(diskUsage.diskTotal - diskUsage.diskAvailable)
-            }}
+            {{ formatBytes(diskUsage.diskTotal - diskUsage.diskAvailable) }}
             used of {{ formatBytes(diskUsage.diskTotal) }} &mdash;
             {{ formatBytes(diskUsage.diskAvailable) }} free
             <span class="disk-bar-path">({{ diskUsage.diskPath }})</span>

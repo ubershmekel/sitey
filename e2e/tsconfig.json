@@ -11,5 +11,11 @@
     "noEmit": true
   },
   "include": ["./**/*.ts"],
-  "exclude": ["../node_modules", "../server", "../web", "../deploy"]
+  "exclude": [
+    "../node_modules",
+    "../server",
+    "../web",
+    "../deploy",
+    "../deploy/data"
+  ]
 }

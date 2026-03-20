@@ -11,6 +11,8 @@
     "prepare": "husky",
     "build": "npm run build -w web && npm run build -w server",
     "typecheck": "npm run db:generate -w server && npm run typecheck -w server && npm run typecheck -w web && tsc --noEmit -p e2e/tsconfig.json",
+    "test": "npm run test -w server",
+    "check:all": "npm run format:check && npm run typecheck && npm run test",
     "format": "prettier --write .",
     "format:staged": "lint-staged",
     "format:check": "prettier --check .",

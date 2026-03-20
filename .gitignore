@@ -3,6 +3,7 @@ dist/
 .env
 !server/.env
 data/
+deploy/data/
 *.db
 *.db-shm
 *.db-wal

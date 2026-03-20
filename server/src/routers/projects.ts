@@ -237,7 +237,7 @@ export const projectsRouter = router({
       const noop = () => {};
       await stopAndRemoveContainer(`sitey-project-${project.id}`, noop);
       await stopAndRemoveContainer(`sitey-${project.id}`, noop);
-      await pruneProjectImages(project.id, "").catch(noop);
+      await pruneProjectImages(project.id, [], noop).catch(noop);
 
       // Delete project from DB (cascades to routes/deployments)
       await db.project.delete({ where: { id: input.id } });
