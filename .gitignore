@@ -14,3 +14,4 @@ web/dist/
 *.log
 test-results/
 .claude/settings.local.json
+e2e/.tmp-state.json

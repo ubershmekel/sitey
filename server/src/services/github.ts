@@ -6,7 +6,7 @@
 import jwt from "jsonwebtoken";
 import { db } from "../lib/db.js";
 
-const GITHUB_API_BASE = "https://api.github.com";
+const GITHUB_API_BASE = process.env.GITHUB_API_BASE ?? "https://api.github.com";
 const GITHUB_INTEGRATION_ID = 1;
 
 export const LEGACY_GITHUB_CONFIG_KEYS = {

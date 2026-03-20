@@ -89,11 +89,10 @@ async function handleSetup() {
   setupError.value = "";
   setupLoading.value = true;
   try {
-    const result = await trpc.auth.setupComplete.mutate({
+    await trpc.auth.setupComplete.mutate({
       email: email.value,
       password: password.value,
     });
-    auth.setToken(result.token);
     await auth.fetchUser();
     isSetup.value = false;
     router.push("/");

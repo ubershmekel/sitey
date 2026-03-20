@@ -67,7 +67,13 @@ export async function bootstrap() {
 }
 
 async function detectPublicIP(): Promise<string | null> {
-  const services = ["https://icanhazip.com", "https://api.ipify.org"];
+  const envServices = process.env.DETECT_IP_SERVICES;
+  const services = envServices
+    ? envServices
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : ["https://icanhazip.com", "https://api.ipify.org"];
   for (const url of services) {
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(3000) });

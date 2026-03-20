@@ -325,11 +325,9 @@ function appendRouteHandler(lines: string[], route: ProjectRoute): void {
   }
 }
 
-function appendTlsDirective(lines: string[], email?: string): void {
+function appendTlsEmailDirective(lines: string[], email: string): void {
   const trimmedEmail = email?.trim();
-  if (trimmedEmail) {
-    lines.push(`    tls ${trimmedEmail}`);
-  }
+  lines.push(`    tls ${trimmedEmail}`);
 }
 
 function appendSiteBlockBody(lines: string[], routes: ProjectRoute[]): void {
@@ -380,7 +378,9 @@ function appendSiteBlock(
 
   // Main (HTTPS) block — Caddy provisions the cert in the background.
   lines.push(`${hostname} {`);
-  appendTlsDirective(lines, email);
+  if (email && email.trim()) {
+    appendTlsEmailDirective(lines, email);
+  }
   appendSiteBlockBody(lines, routes);
   lines.push("}");
   lines.push("");
@@ -392,7 +392,7 @@ function appendProbeSiteBlock(
   email: string,
 ): void {
   lines.push(`${hostname} {`);
-  appendTlsDirective(lines, email);
+  appendTlsEmailDirective(lines, email);
   lines.push("    respond 204");
   lines.push("}");
   lines.push("");

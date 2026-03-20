@@ -5,7 +5,9 @@
 ```bash
 # Install dependencies
 npm install
-npm run dev
+
+# Run just the
+npm run dev:nocaddy
 
 # Optional manual startup of each service:
 #
@@ -18,6 +20,25 @@ npm run dev       # starts on :3001
 cd web
 npm run dev       # starts on :3000 (proxies /trpc and /webhook → :3001)
 ```
+
+## Root scripts (`package.json`)
+
+Scripts that operate across the whole monorepo.
+
+| Script                      | When to use                                                                                                                            |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `dev:nocaddy`               | Everyday development — starts API (:3001) and Web (:3000) natively with hot-reload. No Docker required.                                |
+| `dev:docker`                | Full stack with Caddy in Docker — equivalent to the production compose file but with the dev Caddyfile. Use when you need TLS routing. |
+| `build`                     | Build both packages for production (`web/dist` + `server/dist`). Run before a Docker image build.                                      |
+| `typecheck`                 | Check TypeScript across server, web, and e2e. Run before pushing.                                                                      |
+| `format`                    | Auto-format every file with Prettier.                                                                                                  |
+| `format:check`              | Verify formatting without writing (used in CI).                                                                                        |
+| `db:migrate`                | Run `prisma migrate deploy` on the server workspace (production migrations).                                                           |
+| `db:studio`                 | Open Prisma Studio browser UI against the dev DB.                                                                                      |
+| `test:e2e`                  | Run the Playwright E2E suite (spins up mock server + API on :4001 + Web on :4000).                                                     |
+| `test:e2e:mockserver`       | Start the mock external server standalone on :3334. Useful for debugging E2E failures in isolation.                                    |
+| `test:remote-wipe-and-test` | SSH into a remote server, wipe state, and re-run the install. See [Remote reset helper](#remote-reset-helper-test-runs).               |
+| `test:remote-test-install`  | SSH into a remote server and run the installer without wiping first.                                                                   |
 
 ## DB scripts (`server/package.json`)
 
@@ -196,12 +217,10 @@ These rules exist to prevent read paths from becoming slow under load.
 
 ## Running with hot-reload (no Docker rebuilds)
 
-The root `package.json` has a `dev` script that starts both in parallel:
-
 ```bash
 # From repo root — installs deps if needed, then starts both
 npm install
-npm run dev
+npm run dev:nocaddy
 ```
 
 - **API** → `http://localhost:3001` (`tsx watch` auto-restarts on file save)

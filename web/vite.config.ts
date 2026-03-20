@@ -1,10 +1,12 @@
 import { defineConfig } from "vite";
 import vue from "@vitejs/plugin-vue";
 
+const apiTarget = process.env.API_PROXY_TARGET ?? "http://127.0.0.1:3001";
+
 export default defineConfig({
   plugins: [vue()],
   server: {
-    port: 3000,
+    port: process.env.PORT ? Number(process.env.PORT) : 3000,
     host: true,
     allowedHosts: true,
     // When running behind a reverse proxy (Caddy in Docker dev), tell the browser
@@ -14,15 +16,15 @@ export default defineConfig({
       : {},
     proxy: {
       "/trpc": {
-        target: "http://127.0.0.1:3001",
+        target: apiTarget,
         changeOrigin: true,
       },
       "/webhook": {
-        target: "http://127.0.0.1:3001",
+        target: apiTarget,
         changeOrigin: true,
       },
       "/health": {
-        target: "http://127.0.0.1:3001",
+        target: apiTarget,
         changeOrigin: true,
       },
     },
