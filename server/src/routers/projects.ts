@@ -18,7 +18,11 @@ import {
   pruneProjectImages,
 } from "../services/docker.js";
 import { projectRootPath } from "../services/git.js";
-import { normalizeSiteUrl, resolvePublicSiteUrl } from "../services/siteUrl.js";
+import {
+  normalizeSiteUrl,
+  resolvePublicSiteUrl,
+  isLoopbackHost,
+} from "../services/siteUrl.js";
 
 const SUBDOMAIN_LABEL_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
 const randomSubdomainSuffix = customAlphabet(
@@ -127,7 +131,11 @@ export const projectsRouter = router({
         }
         // Probe unchecked route TLS in the background so the next
         // fetch returns a verified status.
-        if (route.domain && route.tlsStatus === "unchecked") {
+        if (
+          route.domain &&
+          !route.httpOnly &&
+          route.tlsStatus === "unchecked"
+        ) {
           scheduleRouteTlsProbe(route);
         }
       }
@@ -312,6 +320,7 @@ export const projectsRouter = router({
         domainId: z.number().int().optional(),
         pathPrefix: z.string().default(""),
         subdomain: z.string().default(""),
+        httpOnly: z.boolean().default(false),
       }),
     )
     .mutation(async ({ input }) => {
@@ -359,6 +368,31 @@ export const projectsRouter = router({
         subdomain = "";
       }
 
+      if (domain && isLoopbackHost(domain.hostname) && !input.httpOnly) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "localhost routes must be created as HTTP-only.",
+        });
+      }
+
+      if (input.domainId) {
+        const sameHostRoutes = await db.projectRoute.findMany({
+          where: { domainId: input.domainId, subdomain },
+          select: { id: true, httpOnly: true },
+        });
+        if (
+          sameHostRoutes.some(
+            (existing) => existing.httpOnly !== input.httpOnly,
+          )
+        ) {
+          throw new TRPCError({
+            code: "BAD_REQUEST",
+            message:
+              "All routes on the same host must use the same HTTP-only setting.",
+          });
+        }
+      }
+
       let route;
       try {
         route = await db.projectRoute.create({
@@ -367,6 +401,7 @@ export const projectsRouter = router({
             domainId: input.domainId,
             pathPrefix: input.pathPrefix,
             subdomain,
+            httpOnly: input.httpOnly,
           },
           include: { domain: true },
         });
@@ -389,7 +424,7 @@ export const projectsRouter = router({
       }
 
       // Probe TLS for the new route's hostname and persist the result.
-      if (route.domain) {
+      if (route.domain && !route.httpOnly) {
         try {
           route.tlsStatus = await probeRouteTls(route);
         } catch (err) {
@@ -433,6 +468,11 @@ export const projectsRouter = router({
         throw new TRPCError({
           code: "BAD_REQUEST",
           message: "Route has no domain",
+        });
+      if (route.httpOnly)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "HTTP-only routes do not support TLS checks.",
         });
       const tlsStatus = await probeRouteTls(route);
       return { tlsStatus };

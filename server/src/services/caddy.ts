@@ -13,7 +13,7 @@
  */
 
 import { db } from "../lib/db.js";
-import { resolvePublicSiteUrl } from "./siteUrl.js";
+import { resolvePublicSiteUrl, isLoopbackHost } from "./siteUrl.js";
 import { docker } from "./docker.js";
 import tls from "node:tls";
 
@@ -200,6 +200,7 @@ function appendAdminHandlers(lines: string[]): void {
 type ProjectRoute = {
   subdomain: string;
   pathPrefix: string;
+  httpOnly: boolean;
   project: {
     id: number;
     deployMode: string;
@@ -230,8 +231,10 @@ export function resolveRouteHostname(
 export async function probeRouteTls(route: {
   id: string;
   subdomain: string;
+  httpOnly?: boolean;
   domain: { hostname: string } | null;
 }): Promise<"unchecked" | "active" | "error"> {
+  if (route.httpOnly) return "unchecked";
   if (!route.domain) return "unchecked";
   const hostname = resolveRouteHostname(route.domain.hostname, route.subdomain);
   if (!hostname) return "unchecked";
@@ -250,8 +253,10 @@ export async function probeRouteTls(route: {
 export function scheduleRouteTlsProbe(route: {
   id: string;
   subdomain: string;
+  httpOnly?: boolean;
   domain: { hostname: string } | null;
 }): void {
+  if (route.httpOnly) return;
   probeRouteTls(route).catch((err) =>
     console.error(`[caddy] Route TLS probe failed for ${route.id}:`, err),
   );
@@ -371,8 +376,16 @@ function appendSiteBlock(
   hostname: string,
   email: string,
   routes: ProjectRoute[],
-  options?: { httpFallback?: boolean },
+  options?: { httpFallback?: boolean; httpOnly?: boolean },
 ): void {
+  if (options?.httpOnly) {
+    lines.push(`http://${hostname} {`);
+    appendSiteBlockBody(lines, routes);
+    lines.push("}");
+    lines.push("");
+    return;
+  }
+
   // Plain-HTTP fallback — keeps the site reachable while cert is pending.
   if (options?.httpFallback) {
     lines.push(`http://${hostname} {`);
@@ -405,6 +418,7 @@ function toProjectRoutes(
   routes: Array<{
     subdomain: string;
     pathPrefix: string;
+    httpOnly: boolean;
     project: {
       id: number;
       deployMode: string;
@@ -426,6 +440,7 @@ function toProjectRoutes(
     result.push({
       subdomain: route.subdomain,
       pathPrefix: route.pathPrefix,
+      httpOnly: route.httpOnly,
       project: {
         ...p,
         hasSuccessfulDeployment: p.deployments.length > 0,
@@ -543,12 +558,13 @@ export async function buildCaddyfile(): Promise<string> {
     const httpFallback = domain.status !== "active";
 
     if (!domain.hostname.startsWith("*.")) {
+      const hostHttpOnly = projectRoutes.some((route) => route.httpOnly);
       appendSiteBlock(
         lines,
         domain.hostname,
         domain.letsEncryptEmail,
         projectRoutes,
-        { httpFallback },
+        { httpFallback, httpOnly: hostHttpOnly },
       );
       continue;
     }
@@ -589,8 +605,10 @@ export async function buildCaddyfile(): Promise<string> {
 
     for (const [hostname, hostRoutes] of routesByHostname.entries()) {
       if (hostname === siteyNamedDomain) continue; // management block already owns this hostname
+      const hostHttpOnly = hostRoutes.some((route) => route.httpOnly);
       appendSiteBlock(lines, hostname, domain.letsEncryptEmail, hostRoutes, {
         httpFallback,
+        httpOnly: hostHttpOnly,
       });
     }
   }
@@ -614,6 +632,7 @@ export function scheduleDomainStatusRefresh(domain: {
   id: number;
   hostname: string;
 }): void {
+  if (isLoopbackHost(domain.hostname)) return;
   if (inFlightRefreshes.has(domain.id)) return; // already in-flight
 
   inFlightRefreshes.add(domain.id);

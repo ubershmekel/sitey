@@ -114,6 +114,9 @@ model ProjectRoute {
   // "unchecked" until a probe confirms the cert is live.
   tlsStatus   String   @default("unchecked") // unchecked | active | error
 
+  // Serve this hostname over plain HTTP only (no HTTPS block).
+  httpOnly    Boolean  @default(false)
+
   createdAt   DateTime @default(now())
 
   @@unique([domainId, subdomain, pathPrefix])

@@ -80,13 +80,19 @@
             target="_blank"
             rel="noopener"
             :class="
-              primaryDomainRoute?.tlsStatus === 'active'
+              primaryDomainRoute?.tlsStatus === 'active' &&
+              !primaryDomainRoute?.httpOnly
                 ? 'url-https'
                 : 'url-http-primary'
             "
             >{{ projectUrl }}</a
           >
-          <template v-if="primaryDomainRoute?.tlsStatus === 'active'">
+          <template
+            v-if="
+              primaryDomainRoute?.tlsStatus === 'active' &&
+              !primaryDomainRoute?.httpOnly
+            "
+          >
             <span class="url-sep">·</span>
             <a
               :href="projectUrl.replace('https://', 'http://')"
@@ -99,6 +105,7 @@
           <template
             v-if="
               primaryDomainRoute?.domain &&
+              !primaryDomainRoute?.httpOnly &&
               primaryDomainRoute.tlsStatus !== 'active'
             "
           >
@@ -155,34 +162,36 @@
         </div>
       </div>
 
-      <!-- ── Info grid ─────────────────────────────────────────────── -->
-      <div class="info-grid">
-        <div class="info-card">
-          <div class="info-label">Repository</div>
-          <div class="info-value mono">
-            {{ project.repoOwner }}/{{ project.repoName }}:{{ project.branch }}
-          </div>
+      <!-- ── Info rows ─────────────────────────────────────────────── -->
+      <div class="info-rows">
+        <div class="info-row">
+          <span class="info-label">Repo</span>
+          <span class="info-value mono"
+            >{{ project.repoOwner }}/{{ project.repoName }}:{{
+              project.branch
+            }}</span
+          >
         </div>
-        <div class="info-card">
-          <div class="info-label">Deploy type</div>
-          <div class="info-value">{{ deployTypeLabel }}</div>
+        <div class="info-row">
+          <span class="info-label">Type</span>
+          <span class="info-value">{{ deployTypeLabel }}</span>
         </div>
-        <div v-if="project.deployMode === 'server'" class="info-card">
-          <div class="info-label">Container port</div>
-          <div class="info-value mono">{{ project.containerPort }}</div>
+        <div v-if="project.deployMode === 'server'" class="info-row">
+          <span class="info-label">Port</span>
+          <span class="info-value mono">{{ project.containerPort }}</span>
         </div>
         <div
           v-if="project.deployMode === 'static' && project.buildImage"
-          class="info-card"
+          class="info-row"
         >
-          <div class="info-label">Build image</div>
-          <div class="info-value mono">{{ project.buildImage }}</div>
+          <span class="info-label">Build image</span>
+          <span class="info-value mono">{{ project.buildImage }}</span>
         </div>
-        <div class="info-card">
-          <div class="info-label">GitHub</div>
-          <div class="info-value">
-            {{ project.githubMode === "app" ? "GitHub App" : "Webhook" }}
-          </div>
+        <div class="info-row">
+          <span class="info-label">GitHub</span>
+          <span class="info-value">{{
+            project.githubMode === "app" ? "App" : "Webhook"
+          }}</span>
         </div>
       </div>
 
@@ -234,9 +243,16 @@
         <p class="section-hint">
           Each route maps a domain (or path prefix) to this project.
         </p>
-
+        <button
+          class="btn-primary"
+          type="button"
+          :disabled="routeSaving || domains.length === 0"
+          @click="addRouteModalOpen = true"
+        >
+          + Add route
+        </button>
         <div v-if="project.routes.length === 0" class="empty-msg">
-          No domain routes yet — add one below.
+          No domain routes yet.
         </div>
         <div v-else class="route-list">
           <div v-for="r in project.routes" :key="r.id" class="route-row">
@@ -253,12 +269,16 @@
             </div>
             <div class="route-meta">
               <span v-if="r.pathPrefix" class="route-badge">path</span>
-              <template v-if="r.domain && r.tlsStatus === 'active'">
+              <template v-if="r.httpOnly">
+                <span class="route-badge">http only</span>
+              </template>
+              <template v-else-if="r.domain && r.tlsStatus === 'active'">
                 <span class="route-badge route-badge-tls">https</span>
               </template>
               <template
                 v-else-if="
                   r.domain &&
+                  !r.httpOnly &&
                   (r.tlsStatus === 'unchecked' || r.tlsStatus === 'error')
                 "
               >
@@ -289,61 +309,6 @@
               {{ r.protected ? "Protected" : "Remove" }}
             </button>
           </div>
-        </div>
-
-        <div class="add-route-box">
-          <div class="add-route-title">Add route</div>
-          <form
-            class="route-form"
-            :style="
-              isWildcardSelected
-                ? 'grid-template-columns: 1fr 1fr 1fr auto'
-                : ''
-            "
-            @submit.prevent="addRoute"
-          >
-            <label>
-              Domain
-              <select
-                v-model="newRoute.domainId"
-                required
-                @change="onDomainChange"
-              >
-                <option value="">Select domain</option>
-                <option v-for="d in domains" :key="d.id" :value="d.id">
-                  {{ d.hostname }}
-                </option>
-              </select>
-            </label>
-            <label v-if="isWildcardSelected">
-              Subdomain <span class="hint">(e.g. myapp)</span>
-              <div class="subdomain-input-wrap">
-                <input
-                  v-model="newRoute.subdomain"
-                  type="text"
-                  placeholder="auto"
-                  class="subdomain-input"
-                />
-                <span class="subdomain-suffix">.{{ selectedDomainBase }}</span>
-              </div>
-            </label>
-            <label>
-              Path prefix <span class="hint">(optional)</span>
-              <input
-                v-model="newRoute.pathPrefix"
-                type="text"
-                placeholder="/"
-              />
-            </label>
-            <button
-              class="btn-primary"
-              type="submit"
-              :disabled="routeSaving || !newRoute.domainId"
-            >
-              {{ routeSaving ? "Saving..." : "Add route" }}
-            </button>
-          </form>
-          <div v-if="routeError" class="alert error mt-1">{{ routeError }}</div>
         </div>
       </div>
 
@@ -676,6 +641,14 @@
         </div>
       </div>
     </div>
+
+    <AddRouteModal
+      v-model="addRouteModalOpen"
+      :domains="domains"
+      :saving="routeSaving"
+      :error="routeError"
+      @submit="addRoute"
+    />
   </Layout>
 </template>
 
@@ -683,6 +656,7 @@
 import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 import { useRoute, useRouter, RouterLink } from "vue-router";
 import Layout from "../components/Layout.vue";
+import AddRouteModal from "../components/AddRouteModal.vue";
 import { trpc } from "../trpc";
 
 type Project = Awaited<ReturnType<typeof trpc.projects.get.query>>;
@@ -691,6 +665,7 @@ type WebhookInfo = Awaited<
   ReturnType<typeof trpc.projects.getWebhookInfo.query>
 >;
 type Domain = Awaited<ReturnType<typeof trpc.domains.list.query>>[number];
+const VIRTUAL_LOOPBACK_DOMAIN_ID = -127001;
 
 const route = useRoute();
 const router = useRouter();
@@ -706,6 +681,7 @@ const deleting = ref(false);
 const toggling = ref(false);
 const routeSaving = ref(false);
 const routeError = ref("");
+const addRouteModalOpen = ref(false);
 const webhookInfo = ref<WebhookInfo | null>(null);
 const webhookError = ref("");
 const webhookDomainId = ref<number | null>(null);
@@ -738,28 +714,6 @@ const tlsModalHostname = ref("");
 const LOG_POLL_MS = 3000;
 let logPollTimer: ReturnType<typeof setInterval> | null = null;
 
-const newRoute = ref({
-  domainId: null as number | null,
-  pathPrefix: "",
-  subdomain: "",
-});
-
-const isWildcardSelected = computed(() => {
-  if (!newRoute.value.domainId) return false;
-  const d = domains.value.find((x) => x.id === newRoute.value.domainId);
-  return d?.hostname.startsWith("*.") ?? false;
-});
-
-const selectedDomainBase = computed(() => {
-  const d = domains.value.find((x) => x.id === newRoute.value.domainId);
-  if (!d?.hostname.startsWith("*.")) return "";
-  return d.hostname.slice(2);
-});
-
-function onDomainChange() {
-  newRoute.value.subdomain = "";
-}
-
 const primaryDomainRoute = computed(
   () => project.value?.routes.find((r) => !!r.domain) ?? null,
 );
@@ -775,7 +729,7 @@ function routeHostname(r: ProjectRoute): string {
 const projectUrl = computed(() => {
   const r = primaryDomainRoute.value;
   if (!r?.domain) return "";
-  const scheme = r.tlsStatus === "active" ? "https" : "http";
+  const scheme = !r.httpOnly && r.tlsStatus === "active" ? "https" : "http";
   return `${scheme}://${routeHostname(r)}${r.pathPrefix || ""}`;
 });
 
@@ -846,7 +800,7 @@ function routeLabel(r: ProjectRoute): string {
   const pathPrefix = r.pathPrefix || "";
   const hostname = routeHostname(r);
   if (hostname) {
-    const scheme = r.tlsStatus === "active" ? "https" : "http";
+    const scheme = !r.httpOnly && r.tlsStatus === "active" ? "https" : "http";
     return `${scheme}://${hostname}${pathPrefix}`;
   }
   return pathPrefix ? `<server>${pathPrefix}` : "<server>";
@@ -884,10 +838,12 @@ async function fetchProject() {
     applyProjectToEditors(proj);
     envVarsText.value = proj.envVars ?? "";
     domains.value = domainList.map((d) => ({ id: d.id, hostname: d.hostname }));
-    if (!newRoute.value.domainId && domains.value.length === 1) {
-      newRoute.value.domainId = domains.value[0].id;
+    if (!domains.value.some((d) => d.hostname === "127.0.0.1")) {
+      domains.value.push({
+        id: VIRTUAL_LOOPBACK_DOMAIN_ID,
+        hostname: "127.0.0.1",
+      });
     }
-
     if (project.value.githubMode === "webhook") {
       await refetchWebhookInfo();
     } else {
@@ -1001,19 +957,39 @@ async function saveEnvVars() {
   }
 }
 
-async function addRoute() {
-  if (!newRoute.value.domainId) return;
+async function addRoute(input: {
+  domainId: number;
+  domainHostname: string;
+  pathPrefix: string;
+  subdomain: string;
+  httpOnly: boolean;
+}) {
   routeSaving.value = true;
   routeError.value = "";
   try {
+    let domainId = input.domainId;
+    if (domainId <= 0) {
+      const existing = domains.value.find(
+        (d) => d.hostname === input.domainHostname && d.id > 0,
+      );
+      if (existing) {
+        domainId = existing.id;
+      } else {
+        const created = await trpc.domains.create.mutate({
+          hostname: input.domainHostname,
+        });
+        domainId = created.id;
+      }
+    }
+
     await trpc.projects.addRoute.mutate({
       projectId,
-      domainId: newRoute.value.domainId ?? undefined,
-      pathPrefix: normalizePathPrefix(newRoute.value.pathPrefix),
-      subdomain: newRoute.value.subdomain.trim().toLowerCase(),
+      domainId,
+      pathPrefix: normalizePathPrefix(input.pathPrefix),
+      subdomain: input.subdomain.trim().toLowerCase(),
+      httpOnly: input.httpOnly,
     });
-    newRoute.value.pathPrefix = "";
-    newRoute.value.subdomain = "";
+    addRouteModalOpen.value = false;
     await fetchProject();
   } catch (e: unknown) {
     routeError.value =
@@ -1233,6 +1209,9 @@ watch(
   },
   { immediate: true },
 );
+watch(addRouteModalOpen, (open) => {
+  if (open) routeError.value = "";
+});
 onUnmounted(stopLogPolling);
 </script>
 
@@ -1376,25 +1355,27 @@ h1 {
 }
 
 /* ── Info grid ───────────────────────────────────────────────── */
-.info-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
-  gap: 0.75rem;
+.info-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
   margin-bottom: 2rem;
 }
 
-.info-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-default);
-  border-radius: 8px;
-  padding: 0.85rem 1rem;
+.info-row {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: var(--font-small);
 }
 
 .info-label {
   font-size: var(--font-tiny);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  margin-bottom: 0.3rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  min-width: 6rem;
 }
 
 .mono {
@@ -1566,62 +1547,6 @@ h1 {
 }
 
 /* ── Add route box ──────────────────────────────────────────── */
-.add-route-box {
-  background: var(--bg-elevated);
-  border: 1px solid var(--border-subtle);
-  border-radius: 8px;
-  padding: 1rem;
-}
-
-.add-route-title {
-  font-size: var(--font-tiny);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  margin-bottom: 0.75rem;
-}
-
-.route-form {
-  display: grid;
-  grid-template-columns: 1fr 1fr auto;
-  gap: 0.75rem;
-  align-items: end;
-}
-
-.subdomain-input-wrap {
-  display: flex;
-  align-items: center;
-  background: var(--bg-input);
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  overflow: hidden;
-  transition: border-color 0.15s;
-}
-
-.subdomain-input-wrap:focus-within {
-  border-color: var(--brand);
-}
-
-.subdomain-input {
-  flex: 1;
-  min-width: 0;
-  background: transparent;
-  border: none;
-  border-radius: 0;
-  padding: 0.6rem 0.4rem 0.6rem 0.75rem;
-}
-
-.subdomain-input:focus {
-  border-color: transparent;
-}
-
-.subdomain-suffix {
-  font-size: var(--font-tiny);
-  padding: 0 0.6rem 0 0;
-  white-space: nowrap;
-  font-family: monospace;
-}
-
 /* ── Webhook ────────────────────────────────────────────────── */
 .webhook-card {
   background: var(--bg-card);

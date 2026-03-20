@@ -10,6 +10,7 @@ import {
   scheduleDomainStatusRefresh,
   isDomainStatusStale,
 } from "../services/caddy.js";
+import { isLoopbackHost } from "../services/siteUrl.js";
 import { docker, decodeDockerLogPayload } from "../services/docker.js";
 
 const HOSTNAME_REGEX =
@@ -23,6 +24,10 @@ function normalizeOptionalEmail(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function isValidDomainHostname(hostname: string): boolean {
+  return HOSTNAME_REGEX.test(hostname) || isLoopbackHost(hostname);
+}
+
 export const domainsRouter = router({
   list: settledProcedure.query(async () => {
     const domains = await db.domain.findMany({
@@ -34,6 +39,7 @@ export const domainsRouter = router({
 
     // Trigger background TLS probes for stale domains — does not block response
     for (const d of domains) {
+      if (isLoopbackHost(d.hostname)) continue;
       if (isDomainStatusStale(d.statusCheckedAt))
         scheduleDomainStatusRefresh(d);
     }
@@ -76,9 +82,9 @@ export const domainsRouter = router({
           z
             .string()
             .min(3)
-            .regex(
-              HOSTNAME_REGEX,
-              "Must be a valid hostname (e.g. example.com or *.example.com)",
+            .refine(
+              isValidDomainHostname,
+              "Must be a valid hostname (e.g. example.com, *.example.com, or localhost)",
             ),
         ),
         letsEncryptEmail: z
@@ -101,6 +107,7 @@ export const domainsRouter = router({
         data: {
           hostname: input.hostname,
           letsEncryptEmail: input.letsEncryptEmail,
+          status: isLoopbackHost(input.hostname) ? "active" : "pending",
         },
       });
       // Push updated Caddy config — provisions TLS cert for this domain immediately.

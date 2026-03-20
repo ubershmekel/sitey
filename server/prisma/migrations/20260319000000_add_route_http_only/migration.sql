@@ -1,0 +1,1 @@
+ALTER TABLE "ProjectRoute" ADD COLUMN "httpOnly" BOOLEAN NOT NULL DEFAULT false;

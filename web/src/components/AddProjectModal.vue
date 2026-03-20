@@ -264,6 +264,9 @@ const repoByFullName = computed(() => {
 const allowDomainSelection = computed(
   () => props.fixedDomainId == null && props.domains.length > 0,
 );
+const domainById = computed(
+  () => new Map(props.domains.map((domain) => [domain.id, domain])),
+);
 
 function emptyForm() {
   return {
@@ -391,9 +394,11 @@ async function addProject() {
 
     const routeDomainId = props.fixedDomainId ?? form.value.domainId;
     if (routeDomainId) {
+      const selectedDomain = domainById.value.get(routeDomainId);
       await trpc.projects.addRoute.mutate({
         projectId: created.id,
         domainId: routeDomainId,
+        httpOnly: selectedDomain?.hostname === "localhost",
       });
     }
 
