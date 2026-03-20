@@ -188,21 +188,6 @@ input:focus {
   margin-top: 0.5rem;
 }
 
-.btn-ghost {
-  background: none;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 0.6rem 1.25rem;
-  cursor: pointer;
-  transition:
-    border-color 0.15s,
-    color 0.15s;
-}
-
-.btn-ghost:hover {
-  border-color: var(--text-muted);
-}
-
 .dns-check {
   font-size: var(--font-tiny);
   padding: 0.1rem 0;

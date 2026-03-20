@@ -488,21 +488,6 @@ select:focus {
   margin-top: 0.5rem;
 }
 
-.btn-ghost {
-  background: none;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 0.6rem 1.25rem;
-  cursor: pointer;
-  transition:
-    border-color 0.15s,
-    color 0.15s;
-}
-
-.btn-ghost:hover {
-  border-color: var(--text-muted);
-}
-
 .alert.error {
   background: var(--status-err-bg);
   border: 1px solid var(--status-err-border);

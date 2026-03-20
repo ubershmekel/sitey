@@ -377,27 +377,6 @@ h1 {
   padding: 0.6rem 0.75rem;
 }
 
-.btn-ghost {
-  background: none;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 0.5rem 1rem;
-  font-size: var(--font-tiny);
-  cursor: pointer;
-  transition:
-    border-color 0.15s,
-    color 0.15s;
-}
-
-.btn-ghost:hover {
-  border-color: var(--text-muted);
-}
-
-.btn-ghost:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 .btn-sm {
   padding: 0.35rem 0.75rem;
   font-size: var(--font-tiny);

@@ -92,19 +92,6 @@ function cancel() {
   gap: 0.75rem;
 }
 
-.btn-ghost {
-  background: none;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 0.6rem 1.25rem;
-  font-size: var(--font-tiny);
-  cursor: pointer;
-}
-
-.btn-ghost:hover {
-  border-color: var(--text-muted);
-}
-
 .btn-danger {
   background: var(--status-err-bg);
   color: var(--status-err-text);

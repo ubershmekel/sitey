@@ -148,6 +148,19 @@
             </span>
           </div>
           <div class="user-actions">
+            <button
+              type="button"
+              class="btn-danger"
+              v-if="u.id !== auth.user?.id"
+              :disabled="userActionLoadingId === u.id"
+              @click="openDeleteConfirm(u)"
+            >
+              {{
+                userActionLoadingId === u.id && userActionKind === "delete"
+                  ? "Deleting..."
+                  : "Delete user"
+              }}
+            </button>
             <RouterLink
               v-if="u.id === auth.user?.id"
               to="/change-password"
@@ -165,19 +178,6 @@
                 userActionLoadingId === u.id && userActionKind === "reset"
                   ? "Resetting..."
                   : "Reset password"
-              }}
-            </button>
-            <button
-              type="button"
-              class="btn-danger"
-              v-if="u.id !== auth.user?.id"
-              :disabled="userActionLoadingId === u.id"
-              @click="openDeleteConfirm(u)"
-            >
-              {{
-                userActionLoadingId === u.id && userActionKind === "delete"
-                  ? "Deleting..."
-                  : "Delete user"
               }}
             </button>
           </div>
@@ -805,22 +805,6 @@ textarea {
 .btn-sm {
   padding: 0.25rem 0.6rem;
   font-size: var(--font-tiny);
-}
-
-.btn-ghost {
-  background: none;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 0.5rem 1rem;
-  font-size: var(--font-tiny);
-  cursor: pointer;
-  transition:
-    border-color 0.15s,
-    color 0.15s;
-}
-
-.btn-ghost:hover {
-  border-color: var(--text-muted);
 }
 
 .about p {

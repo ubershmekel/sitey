@@ -777,25 +777,6 @@ textarea {
   font-size: var(--font-tiny);
 }
 
-.btn-ghost {
-  background: none;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 0.5rem 1rem;
-  font-size: var(--font-tiny);
-  cursor: pointer;
-  text-decoration: none;
-  display: inline-flex;
-  align-items: center;
-  transition:
-    border-color 0.15s,
-    color 0.15s;
-}
-
-.btn-ghost:hover {
-  border-color: var(--text-muted);
-}
-
 .btn-danger {
   background: var(--status-err-bg);
   color: var(--status-err-text);

@@ -667,25 +667,4 @@ h1 {
   white-space: pre-wrap;
   word-break: break-all;
 }
-
-.btn-ghost-sm {
-  background: none;
-  border: 1px solid var(--border-strong);
-  border-radius: 5px;
-  padding: 0.25rem 0.55rem;
-  font-size: var(--font-tiny);
-  cursor: pointer;
-  transition:
-    border-color 0.15s,
-    color 0.15s;
-}
-
-.btn-ghost-sm:hover:not(:disabled) {
-  border-color: var(--text-muted);
-}
-
-.btn-ghost-sm:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
 </style>

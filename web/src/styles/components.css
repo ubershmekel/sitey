@@ -294,3 +294,60 @@ img {
   padding: 0.1em 0.35em;
   color: var(--status-info-text);
 }
+
+/* --------------------------------------------------
+   Ghost buttons
+   Secondary actions that shouldn't compete with .btn-primary.
+   Works on both <button> and <a> elements — text-decoration is
+   suppressed and inline-flex ensures consistent alignment either way.
+   Use .btn-ghost-sm for tight spaces (table rows, inline toolbars).
+-------------------------------------------------- */
+
+.btn-ghost {
+  background: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 0.5rem 1rem;
+  font-size: var(--font-tiny);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  border-color: var(--text-muted);
+}
+
+.btn-ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-ghost-sm {
+  background: none;
+  border: 1px solid var(--border-strong);
+  border-radius: 5px;
+  padding: 0.25rem 0.55rem;
+  font-size: var(--font-tiny);
+  cursor: pointer;
+  text-decoration: none;
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  transition:
+    border-color 0.15s,
+    color 0.15s;
+}
+
+.btn-ghost-sm:hover:not(:disabled) {
+  border-color: var(--text-muted);
+}
+
+.btn-ghost-sm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

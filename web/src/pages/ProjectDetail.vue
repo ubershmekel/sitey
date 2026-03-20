@@ -1882,35 +1882,6 @@ select:focus {
   border-color: var(--status-err-border);
 }
 
-.btn-ghost {
-  background: none;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 0.5rem 1rem;
-  font-size: var(--font-tiny);
-  cursor: pointer;
-  transition:
-    border-color 0.15s,
-    color 0.15s;
-}
-
-.btn-ghost:hover {
-  border-color: var(--text-muted);
-}
-
-.btn-ghost-sm {
-  background: none;
-  border: 1px solid var(--border-strong);
-  border-radius: 5px;
-  padding: 0.3rem 0.6rem;
-  font-size: var(--font-tiny);
-  cursor: pointer;
-  transition:
-    border-color 0.15s,
-    color 0.15s;
-  white-space: nowrap;
-}
-
 .danger-zone {
   margin-top: 3rem;
   padding-top: 1.5rem;
