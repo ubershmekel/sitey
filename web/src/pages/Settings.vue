@@ -75,8 +75,8 @@
     <section class="settings-section">
       <h2>Users</h2>
       <p class="section-hint">
-        Reset generates a temporary password and copies it to your clipboard.
-        The user will be required to change it on next sign-in.
+        Reset generates a temporary password and shows it here. Use "Copy
+        password" to copy it to your clipboard.
       </p>
 
       <div v-if="usersError" class="alert error">{{ usersError }}</div>
@@ -146,11 +146,15 @@
             <span v-if="u.id === auth.user?.id" class="user-row-hint">
               current user
             </span>
-            <span v-else-if="u.mustChangePassword" class="user-row-hint">
-              password reset required
-            </span>
           </div>
           <div class="user-actions">
+            <RouterLink
+              v-if="u.id === auth.user?.id"
+              to="/change-password"
+              class="btn-ghost"
+            >
+              Change my password
+            </RouterLink>
             <button
               type="button"
               class="btn-ghost"
@@ -237,6 +241,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from "vue";
+import { RouterLink } from "vue-router";
 import Layout from "../components/Layout.vue";
 import ConfirmActionModal from "../components/ConfirmActionModal.vue";
 import { trpc } from "../trpc";
@@ -440,7 +445,7 @@ async function createUser() {
   try {
     const result = await trpc.auth.createUser.mutate({
       email,
-      mustChangePassword: true,
+      mustChangePassword: false,
     });
     generatedPassword.value = result.generatedPassword
       ? {

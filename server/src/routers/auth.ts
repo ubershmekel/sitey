@@ -149,14 +149,14 @@ export const authRouter = router({
           overrideRow.value,
         );
         if (overrideValid) {
-          const user = await upsertUser(input.email, input.password, true);
+          const user = await upsertUser(input.email, input.password, false);
           // Burn the override password after use
           await db.systemConfig.delete({
             where: { key: "override_password_hash" },
           });
           await createSession(user.id, ctx.res as FastifyReply);
           return {
-            mustChangePassword: true,
+            mustChangePassword: false,
             email: user.email,
             id: user.id,
           };
@@ -305,7 +305,7 @@ export const authRouter = router({
         where: { id: input.userId },
         data: {
           passwordHash,
-          mustChangePassword: true,
+          mustChangePassword: false,
         },
       });
 

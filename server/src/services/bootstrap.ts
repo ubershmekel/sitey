@@ -119,7 +119,7 @@ export async function resetAdminPassword() {
 
   await db.user.update({
     where: { id: user.id },
-    data: { passwordHash: hash, mustChangePassword: true },
+    data: { passwordHash: hash, mustChangePassword: false },
   });
 
   console.log(
@@ -129,7 +129,7 @@ export async function resetAdminPassword() {
       `Email   : ${user.email}`,
       `Password: ${newPassword}`,
       "",
-      "You will be required to change this password on next login.",
+      "Use this password to log in.",
     ]),
   );
 
@@ -140,7 +140,7 @@ export async function resetAdminPassword() {
 //
 // Stores a hashed override password in SystemConfig. On login, if the entered
 // password matches this hash, Sitey will upsert the given email as a user and
-// log them in — regardless of what their actual password is. Useful for first
+// log them in regardless of what their actual password is. Useful for first
 // setup and for recovering access to any account.
 
 export async function generateOverridePassword() {
@@ -169,8 +169,7 @@ export async function generateOverridePassword() {
       `Password: ${password}`,
       "",
       "Use this password with ANY email on the login page",
-      "to take over that account. You will be prompted to",
-      "set a new password after logging in.",
+      "to take over that account.",
       "",
       "Save this — it will not be shown again.",
     ]),
