@@ -16,7 +16,8 @@
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
-    "db:reset": "prisma migrate reset"
+    "db:reset": "prisma migrate reset",
+    "test": "node --import tsx/esm --test src/tests/**/*.test.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",

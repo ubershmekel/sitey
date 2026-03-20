@@ -54,6 +54,54 @@ function imageTag(project: Project, sha: string): string {
   return `sitey/${project.id}:${short}`;
 }
 
+/** Parse the rollback count from a raw SystemConfig value. Exported for testing. */
+export function parseRollbackCount(value: string | undefined): number {
+  return Math.max(0, parseInt(value ?? "1", 10) || 0);
+}
+
+/**
+ * Build the final list of image tags to keep.
+ * currentTag is always kept; previousTags is the pre-fetched list of rollback
+ * tags (already limited to N by the DB query). Duplicates are removed.
+ * Exported for testing.
+ */
+export function buildKeepTags(
+  currentTag: string,
+  previousTags: string[],
+  n: number,
+): string[] {
+  if (n === 0) return [currentTag];
+  return [currentTag, ...previousTags.filter((t) => t !== currentTag)];
+}
+
+async function getKeepTags(
+  project: Project,
+  currentTag: string,
+): Promise<string[]> {
+  const cfg = await db.systemConfig.findUnique({
+    where: { key: "cleanup_rollback_count" },
+  });
+  const n = parseRollbackCount(cfg?.value);
+  if (n === 0) return [currentTag];
+
+  const previous = await db.deployment.findMany({
+    where: {
+      projectId: project.id,
+      status: "success",
+      commitSha: { not: null },
+    },
+    orderBy: { finishedAt: "desc" },
+    take: n,
+    select: { commitSha: true },
+  });
+
+  return buildKeepTags(
+    currentTag,
+    previous.map((d) => imageTag(project, d.commitSha!)),
+    n,
+  );
+}
+
 function buildManagedDockerfile(project: Project, onLog: OnLog): string {
   if (project.serverRunCommand) {
     onLog(
@@ -381,7 +429,8 @@ async function runDeployment(
     }
 
     // 7. Prune old images for this project
-    await pruneProjectImages(project.id, tag);
+    const keepTags = await getKeepTags(project, tag);
+    await pruneProjectImages(project.id, keepTags, onLog);
 
     // 8. Push updated Caddy config (new container is now reachable)
     try {

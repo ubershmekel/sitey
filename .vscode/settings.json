@@ -9,6 +9,15 @@
   },
   "prettier.prettierPath": "./node_modules/prettier",
   "prettier.requireConfig": true,
+  "jestrunner.enableTestExplorer": true,
+  "jestrunner.projectPath": "./server",
+  "jestrunner.disablePlaywright": true,
+  "jestrunner.nodeTestRunOptions": ["--import", "tsx/esm"],
+  "jestrunner.defaultTestPatterns": [
+    "src/tests/**/*.test.ts",
+    "**/*.{test,spec}.?(c|m)[jt]s?(x)",
+    "**/__tests__/**/*.?(c|m)[jt]s?(x)"
+  ],
   "[vue]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
   }

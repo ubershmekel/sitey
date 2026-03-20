@@ -196,6 +196,59 @@
       @confirm="confirmUserAction"
     />
 
+    <!-- Docker disk usage -->
+    <section class="settings-section">
+      <h2>Docker Disk Usage</h2>
+      <p class="section-hint">
+        Disk space used by Docker images, container layers, volumes, and build
+        cache on this host.
+      </p>
+      <template v-if="diskUsage">
+        <div class="disk-stat-block">
+          <div class="disk-bar-wrap">
+            <div class="disk-bar" :style="diskBarStyle" />
+          </div>
+          <p class="disk-bar-label">
+            {{
+              formatBytes(diskUsage.diskTotal - diskUsage.diskAvailable)
+            }}
+            used of {{ formatBytes(diskUsage.diskTotal) }} &mdash;
+            {{ formatBytes(diskUsage.diskAvailable) }} free
+            <span class="disk-bar-path">({{ diskUsage.diskPath }})</span>
+          </p>
+        </div>
+        <div class="disk-usage-grid" style="margin-top: 0.75rem">
+          <span class="meta-label">Images</span>
+          <span class="meta-value">{{ formatBytes(diskUsage.images) }}</span>
+          <span class="meta-label">Containers (writable layers)</span>
+          <span class="meta-value">{{
+            formatBytes(diskUsage.containers)
+          }}</span>
+          <span class="meta-label">Volumes</span>
+          <span class="meta-value">{{ formatBytes(diskUsage.volumes) }}</span>
+          <span class="meta-label">Build cache</span>
+          <span class="meta-value">{{
+            formatBytes(diskUsage.buildCache)
+          }}</span>
+        </div>
+      </template>
+      <p
+        v-else-if="diskUsageError"
+        class="section-hint"
+        style="color: var(--status-err-text)"
+      >
+        {{ diskUsageError }}
+      </p>
+      <button
+        class="btn-ghost"
+        style="margin-top: 0.75rem"
+        @click="loadDiskUsage"
+        :disabled="diskUsageLoading"
+      >
+        {{ diskUsageLoading ? "Loading…" : diskUsage ? "Refresh" : "Load" }}
+      </button>
+    </section>
+
     <!-- Caddy config debug -->
     <section class="settings-section">
       <h2>Active Caddy config</h2>
@@ -514,6 +567,47 @@ async function deleteUser(user: AuthUser) {
   }
 }
 
+type DiskUsage = Awaited<ReturnType<typeof trpc.system.getDiskUsage.query>>;
+const diskUsage = ref<DiskUsage | null>(null);
+const diskUsageLoading = ref(false);
+const diskUsageError = ref("");
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 ** 2) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 ** 3) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+  return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+}
+
+const diskBarStyle = computed(() => {
+  if (!diskUsage.value || diskUsage.value.diskTotal === 0) return {};
+  const pct = Math.round(
+    ((diskUsage.value.diskTotal - diskUsage.value.diskAvailable) /
+      diskUsage.value.diskTotal) *
+      100,
+  );
+  const color =
+    pct >= 85
+      ? "var(--status-err-text)"
+      : pct >= 70
+        ? "var(--status-warn-text)"
+        : "var(--brand)";
+  return { width: `${pct}%`, background: color };
+});
+
+async function loadDiskUsage() {
+  diskUsageLoading.value = true;
+  diskUsageError.value = "";
+  try {
+    diskUsage.value = await trpc.system.getDiskUsage.query();
+  } catch (e: unknown) {
+    diskUsageError.value =
+      (e as { message?: string })?.message ?? "Failed to load disk usage.";
+  } finally {
+    diskUsageLoading.value = false;
+  }
+}
+
 const caddyfile = ref("");
 const caddyfileLoading = ref(false);
 
@@ -804,6 +898,42 @@ textarea {
 
 .btn-sm {
   padding: 0.25rem 0.6rem;
+  font-size: var(--font-tiny);
+}
+
+.disk-stat-block {
+  max-width: 480px;
+}
+
+.disk-bar-wrap {
+  height: 8px;
+  background: var(--border-default);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.disk-bar {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.3s;
+}
+
+.disk-bar-label {
+  font-size: var(--font-tiny);
+  color: var(--text-muted);
+  margin: 0;
+}
+
+.disk-bar-path {
+  opacity: 0.6;
+  font-family: monospace;
+}
+
+.disk-usage-grid {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 0.35rem 1rem;
   font-size: var(--font-tiny);
 }
 

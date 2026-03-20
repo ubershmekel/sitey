@@ -164,18 +164,24 @@ export async function stopAndRemoveContainer(
 
 export async function pruneProjectImages(
   projectId: number,
-  keepTag: string,
+  keepTags: string[],
+  onLog: (line: string) => void,
 ): Promise<void> {
   const images = await docker.listImages({
     filters: { label: [`sitey.project=${projectId}`] },
   });
   for (const img of images) {
-    if (!img.RepoTags?.includes(keepTag)) {
-      try {
-        await docker.getImage(img.Id).remove({ force: false });
-      } catch {
-        // ignore — image may be in use
-      }
+    const tags = img.RepoTags ?? [];
+    if (tags.some((t) => keepTags.includes(t))) continue;
+    try {
+      await docker.getImage(img.Id).remove({ force: false });
+      onLog(
+        `[cleanup] Removed image ${img.Id.slice(0, 12)} (${tags.join(", ") || "<untagged>"})`,
+      );
+    } catch (err) {
+      onLog(
+        `[cleanup] Could not remove ${img.Id.slice(0, 12)}: ${(err as Error).message}`,
+      );
     }
   }
 }
