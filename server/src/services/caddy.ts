@@ -326,8 +326,13 @@ function appendRouteHandler(lines: string[], route: ProjectRoute): void {
 }
 
 function appendTlsEmailDirective(lines: string[], email: string): void {
+  // BEWARE: `tls` on its own fails with this error:
+  //   adapting config using caddyfile adapter: parsing caddyfile tokens for
+  //   'tls': wrong argument count or unexpected line ending after 'tls'
   const trimmedEmail = email?.trim();
-  lines.push(`    tls ${trimmedEmail}`);
+  if (trimmedEmail) {
+    lines.push(`    tls ${trimmedEmail}`);
+  }
 }
 
 function appendSiteBlockBody(lines: string[], routes: ProjectRoute[]): void {
@@ -378,9 +383,7 @@ function appendSiteBlock(
 
   // Main (HTTPS) block — Caddy provisions the cert in the background.
   lines.push(`${hostname} {`);
-  if (email && email.trim()) {
-    appendTlsEmailDirective(lines, email);
-  }
+  appendTlsEmailDirective(lines, email);
   appendSiteBlockBody(lines, routes);
   lines.push("}");
   lines.push("");

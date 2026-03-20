@@ -18,10 +18,14 @@ import { test, expect } from "@playwright/test";
 const MOCK_URL = "http://127.0.0.1:3334";
 const TEST_EMAIL = "admin@sitey-e2e.test";
 const TEST_PASSWORD = "e2e-password-1";
+const TEST_DOMAIN = "*.example.com";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 type RequestEntry = { method: string; path: string; body: string };
+function normalizeCaddyfile(value: string): string {
+  return value.replace(/\r\n/g, "\n").trim();
+}
 
 async function getMockRequests(
   request: import("@playwright/test").APIRequestContext,
@@ -107,13 +111,25 @@ test("initial Caddy config push contains HTTP handler and API proxy", async ({
   ).toBeDefined();
 
   const body = initial!.body;
+  const normalized = normalizeCaddyfile(body);
+  const expected = normalizeCaddyfile(`
+{
+    admin 0.0.0.0:2019
+}
 
-  // Always-present plain-HTTP management block
-  expect(body).toContain(":80");
-
-  // Admin handler routes that the management block must proxy
-  expect(body).toContain("/trpc");
-  expect(body).toContain(`reverse_proxy sitey-api:3001`);
+:80 {
+    @api path /trpc/* /webhook/* /health/*
+    handle @api {
+        reverse_proxy sitey-api:3001
+    }
+    handle {
+        root * /srv/web
+        try_files {path} /index.html
+        file_server
+    }
+}
+`);
+  expect(normalized).toBe(expected);
 });
 
 // ── Test 2 ────────────────────────────────────────────────────────────────────
@@ -131,7 +147,7 @@ test("adding a domain through onboarding updates Caddyfile", async ({
   await page.getByText("Add domain now ->").click();
 
   // The AddDomainModal dialog is now open — fill the hostname field
-  await page.locator('input[placeholder="myapp.com"]').fill("example.com");
+  await page.locator('input[placeholder="myapp.com"]').fill(TEST_DOMAIN);
 
   // Submit the form
   await page.getByRole("button", { name: "Add domain", exact: true }).click();
@@ -163,14 +179,40 @@ test("adding a domain through onboarding updates Caddyfile", async ({
   ).toBeGreaterThanOrEqual(1);
 
   const latest = caddyLoads[caddyLoads.length - 1];
-  const body = latest.body;
+  const body = normalizeCaddyfile(latest.body);
+  const expected = normalizeCaddyfile(`
+{
+    admin 0.0.0.0:2019
+}
 
-  // The new domain must appear in the Caddyfile
-  expect(body).toContain("example.com");
+:80 {
+    @api path /trpc/* /webhook/* /health/*
+    handle @api {
+        reverse_proxy sitey-api:3001
+    }
+    handle {
+        root * /srv/web
+        try_files {path} /index.html
+        file_server
+    }
+}
 
-  // The HTTPS site block must carry a tls directive (emitted by appendTlsDirective)
-  expect(body).toContain("tls");
+sitey.example.com {
+    @api path /trpc/* /webhook/* /health/*
+    handle @api {
+        reverse_proxy sitey-api:3001
+    }
+    handle {
+        root * /srv/web
+        try_files {path} /index.html
+        file_server
+    }
+}
 
-  // The internal API proxy must still be wired up
-  expect(body).toContain("reverse_proxy sitey-api:3001");
+sitey-dns-check.example.com {
+    respond 204
+}
+`);
+
+  expect(body).toBe(expected);
 });
