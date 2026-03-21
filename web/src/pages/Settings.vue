@@ -281,10 +281,10 @@
         Caddy.
       </p>
       <p v-if="installedAt" class="hint">Installed {{ installedAt }}</p>
-      <p class="hint">To reset the admin password, run on the host:</p>
+      <p class="hint">To generate an override password, run on the host:</p>
       <code class="block-code"
-        >docker compose exec sitey-api node dist/services/bootstrap.js
-        reset</code
+        >docker compose exec sitey-api npm run -s
+        bootstrap:generate-password</code
       >
     </section>
   </Layout>

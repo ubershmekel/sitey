@@ -50,7 +50,7 @@ cd /opt/sitey/deploy
 docker compose up -d --build
 
 # 4. Generate your login credentials
-docker compose exec sitey-api npm run -s bootstrap:init
+docker compose exec sitey-api npm run -s bootstrap:generate-password
 ```
 
 This prints a one-time override password. Open the address shown in the logs, go
@@ -76,19 +76,15 @@ way that requires a fresh DB — see **Nuking data** below.
 
 ## CLI account commands
 
-Both commands run against the live container and print credentials to stdout.
+The CLI exposes one recovery command:
 
-| Command | When to use                                                                   |
-| ------- | ----------------------------------------------------------------------------- |
-| `init`  | Generate a one-time override password usable on any account at the login page |
-| `reset` | Locked out — generates a new random password for the first user               |
+| Command                       | When to use                                                                   |
+| ----------------------------- | ----------------------------------------------------------------------------- |
+| `bootstrap:generate-password` | Generate a one-time override password usable on any account at the login page |
 
 ```bash
 # Initial setup (before setup wizard is completed)
-docker compose exec sitey-api npm run -s bootstrap:init
-
-# Skeleton key password reset (after setup is complete)
-docker compose exec sitey-api npm run -s bootstrap:reset
+docker compose exec sitey-api npm run -s bootstrap:generate-password
 ```
 
 These scripts auto-detect whether the container has built JS (`dist/`) or source
@@ -102,11 +98,11 @@ If you've forgotten your password or the account is in a bad state:
 
 ```bash
 cd /opt/sitey/deploy
-docker compose exec sitey-api npm run -s bootstrap:reset
+docker compose exec sitey-api npm run -s bootstrap:generate-password
 ```
 
-This generates a new random password for the first user account and prints it to
-stdout. Use it to log in, then set a new password when prompted.
+This generates an override password and prints it to stdout. Use it with your
+email on the login page, then set a new password when prompted.
 
 ---
 

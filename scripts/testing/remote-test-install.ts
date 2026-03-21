@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import config from "./load-config.mjs";
+import config from "./load-config.ts";
 
 const sshTarget = config.SSH_TARGET;
 

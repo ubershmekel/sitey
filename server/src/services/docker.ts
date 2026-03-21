@@ -388,18 +388,18 @@ export function generateServerDockerfile(
   const packageJsonSource =
     sourceRoot === "." ? "package*.json" : `${sourceRoot}/package*.json`;
   const fullSource = sourceRoot === "." ? "." : `${sourceRoot}/.`;
-  return `FROM node:22-bookworm-slim AS deps
+  return `FROM node:24-bookworm-slim AS deps
 WORKDIR /app
 COPY ${packageJsonSource} ./
 RUN npm ci --omit=dev
 
-FROM node:22-bookworm-slim AS builder
+FROM node:24-bookworm-slim AS builder
 WORKDIR /app
 COPY ${packageJsonSource} ./
 RUN npm ci
 COPY ${fullSource} .
 ${buildStep}
-FROM node:22-bookworm-slim AS runner
+FROM node:24-bookworm-slim AS runner
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app .
@@ -417,19 +417,19 @@ export function generateDefaultDockerfile(
   const packageJsonSource =
     sourceRoot === "." ? "package*.json" : `${sourceRoot}/package*.json`;
   const fullSource = sourceRoot === "." ? "." : `${sourceRoot}/.`;
-  return `FROM node:22-bookworm-slim AS deps
+  return `FROM node:24-bookworm-slim AS deps
 WORKDIR /app
 COPY ${packageJsonSource} ./
 RUN npm ci --omit=dev
 
-FROM node:22-bookworm-slim AS builder
+FROM node:24-bookworm-slim AS builder
 WORKDIR /app
 COPY ${packageJsonSource} ./
 RUN npm ci
 COPY ${fullSource} .
 RUN npm run build --if-present
 
-FROM node:22-bookworm-slim
+FROM node:24-bookworm-slim
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=builder /app .

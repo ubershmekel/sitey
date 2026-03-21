@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { spawn } from "node:child_process";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
-import config from "./load-config.mjs";
+import config from "./load-config.ts";
 
 const sshTarget = config.SSH_TARGET;
 const email = config.EMAIL;
@@ -39,7 +39,7 @@ if (refreshMode === "installer" && remoteDeployDir !== "/opt/sitey/deploy") {
 
 const sshHost = sshTarget.includes("@") ? sshTarget.split("@")[1] : sshTarget;
 
-const shq = (value) => `'${String(value).replace(/'/g, `'\\''`)}'`;
+const shq = (value: string) => `'${String(value).replace(/'/g, `'\\''`)}'`;
 const remoteCommand = [
   `REMOTE_DEPLOY_DIR=${shq(remoteDeployDir)}`,
   `REFRESH_MODE=${shq(refreshMode)}`,
@@ -62,7 +62,7 @@ child.stdin.write(remoteScript);
 child.stdin.end();
 
 let sshOutput = "";
-child.stdout.on("data", (chunk) => {
+child.stdout.on("data", (chunk: Buffer | string) => {
   process.stdout.write(chunk);
   sshOutput += chunk.toString();
 });
@@ -90,8 +90,8 @@ child.on("exit", (code) => {
       "playwright",
       "test",
       "--config",
-      "playwright.config.mjs",
-      "remote-playwright.test.mjs",
+      "playwright.config.ts",
+      "remote-playwright.test.ts",
       "--reporter=list",
     ],
     {

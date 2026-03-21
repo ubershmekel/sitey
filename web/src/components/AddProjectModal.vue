@@ -129,7 +129,7 @@
           <input
             v-model="form.buildImage"
             type="text"
-            placeholder="Leave empty to use Node.js 22"
+            placeholder="Leave empty to use Node.js 24"
           />
         </label>
       </template>

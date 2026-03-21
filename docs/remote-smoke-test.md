@@ -35,7 +35,7 @@ Edit `scripts/testing/reset-remote.env` and set:
 Then run reset with one command:
 
 ```bash
-npm run test:reset-remote
+npm run test:remote-wipe-and-test
 ```
 
 You can run the same command from your IDE package scripts UI as a one-click
@@ -78,7 +78,7 @@ Store them in a dated folder (example: `artifacts/smoke/2026-03-13/`).
 
 - If password parsing fails, run on server:
   - `cd /opt/sitey/deploy`
-  - `docker compose exec -T sitey-api npm run -s bootstrap:init`
+  - `docker compose exec -T sitey-api npm run -s bootstrap:generate-password`
 - If HTTPS does not issue:
   - Confirm both A records point to the server IP.
   - Confirm ports 80/443 are open.

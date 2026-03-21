@@ -2,6 +2,8 @@
 
 ## Local setup
 
+Node.js 24+ is required so we can run typescript directly with `node file.ts`.
+
 ```bash
 # Install dependencies
 npm install
@@ -351,7 +353,7 @@ Set `SSH_TARGET` / `SITEY_URL` / `REFRESH_MODE` in
 `scripts/testing/reset-remote.env`, then run:
 
 ```bash
-npm run test:reset-remote
+npm run test:remote-wipe-and-test
 ```
 
 This is intended for repeatable test resets (not normal upgrade/deploy flows),

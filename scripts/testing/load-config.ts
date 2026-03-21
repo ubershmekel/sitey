@@ -12,7 +12,7 @@ if (!existsSync(envPath)) {
 }
 
 const envFile = readFileSync(envPath, "utf8");
-const config = {};
+const config: Record<string, string> = {};
 
 for (const rawLine of envFile.split(/\r?\n/)) {
   const line = rawLine.trim();

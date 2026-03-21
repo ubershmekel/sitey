@@ -1,20 +1,24 @@
 #!/usr/bin/env node
-import { existsSync } from "node:fs";
 import { spawnSync } from "node:child_process";
+import { existsSync } from "node:fs";
 
 const action = process.argv[2];
-if (action !== "init" && action !== "reset") {
-  console.error("Usage: npm run bootstrap:init | npm run bootstrap:reset");
+const allowedActions = ["generate-password"];
+
+if (!action || !allowedActions.includes(action)) {
+  console.error("Usage: npm run bootstrap:generate-password");
   process.exit(1);
 }
 
 const jsCandidates = ["dist/services/bootstrap.js", "dist/bootstrap.js"];
-
 const jsEntry = jsCandidates.find((p) => existsSync(p));
+
+const args = process.argv.slice(2);
+
 if (jsEntry) {
   const result = spawnSync(
     process.execPath,
-    ["--enable-source-maps", jsEntry, action],
+    ["--enable-source-maps", jsEntry, ...args],
     {
       stdio: "inherit",
     },
@@ -24,13 +28,9 @@ if (jsEntry) {
 
 const tsEntry = "src/services/bootstrap.ts";
 if (existsSync(tsEntry)) {
-  const result = spawnSync(
-    process.execPath,
-    ["--import", "tsx", tsEntry, action],
-    {
-      stdio: "inherit",
-    },
-  );
+  const result = spawnSync(process.execPath, [tsEntry, ...args], {
+    stdio: "inherit",
+  });
   process.exit(result.status ?? 1);
 }
 

@@ -2,6 +2,9 @@
   "name": "@sitey/server",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=24"
+  },
   "type": "module",
   "main": "dist/index.js",
   "scripts": {
@@ -9,14 +12,14 @@
     "typecheck": "tsc --noEmit",
     "build": "tsup src/index.ts src/services/bootstrap.ts --format esm --dts --sourcemap --out-dir dist",
     "start": "node --enable-source-maps dist/index.js",
-    "bootstrap:init": "node scripts/run-bootstrap.mjs init",
-    "bootstrap:reset": "node scripts/run-bootstrap.mjs reset",
+    "bootstrap:generate-password": "node scripts/run-bootstrap.ts generate-password",
     "db:migrate": "prisma migrate deploy",
     "db:migrate:dev": "prisma migrate dev",
     "db:generate": "prisma generate",
     "db:studio": "prisma studio",
     "db:push": "prisma db push",
     "db:reset": "prisma migrate reset",
+    "db:check": "prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code",
     "test": "node --import tsx/esm --test src/tests/**/*.test.ts"
   },
   "dependencies": {

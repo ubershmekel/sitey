@@ -1,6 +1,9 @@
 {
   "name": "sitey",
   "private": true,
+  "engines": {
+    "node": ">=24"
+  },
   "workspaces": [
     "server",
     "web"
@@ -12,7 +15,7 @@
     "build": "npm run build -w web && npm run build -w server",
     "typecheck": "npm run db:generate -w server && npm run typecheck -w server && npm run typecheck -w web && tsc --noEmit -p e2e/tsconfig.json",
     "test": "npm run test -w server",
-    "check:all": "npm run format:check && npm run typecheck && npm run test",
+    "check:all": "npm run format:check && npm run typecheck && npm run db:check -w server && npm run test",
     "format": "prettier --write .",
     "format:staged": "lint-staged",
     "format:check": "prettier --check .",
@@ -20,8 +23,8 @@
     "db:studio": "npm run db:studio -w server",
     "test:e2e": "playwright test --config e2e/playwright.config.ts",
     "test:e2e:mockserver": "tsx e2e/mock-external-server.ts",
-    "test:remote-wipe-and-test": "node scripts/testing/remote-test-wipe.mjs",
-    "test:remote-test-install": "node scripts/testing/remote-test-install.mjs"
+    "test:remote-wipe-and-test": "node scripts/testing/remote-test-wipe.ts",
+    "test:remote-test-install": "node scripts/testing/remote-test-install.ts"
   },
   "lint-staged": {
     "*": "prettier --write --ignore-unknown"

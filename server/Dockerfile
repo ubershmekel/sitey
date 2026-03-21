@@ -1,4 +1,4 @@
-FROM node:22-bookworm-slim AS base
+FROM node:24-bookworm-slim AS base
 WORKDIR /app
 
 # git + CA roots needed for HTTPS clone/pull; openssl/python/build tools for native deps
@@ -34,7 +34,7 @@ RUN npm run db:generate
 RUN npm run build
 
 # Production image
-FROM node:22-bookworm-slim AS runner
+FROM node:24-bookworm-slim AS runner
 WORKDIR /app
 
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git openssl && rm -rf /var/lib/apt/lists/*

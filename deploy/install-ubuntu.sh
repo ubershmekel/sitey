@@ -108,14 +108,14 @@ if [[ "${API_READY}" -ne 1 ]]; then
   echo
   echo "You can retry manually with:"
   echo "  cd /opt/sitey/deploy"
-  echo "  docker compose exec --interactive=false -T sitey-api npm run -s bootstrap:init"
+  echo "  docker compose exec --interactive=false -T sitey-api npm run -s bootstrap:generate-password"
   exit 1
 fi
 
 echo "==> Generating admin override password"
 PASS_OUTPUT=""
 for _ in $(seq 1 20); do
-  if PASS_OUTPUT="$(bootstrap_cmd init 2>&1)"; then
+  if PASS_OUTPUT="$(bootstrap_cmd generate-password 2>&1)"; then
     break
   fi
   sleep 2
@@ -125,7 +125,7 @@ if [[ -z "${PASS_OUTPUT}" ]]; then
   echo "Failed to generate admin password automatically."
   echo "Run this command manually:"
   echo "  cd /opt/sitey/deploy"
-  echo "  docker compose exec --interactive=false -T sitey-api npm run -s bootstrap:init"
+  echo "  docker compose exec --interactive=false -T sitey-api npm run -s bootstrap:generate-password"
   exit 1
 fi
 

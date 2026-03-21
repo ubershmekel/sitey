@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Remote reset script — piped to the remote host via ssh by remote-test-wipe.mjs
+# Remote reset script — piped to the remote host via ssh by remote-test-wipe.ts
 # Can also be run standalone: ssh root@host "REMOTE_DEPLOY_DIR=/opt/sitey/deploy REFRESH_MODE=pull bash -s" < reset-remote.sh
 set -euo pipefail
 
@@ -35,9 +35,9 @@ for _ in $(seq 1 60); do
 done
 
 # Generate a fresh override password
-PASS_OUTPUT="$(docker compose exec --interactive=false -T sitey-api npm run -s bootstrap:init 2>&1 || true)"
+PASS_OUTPUT="$(docker compose exec --interactive=false -T sitey-api npm run -s bootstrap:generate-password 2>&1 || true)"
 if [[ -z "${PASS_OUTPUT}" ]]; then
-  echo "Failed to get password from bootstrap:init"
+  echo "Failed to get password from bootstrap:generate-password"
   exit 1
 fi
 
