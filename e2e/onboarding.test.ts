@@ -85,6 +85,12 @@ async function ensureLoggedIn(page: import("@playwright/test").Page) {
   }
 
   void isSetup; // used above, suppress lint warning
+
+  // Verify session survives a full page reload (catches dropped-cookie bugs
+  // where login appears to succeed but the session isn't actually stored).
+  await page.reload();
+  await page.waitForLoadState("networkidle");
+  await expect(page).not.toHaveURL(/\/login/, { timeout: 5_000 });
 }
 
 // ── Test 1 ────────────────────────────────────────────────────────────────────

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import type { FastifyReply } from "fastify";
+import type { FastifyRequest, FastifyReply } from "fastify";
 import "@fastify/cookie";
 import {
   router,
@@ -24,17 +24,21 @@ const passwordSchema = z
   .string()
   .min(9, "Password must be at least 9 characters");
 
-function cookieOptions() {
+function cookieOptions(secure: boolean) {
   return {
     httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
+    secure,
     sameSite: "lax" as const,
     path: "/",
     maxAge: SESSION_MAX_AGE,
   };
 }
 
-async function createSession(userId: string, res: FastifyReply): Promise<void> {
+async function createSession(
+  userId: string,
+  req: FastifyRequest,
+  res: FastifyReply,
+): Promise<void> {
   const raw = generateToken();
   const expiresAt = new Date(
     Date.now() + SESSION_TTL_DAYS * 24 * 60 * 60 * 1000,
@@ -47,7 +51,7 @@ async function createSession(userId: string, res: FastifyReply): Promise<void> {
       expiresAt,
     },
   });
-  res.setCookie("sitey_session", raw, cookieOptions());
+  res.setCookie("sitey_session", raw, cookieOptions(req.protocol === "https"));
 }
 
 async function upsertUser(
@@ -107,7 +111,11 @@ export const authRouter = router({
         update: {},
       });
 
-      await createSession(user.id, ctx.res as FastifyReply);
+      await createSession(
+        user.id,
+        ctx.req as FastifyRequest,
+        ctx.res as FastifyReply,
+      );
       return { ok: true };
     }),
 
@@ -130,7 +138,11 @@ export const authRouter = router({
           existingUser.passwordHash,
         );
         if (valid) {
-          await createSession(existingUser.id, ctx.res as FastifyReply);
+          await createSession(
+            existingUser.id,
+            ctx.req as FastifyRequest,
+            ctx.res as FastifyReply,
+          );
           return {
             mustChangePassword: existingUser.mustChangePassword,
             email: existingUser.email,
@@ -154,7 +166,11 @@ export const authRouter = router({
           await db.systemConfig.delete({
             where: { key: "override_password_hash" },
           });
-          await createSession(user.id, ctx.res as FastifyReply);
+          await createSession(
+            user.id,
+            ctx.req as FastifyRequest,
+            ctx.res as FastifyReply,
+          );
           return {
             mustChangePassword: false,
             email: user.email,
@@ -216,7 +232,11 @@ export const authRouter = router({
         where: { userId: user.id, type: "session" },
       });
 
-      await createSession(user.id, ctx.res as FastifyReply);
+      await createSession(
+        user.id,
+        ctx.req as FastifyRequest,
+        ctx.res as FastifyReply,
+      );
       return { ok: true };
     }),
 
