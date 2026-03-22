@@ -62,6 +62,7 @@ test("setup sitey instance", async ({ page }, testInfo) => {
   await mgmtPage.getByRole("textbox", { name: "Password" }).fill(PASSWORD);
   await mgmtPage.getByRole("button", { name: "Sign in" }).click();
 
+  await mgmtPage.waitForURL(`https://${mgmtHost}/`);
   console.log(`[mgmtPage] url after sign-in click: ${mgmtPage.url()}`);
   await mgmtPage.screenshot({
     path: testInfo.outputPath("after-https-login.png"),
@@ -70,6 +71,9 @@ test("setup sitey instance", async ({ page }, testInfo) => {
 
   // Verify navigation works.
   await mgmtPage.getByRole("link", { name: "Projects" }).click();
+  await expect(
+    mgmtPage.getByRole("heading", { name: "Projects" }),
+  ).toBeVisible();
   await expect(
     mgmtPage.getByRole("button", { name: "Add project" }),
   ).toBeVisible();
