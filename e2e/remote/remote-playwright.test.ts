@@ -55,12 +55,15 @@ test("setup sitey instance", async ({ page }, testInfo) => {
     }
   }
 
+  console.log(`[mgmtPage] url after TLS retry loop: ${mgmtPage.url()}`);
+
   // Login again on management domain.
   await mgmtPage.getByRole("textbox", { name: "Email" }).fill(EMAIL);
   await mgmtPage.getByRole("textbox", { name: "Password" }).fill(PASSWORD);
   await mgmtPage.getByRole("button", { name: "Sign in" }).click();
 
-  await page.screenshot({
+  console.log(`[mgmtPage] url after sign-in click: ${mgmtPage.url()}`);
+  await mgmtPage.screenshot({
     path: testInfo.outputPath("after-https-login.png"),
     fullPage: true,
   });
@@ -70,4 +73,8 @@ test("setup sitey instance", async ({ page }, testInfo) => {
   await expect(
     mgmtPage.getByRole("button", { name: "Add project" }),
   ).toBeVisible();
+  await mgmtPage.screenshot({
+    path: testInfo.outputPath("https-projects.png"),
+    fullPage: true,
+  });
 });

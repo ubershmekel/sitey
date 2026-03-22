@@ -196,13 +196,22 @@ function sleep(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
 }
 
+function since(start: number): string {
+  const ms = Date.now() - start;
+  return ms < 60_000
+    ? `${(ms / 1000).toFixed(1)}s`
+    : `${(ms / 60_000).toFixed(1)}m`;
+}
+
 // ---------------------------------------------------------------------------
 // Orchestration
 // ---------------------------------------------------------------------------
 
 let serverId: number | null = null;
+const totalStart = Date.now();
 
 try {
+  let stepStart = Date.now();
   log(`Creating Hetzner server (${serverType} @ ${location})...`);
   const server = await createServer({
     token: config.HCLOUD_TOKEN,
@@ -212,8 +221,9 @@ try {
     sshKey: config.HETZNER_SSH_KEY,
   });
   serverId = server.id;
-  log(`Server ready: id=${server.id}  ip=${server.ip}`);
+  log(`Server ready: id=${server.id}  ip=${server.ip}  (${since(stepStart)})`);
 
+  stepStart = Date.now();
   log(`Configuring Namecheap DNS: ${wildcardDomainRun} → ${server.ip}`);
   await setWildcardRecord({
     apiUser: config.NAMECHEAP_API_USER,
@@ -224,12 +234,14 @@ try {
     subdomain,
     ip: server.ip,
   });
-  log("DNS updated.");
+  log(`DNS updated. (${since(stepStart)})`);
 
+  stepStart = Date.now();
   log("Waiting for SSH...");
   await waitForSsh(server.ip);
-  log("SSH is up.");
+  log(`SSH is up. (${since(stepStart)})`);
 
+  stepStart = Date.now();
   log("Running install script...");
   const installOutput = await runInstall(server.ip);
 
@@ -238,14 +250,15 @@ try {
     throw new Error("Could not parse password from install output");
   }
   const password = passwordMatch[1];
-  log(`Install complete. Password parsed.`);
+  log(`Install complete. (${since(stepStart)})`);
 
   log(`Waiting ${dnsPropagationMs / 1000}s for DNS propagation...`);
   await sleep(dnsPropagationMs);
 
+  stepStart = Date.now();
   log("Running Playwright tests...");
   await runPlaywright(server.ip, password);
-  log("All tests passed.");
+  log(`All tests passed. (${since(stepStart)})`);
 } finally {
   if (serverId !== null) {
     log(`Deleting Hetzner server ${serverId}...`);
@@ -274,4 +287,6 @@ try {
   } catch (err) {
     console.error("[full-loop] WARNING: failed to remove DNS records:", err);
   }
+
+  log(`Total time: ${since(totalStart)}`);
 }
