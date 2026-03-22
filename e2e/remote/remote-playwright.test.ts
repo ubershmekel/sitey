@@ -21,7 +21,7 @@ test("setup sitey instance", async ({ page }, testInfo) => {
   // Override password logs straight in (mustChangePassword=false), so we land on /.
   await page.waitForURL(`${BASE_URL}/`);
   await page.screenshot({
-    path: testInfo.outputPath("after-login.png"),
+    path: testInfo.outputPath("http-dashboard-loading.png"),
     fullPage: true,
   });
 
@@ -64,8 +64,13 @@ test("setup sitey instance", async ({ page }, testInfo) => {
 
   await mgmtPage.waitForURL(`https://${mgmtHost}/`);
   console.log(`[mgmtPage] url after sign-in click: ${mgmtPage.url()}`);
+
+  // Verify dashboard loaded fully before screenshot.
+  await expect(
+    mgmtPage.getByText("Connect and install GitHub App"),
+  ).toBeVisible();
   await mgmtPage.screenshot({
-    path: testInfo.outputPath("after-https-login.png"),
+    path: testInfo.outputPath("https-dashboard.png"),
     fullPage: true,
   });
 
