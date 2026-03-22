@@ -33,7 +33,7 @@ import os from "os";
 import fs from "fs";
 
 const E2E_DIR = __dirname;
-const REPO_ROOT = path.join(E2E_DIR, "..");
+const REPO_ROOT = path.join(E2E_DIR, "../..");
 const SERVER_DIR = path.join(REPO_ROOT, "server");
 const WEB_DIR = path.join(REPO_ROOT, "web");
 
@@ -112,7 +112,7 @@ export default defineConfig({
     // 1. Mock external server — must be ready before the API tries to push
     //    its initial Caddyfile on startup.
     {
-      command: "npm run test:e2e:mockserver",
+      command: "npm run dev:e2e-mockserver",
       cwd: REPO_ROOT,
       url: "http://127.0.0.1:3334/__requests",
       reuseExistingServer: false,

@@ -1,2 +1,2 @@
 #!/usr/bin/env sh
-npm run typecheck
+npm run test:types

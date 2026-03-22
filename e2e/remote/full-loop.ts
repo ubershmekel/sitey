@@ -6,8 +6,8 @@
  *   4. Run Playwright tests against the live instance
  *   5. Tear down the server (always, even on failure)
  *
- * Config: scripts/testing/full-loop.env  (copy from full-loop.env.example)
- * Run:    npm run test:full-loop
+ * Config: e2e/remote/full-loop.env  (copy from full-loop.env.example)
+ * Run:    npm run test:e2e-remote
  */
 
 import { spawn } from "node:child_process";
@@ -24,11 +24,11 @@ import { setWildcardRecord, deleteWildcardRecord } from "./infra/namecheap.ts";
 // ---------------------------------------------------------------------------
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
-const envPath = resolve("scripts/testing/full-loop.env");
+const envPath = resolve("e2e/remote/full-loop.env");
 
 if (!existsSync(envPath)) {
-  console.error("Missing scripts/testing/full-loop.env");
-  console.error("Copy scripts/testing/full-loop.env.example and fill values.");
+  console.error("Missing e2e/remote/full-loop.env");
+  console.error("Copy e2e/remote/full-loop.env.example and fill values.");
   process.exit(1);
 }
 

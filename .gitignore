@@ -8,12 +8,11 @@ deploy/data/
 *.db-shm
 *.db-wal
 deploy/.env
-scripts/testing/reset-remote.env
-scripts/testing/full-loop.env
+e2e/remote/full-loop.env
 server/src/generated/
 web/dist/
 .DS_Store
 *.log
 test-results/
 .claude/settings.local.json
-e2e/.tmp-state.json
+.tmp-state.json

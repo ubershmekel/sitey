@@ -12,10 +12,10 @@
   },
   "include": ["./**/*.ts"],
   "exclude": [
-    "../node_modules",
-    "../server",
-    "../web",
-    "../deploy",
-    "../deploy/data"
+    "../../node_modules",
+    "../../server",
+    "../../web",
+    "../../deploy",
+    "../../deploy/data"
   ]
 }

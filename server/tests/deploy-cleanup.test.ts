@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildKeepTags, parseRollbackCount } from "../services/deployment.js";
+import {
+  buildKeepTags,
+  parseRollbackCount,
+} from "../src/services/deployment.js";
 
 // ── parseRollbackCount ────────────────────────────────────────────────────────
 

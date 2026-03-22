@@ -20,7 +20,7 @@
     "db:push": "prisma db push",
     "db:reset": "prisma migrate reset",
     "db:check": "prisma migrate diff --from-migrations prisma/migrations --to-schema prisma/schema.prisma --exit-code",
-    "test": "node --import tsx/esm --test src/tests/**/*.test.ts"
+    "test": "node --import tsx/esm --test tests/**/*.test.ts"
   },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
