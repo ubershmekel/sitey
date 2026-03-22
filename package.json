@@ -23,8 +23,9 @@
     "test:types": "npm run db:generate -w server && npm run typecheck -w server && npm run typecheck -w web && tsc --noEmit -p e2e/local/tsconfig.json && npm run db:check -w server",
     "test:unit": "npm run test -w server",
     "test:e2e-local": "playwright test --config e2e/local/playwright.config.ts",
-    "test:e2e-remote": "node e2e/remote/full-loop.ts",
-    "test:all": "npm run test:format && npm run test:types && npm run test:unit && npm run test:e2e-local && npm run test:e2e-remote"
+    "test:e2e-cloud:worktree": "node e2e/remote/full-loop.ts --worktree",
+    "test:e2e-cloud:main-branch": "node e2e/remote/full-loop.ts",
+    "test:all": "npm run test:format && npm run test:types && npm run test:unit && npm run test:e2e-local && npm run test:e2e-cloud:worktree"
   },
   "lint-staged": {
     "*": "prettier --write --ignore-unknown"

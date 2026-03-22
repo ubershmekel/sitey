@@ -2,12 +2,13 @@
  * Full-loop end-to-end test:
  *   1. Provision a Hetzner server
  *   2. Configure Namecheap DNS (wildcard A record)
- *   3. Run the sitey install script via SSH
+ *   3. Install Sitey on the server (main-branch or worktree mode)
  *   4. Run Playwright tests against the live instance
  *   5. Tear down the server (always, even on failure)
  *
  * Config: e2e/remote/full-loop.env  (copy from full-loop.env.example)
- * Run:    npm run test:e2e-remote
+ * Run:    npm run test:e2e-cloud:main-branch   pull from origin/main (installer path)
+ *         npm run test:e2e-cloud:worktree       upload local worktree to server
  */
 
 import { spawn } from "node:child_process";
@@ -23,7 +24,10 @@ import { setWildcardRecord, deleteWildcardRecord } from "./infra/namecheap.ts";
 // Config
 // ---------------------------------------------------------------------------
 
+const WORKTREE_MODE = process.argv.includes("--worktree");
+
 const scriptDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(scriptDir, "../..");
 const envPath = resolve("e2e/remote/full-loop.env");
 
 if (!existsSync(envPath)) {
@@ -192,6 +196,153 @@ function runPlaywright(ip: string, password: string): Promise<void> {
   });
 }
 
+// ---------------------------------------------------------------------------
+// Worktree helpers (--worktree mode)
+// ---------------------------------------------------------------------------
+
+/** Run a shell script on the server via SSH, capturing stdout. */
+function sshCmd(ip: string, script: string): Promise<string> {
+  return new Promise((res, rej) => {
+    const child = spawn(
+      "ssh",
+      [
+        "-i",
+        sshKeyPath,
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        "-o",
+        "ConnectTimeout=10",
+        `root@${ip}`,
+        script,
+      ],
+      { stdio: ["ignore", "pipe", "inherit"] },
+    );
+    let output = "";
+    child.stdout!.on("data", (chunk: Buffer) => {
+      process.stdout.write(chunk);
+      output += chunk.toString();
+    });
+    child.on("exit", (code) => {
+      if (code !== 0)
+        return rej(new Error(`SSH command exited with code ${code}`));
+      res(output);
+    });
+    child.on("error", rej);
+  });
+}
+
+/**
+ * Upload the local worktree to /opt/sitey on the server.
+ * Uses tar piped over SSH so no rsync dependency is needed.
+ * Excludes node_modules, .git, deploy/data, and e2e test artifacts.
+ */
+function uploadWorktree(ip: string): Promise<void> {
+  return new Promise((res, rej) => {
+    log("  tar-piping local worktree to server...");
+    const tar = spawn(
+      "tar",
+      [
+        "czf",
+        "-",
+        "--exclude=node_modules",
+        "--exclude=.git",
+        "--exclude=deploy/data",
+        "--exclude=e2e/remote/test-results",
+        "--exclude=e2e/remote/full-loop.env",
+        "deploy",
+        "server",
+        "web",
+        "package.json",
+        "package-lock.json",
+      ],
+      { cwd: repoRoot, stdio: ["ignore", "pipe", "pipe"] },
+    );
+    const ssh = spawn(
+      "ssh",
+      [
+        "-i",
+        sshKeyPath,
+        "-o",
+        "StrictHostKeyChecking=no",
+        "-o",
+        "UserKnownHostsFile=/dev/null",
+        "-o",
+        "ConnectTimeout=10",
+        `root@${ip}`,
+        "rm -rf /opt/sitey && mkdir -p /opt/sitey && tar xzf - -C /opt/sitey",
+      ],
+      { stdio: ["pipe", "inherit", "inherit"] },
+    );
+    tar.stdout!.pipe(ssh.stdin!);
+    tar.stderr!.on("data", (chunk: Buffer) => process.stderr.write(chunk));
+    tar.on("exit", (code) => {
+      if (code !== 0) {
+        ssh.kill();
+        rej(new Error(`tar exited with code ${code}`));
+      }
+    });
+    ssh.on("exit", (code) => {
+      if (code !== 0)
+        return rej(new Error(`Upload SSH command exited with code ${code}`));
+      res();
+    });
+    ssh.on("error", rej);
+    tar.on("error", rej);
+  });
+}
+
+/** Install Sitey from the local worktree instead of pulling from origin/main. */
+async function runInstallWorktree(ip: string): Promise<string> {
+  // Step 1: install system deps + Docker
+  await sshCmd(
+    ip,
+    [
+      "set -euo pipefail",
+      "apt-get update -y",
+      "apt-get install -y ca-certificates curl git",
+      "if ! command -v docker >/dev/null 2>&1; then curl -fsSL https://get.docker.com | sh; fi",
+      "systemctl enable --now docker",
+    ].join(" && "),
+  );
+
+  // Step 2: upload local files
+  await uploadWorktree(ip);
+
+  // Step 3: docker compose up + generate password (output captured for password parsing)
+  return sshCmd(
+    ip,
+    `set -euo pipefail
+mkdir -p /opt/sitey/deploy/data
+chown -R root:root /opt/sitey
+cd /opt/sitey/deploy
+PUBLIC_IP="$(curl -4fsSL https://api.ipify.org || true)"
+if [[ -z "$PUBLIC_IP" ]]; then PUBLIC_IP="$(hostname -I | awk '{print $1}')"; fi
+touch .env
+grep -qE '^DATA_ROOT=' .env || echo 'DATA_ROOT=./data' >> .env
+grep -qE '^SITEY_URL=' .env || echo "SITEY_URL=http://$PUBLIC_IP" >> .env
+docker compose up -d --build
+API_READY=0
+for _ in $(seq 1 60); do
+  if docker compose exec --interactive=false -T sitey-api sh -lc "node -v" >/dev/null 2>&1; then
+    API_READY=1; break
+  fi
+  sleep 2
+done
+if [[ "$API_READY" -ne 1 ]]; then
+  docker compose logs --tail=80 sitey-api || true
+  echo "Sitey API did not become ready in time." && exit 1
+fi
+PASS_OUTPUT=""
+for _ in $(seq 1 20); do
+  if PASS_OUTPUT="$(docker compose exec --interactive=false -T sitey-api npm run bootstrap:generate-password 2>&1)"; then break; fi
+  sleep 2
+done
+echo "$PASS_OUTPUT"`,
+  );
+}
+
 function sleep(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
 }
@@ -242,8 +393,14 @@ try {
   log(`SSH is up. (${since(stepStart)})`);
 
   stepStart = Date.now();
-  log("Running install script...");
-  const installOutput = await runInstall(server.ip);
+  if (WORKTREE_MODE) {
+    log("Uploading local worktree and installing...");
+  } else {
+    log("Running install script from origin/main...");
+  }
+  const installOutput = await (WORKTREE_MODE
+    ? runInstallWorktree(server.ip)
+    : runInstall(server.ip));
 
   const passwordMatch = installOutput.match(/password:\s+(\S+)/i);
   if (!passwordMatch) {
