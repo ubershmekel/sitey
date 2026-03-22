@@ -9,6 +9,7 @@ deploy/data/
 *.db-wal
 deploy/.env
 scripts/testing/reset-remote.env
+scripts/testing/full-loop.env
 server/src/generated/
 web/dist/
 .DS_Store

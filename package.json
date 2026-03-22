@@ -24,7 +24,8 @@
     "test:e2e": "playwright test --config e2e/playwright.config.ts",
     "test:e2e:mockserver": "tsx e2e/mock-external-server.ts",
     "test:remote-wipe-and-test": "node scripts/testing/remote-test-wipe.ts",
-    "test:remote-test-install": "node scripts/testing/remote-test-install.ts"
+    "test:remote-test-install": "node scripts/testing/remote-test-install.ts",
+    "test:full-loop": "node scripts/testing/full-loop.ts"
   },
   "lint-staged": {
     "*": "prettier --write --ignore-unknown"
