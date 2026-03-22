@@ -1,6 +1,6 @@
 import { initTRPC, TRPCError } from "@trpc/server";
 import { ZodError } from "zod";
-import type { Context } from "./context.js";
+import type { Context } from "./context.ts";
 
 const t = initTRPC.context<Context>().create({
   errorFormatter({ shape, error }) {

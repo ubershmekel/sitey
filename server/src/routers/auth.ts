@@ -7,15 +7,15 @@ import {
   publicProcedure,
   protectedProcedure,
   settledProcedure,
-} from "../trpc.js";
-import { db } from "../lib/db.js";
+} from "../trpc.ts";
+import { db } from "../lib/db.ts";
 import {
   verifyPassword,
   hashPassword,
   generatePassword,
   generateToken,
   hashToken,
-} from "../services/crypto.js";
+} from "../services/crypto.ts";
 
 const SESSION_TTL_DAYS = 7;
 const SESSION_MAX_AGE = SESSION_TTL_DAYS * 24 * 60 * 60; // seconds

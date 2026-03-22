@@ -78,7 +78,7 @@ Store them in a dated folder (example: `artifacts/smoke/2026-03-13/`).
 
 - If password parsing fails, run on server:
   - `cd /opt/sitey/deploy`
-  - `docker compose exec -T sitey-api npm run -s bootstrap:generate-password`
+  - `docker compose exec -T sitey-api npm run bootstrap:generate-password`
 - If HTTPS does not issue:
   - Confirm both A records point to the server IP.
   - Confirm ports 80/443 are open.

@@ -12,7 +12,7 @@
  *   DETECT_IP_SERVICES → http://localhost:3334/detectip (GET /detectip)
  */
 
-import Fastify, { FastifyInstance } from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 
 type RequestLogEntry = {
   method: string;
@@ -90,13 +90,7 @@ export async function start(
 }
 
 // ── Standalone CLI entrypoint ─────────────────────────────────────────────────
-// Run directly:  node --import tsx/esm e2e/mock-external-server.ts
-// Or via npm:    npm run test:e2e:mockserver
-
-const isMain =
-  process.argv[1] !== undefined &&
-  (process.argv[1].endsWith("mock-external-server.ts") ||
-    process.argv[1].endsWith("mock-external-server.js"));
+const isMain = process.argv[1]?.endsWith("mock-external-server.ts");
 
 if (isMain) {
   const port = parseInt(process.env.MOCK_PORT ?? "3334", 10);

@@ -85,7 +85,7 @@ docker_cmd() {
 
 bootstrap_cmd() {
   local action="$1"
-  docker_cmd compose exec --interactive=false -T sitey-api npm run -s "bootstrap:${action}"
+  docker_cmd compose exec --interactive=false -T sitey-api npm run "bootstrap:${action}"
 }
 
 echo "==> Building and starting Sitey"
@@ -108,7 +108,7 @@ if [[ "${API_READY}" -ne 1 ]]; then
   echo
   echo "You can retry manually with:"
   echo "  cd /opt/sitey/deploy"
-  echo "  docker compose exec --interactive=false -T sitey-api npm run -s bootstrap:generate-password"
+  echo "  docker compose exec --interactive=false -T sitey-api npm run bootstrap:generate-password"
   exit 1
 fi
 
@@ -125,7 +125,7 @@ if [[ -z "${PASS_OUTPUT}" ]]; then
   echo "Failed to generate admin password automatically."
   echo "Run this command manually:"
   echo "  cd /opt/sitey/deploy"
-  echo "  docker compose exec --interactive=false -T sitey-api npm run -s bootstrap:generate-password"
+  echo "  docker compose exec --interactive=false -T sitey-api npm run bootstrap:generate-password"
   exit 1
 fi
 

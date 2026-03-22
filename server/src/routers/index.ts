@@ -1,10 +1,10 @@
-import { router } from "../trpc.js";
-import { authRouter } from "./auth.js";
-import { domainsRouter } from "./domains.js";
-import { projectsRouter } from "./projects.js";
-import { deployRouter } from "./deploy.js";
-import { githubRouter } from "./github.js";
-import { systemRouter } from "./system.js";
+import { router } from "../trpc.ts";
+import { authRouter } from "./auth.ts";
+import { domainsRouter } from "./domains.ts";
+import { projectsRouter } from "./projects.ts";
+import { deployRouter } from "./deploy.ts";
+import { githubRouter } from "./github.ts";
+import { systemRouter } from "./system.ts";
 
 export const appRouter = router({
   auth: authRouter,

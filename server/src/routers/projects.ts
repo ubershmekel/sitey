@@ -2,27 +2,27 @@ import fs from "node:fs";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { customAlphabet } from "nanoid";
-import { router, settledProcedure } from "../trpc.js";
-import { db } from "../lib/db.js";
-import { generateWebhookSecret } from "../services/crypto.js";
+import { router, settledProcedure } from "../trpc.ts";
+import { db } from "../lib/db.ts";
+import { generateWebhookSecret } from "../services/crypto.ts";
 import {
   reloadCaddy,
   isDomainStatusStale,
   scheduleDomainStatusRefresh,
   probeRouteTls,
   scheduleRouteTlsProbe,
-} from "../services/caddy.js";
-import { enqueueDeployment } from "../services/deployment.js";
+} from "../services/caddy.ts";
+import { enqueueDeployment } from "../services/deployment.ts";
 import {
   stopAndRemoveContainer,
   pruneProjectImages,
-} from "../services/docker.js";
-import { projectRootPath } from "../services/git.js";
+} from "../services/docker.ts";
+import { projectRootPath } from "../services/git.ts";
 import {
   normalizeSiteUrl,
   resolvePublicSiteUrl,
   isLoopbackHost,
-} from "../services/siteUrl.js";
+} from "../services/siteUrl.ts";
 
 const SUBDOMAIN_LABEL_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
 const randomSubdomainSuffix = customAlphabet(

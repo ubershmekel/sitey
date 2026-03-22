@@ -1,6 +1,6 @@
 import type { CreateFastifyContextOptions } from "@trpc/server/adapters/fastify";
-import { hashToken } from "./services/crypto.js";
-import { db } from "./lib/db.js";
+import { hashToken } from "./services/crypto.ts";
+import { db } from "./lib/db.ts";
 
 export type UserContext = {
   sub: string;

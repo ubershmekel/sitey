@@ -9,8 +9,12 @@
 
 import path from "path";
 import fs from "fs";
+import { fileURLToPath } from "url";
 
-const STATE_FILE = path.join(__dirname, ".tmp-state.json");
+const STATE_FILE = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  ".tmp-state.json",
+);
 
 export default async function globalTeardown() {
   if (!fs.existsSync(STATE_FILE)) return;

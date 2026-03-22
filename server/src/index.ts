@@ -4,16 +4,16 @@ import cookie from "@fastify/cookie";
 import { Readable } from "node:stream";
 import {
   fastifyTRPCPlugin,
-  FastifyTRPCPluginOptions,
+  type FastifyTRPCPluginOptions,
 } from "@trpc/server/adapters/fastify";
-import { appRouter, type AppRouter } from "./routers/index.js";
-import { createContext } from "./context.js";
-import { bootstrap } from "./services/bootstrap.js";
-import { verifyWebhookSignature } from "./services/crypto.js";
-import { db } from "./lib/db.js";
-import { enqueueDeployment } from "./services/deployment.js";
-import { reloadCaddy } from "./services/caddy.js";
-import { getGithubIntegrationConfig } from "./services/github.js";
+import { appRouter, type AppRouter } from "./routers/index.ts";
+import { createContext } from "./context.ts";
+import { bootstrap } from "./services/bootstrap.ts";
+import { verifyWebhookSignature } from "./services/crypto.ts";
+import { db } from "./lib/db.ts";
+import { enqueueDeployment } from "./services/deployment.ts";
+import { reloadCaddy } from "./services/caddy.ts";
+import { getGithubIntegrationConfig } from "./services/github.ts";
 import { execSync } from "node:child_process";
 
 const PORT = parseInt(process.env.PORT ?? "3001");

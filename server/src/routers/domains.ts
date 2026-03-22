@@ -1,17 +1,17 @@
 import { resolve4 } from "node:dns/promises";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, settledProcedure } from "../trpc.js";
-import { db } from "../lib/db.js";
+import { router, settledProcedure } from "../trpc.ts";
+import { db } from "../lib/db.ts";
 import {
   reloadCaddy,
   getWildcardStatusProbeHostname,
   buildCaddyfile,
   scheduleDomainStatusRefresh,
   isDomainStatusStale,
-} from "../services/caddy.js";
-import { isLoopbackHost } from "../services/siteUrl.js";
-import { docker, decodeDockerLogPayload } from "../services/docker.js";
+} from "../services/caddy.ts";
+import { isLoopbackHost } from "../services/siteUrl.ts";
+import { docker, decodeDockerLogPayload } from "../services/docker.ts";
 
 const HOSTNAME_REGEX =
   /^(?:\*\.)?[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/;

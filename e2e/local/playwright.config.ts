@@ -31,8 +31,9 @@ import { execSync } from "child_process";
 import path from "path";
 import os from "os";
 import fs from "fs";
+import { fileURLToPath } from "url";
 
-const E2E_DIR = __dirname;
+const E2E_DIR = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.join(E2E_DIR, "../..");
 const SERVER_DIR = path.join(REPO_ROOT, "server");
 const WEB_DIR = path.join(REPO_ROOT, "web");

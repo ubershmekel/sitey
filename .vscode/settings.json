@@ -12,7 +12,7 @@
   "jestrunner.enableTestExplorer": true,
   "jestrunner.projectPath": "./server",
   "jestrunner.disablePlaywright": true,
-  "jestrunner.nodeTestRunOptions": ["--import", "tsx/esm"],
+  "jestrunner.nodeTestRunOptions": [],
   "jestrunner.defaultTestPatterns": [
     "src/tests/**/*.test.ts",
     "**/*.{test,spec}.?(c|m)[jt]s?(x)",
@@ -20,5 +20,6 @@
   ],
   "[vue]": {
     "editor.defaultFormatter": "esbenp.prettier-vscode"
-  }
+  },
+  "vue.server.hybridMode": true
 }

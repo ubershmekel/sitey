@@ -1,16 +1,16 @@
 import { statfs } from "node:fs/promises";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, settledProcedure } from "../trpc.js";
+import { router, settledProcedure } from "../trpc.ts";
 import {
   clearConfiguredPublicSiteUrl,
   isLoopbackHost,
   normalizeSiteUrl,
   resolvePublicSiteUrl,
   setConfiguredPublicSiteUrl,
-} from "../services/siteUrl.js";
-import { docker, decodeDockerLogPayload } from "../services/docker.js";
-import { db } from "../lib/db.js";
+} from "../services/siteUrl.ts";
+import { docker, decodeDockerLogPayload } from "../services/docker.ts";
+import { db } from "../lib/db.ts";
 
 export const systemRouter = router({
   getPublicSiteUrl: settledProcedure.query(async () => resolvePublicSiteUrl()),

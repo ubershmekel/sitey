@@ -1,8 +1,8 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, settledProcedure } from "../trpc.js";
-import { db } from "../lib/db.js";
-import { normalizeSiteUrl, resolvePublicSiteUrl } from "../services/siteUrl.js";
+import { router, settledProcedure } from "../trpc.ts";
+import { db } from "../lib/db.ts";
+import { normalizeSiteUrl, resolvePublicSiteUrl } from "../services/siteUrl.ts";
 import {
   clearGithubIntegrationConfig,
   getConfig,
@@ -12,7 +12,7 @@ import {
   upsertGithubIntegrationConfig,
   createAppJwt,
   githubFetch,
-} from "../services/github.js";
+} from "../services/github.ts";
 
 const GITHUB_APP_REPO_CACHE_KEY = "github_app_repo_cache_v1";
 const GITHUB_APP_REPO_CACHE_CHECKED_AT_KEY = "github_app_repo_cache_checked_at";

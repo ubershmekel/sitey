@@ -1,9 +1,9 @@
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { router, settledProcedure } from "../trpc.js";
-import { db } from "../lib/db.js";
-import { enqueueDeployment } from "../services/deployment.js";
-import { deployQueue } from "../lib/queue.js";
+import { router, settledProcedure } from "../trpc.ts";
+import { db } from "../lib/db.ts";
+import { enqueueDeployment } from "../services/deployment.ts";
+import { deployQueue } from "../lib/queue.ts";
 import fs from "node:fs";
 
 export const deployRouter = router({

@@ -12,9 +12,9 @@
  *  - Server startup
  */
 
-import { db } from "../lib/db.js";
-import { resolvePublicSiteUrl, isLoopbackHost } from "./siteUrl.js";
-import { docker } from "./docker.js";
+import { db } from "../lib/db.ts";
+import { resolvePublicSiteUrl, isLoopbackHost } from "./siteUrl.ts";
+import { docker } from "./docker.ts";
 import tls from "node:tls";
 
 const CADDY_ADMIN_URL = process.env.CADDY_ADMIN_URL ?? "http://caddy:2019";

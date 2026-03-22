@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildKeepTags,
   parseRollbackCount,
-} from "../src/services/deployment.js";
+} from "../src/services/deployment.ts";
 
 // ── parseRollbackCount ────────────────────────────────────────────────────────
 

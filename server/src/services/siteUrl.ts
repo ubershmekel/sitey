@@ -1,4 +1,4 @@
-import { db } from "../lib/db.js";
+import { db } from "../lib/db.ts";
 
 export const SITEY_PUBLIC_URL_KEY = "sitey_public_url";
 

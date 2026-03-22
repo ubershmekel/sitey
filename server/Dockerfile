@@ -15,40 +15,23 @@ RUN --mount=type=cache,id=sitey-server-npm,target=/root/.npm,sharing=locked \
 FROM deps AS dev
 COPY prisma ./prisma/
 COPY prisma.config.ts ./
-COPY scripts ./scripts/
 RUN npm run db:generate
 ENV NODE_ENV=development
 EXPOSE 3001
-# CHOKIDAR_USEPOLLING ensures tsx watch detects changes on Docker Desktop for Windows/Mac
+# CHOKIDAR_USEPOLLING ensures file watching detects changes on Docker Desktop for Windows/Mac
 ENV CHOKIDAR_USEPOLLING=true
-CMD ["npx", "tsx", "watch", "src/index.ts"]
-
-# Build
-FROM deps AS builder
-COPY prisma ./prisma/
-COPY prisma.config.ts ./
-COPY scripts ./scripts/
-COPY src ./src
-COPY tsconfig.json ./
-RUN npm run db:generate
-RUN npm run build
+CMD ["node", "--watch", "src/index.ts"]
 
 # Production image
-FROM node:24-bookworm-slim AS runner
-WORKDIR /app
-
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git openssl && rm -rf /var/lib/apt/lists/*
-
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/prisma ./prisma
-COPY --from=builder /app/prisma.config.ts ./
-COPY --from=builder /app/scripts ./scripts
-COPY --from=builder /app/package.json ./
+FROM deps AS runner
+COPY prisma ./prisma/
+COPY prisma.config.ts ./
+COPY src ./src/
+RUN npm run db:generate
 
 ENV NODE_ENV=production
 ENV PORT=3001
 
 EXPOSE 3001
 
-CMD ["node", "--enable-source-maps", "dist/index.js"]
+CMD ["node", "src/index.ts"]

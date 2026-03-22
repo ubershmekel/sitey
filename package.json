@@ -1,6 +1,7 @@
 {
   "name": "sitey",
   "private": true,
+  "type": "module",
   "engines": {
     "node": ">=24"
   },
@@ -12,8 +13,8 @@
     "dev:docker": "docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up --build",
     "dev:nocaddy": "concurrently \"npm run dev -w server\" \"npm run dev -w web\"",
     "prepare": "husky",
-    "build": "npm run build -w web && npm run build -w server",
-    "dev:e2e-mockserver": "tsx e2e/local/mock-external-server.ts",
+    "build": "npm run build -w web",
+    "dev:e2e-mockserver": "node e2e/local/mock-external-server.ts",
     "format": "prettier --write .",
     "format:staged": "lint-staged",
     "db:migrate": "npm run db:migrate -w server",

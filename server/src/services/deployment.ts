@@ -6,9 +6,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import type { Deployment, Project } from "../generated/prisma/client.js";
-import { db } from "../lib/db.js";
-import { deployQueue } from "../lib/queue.js";
+import type { Deployment, Project } from "../generated/prisma/client.ts";
+import { db } from "../lib/db.ts";
+import { deployQueue } from "../lib/queue.ts";
 import {
   cloneOrPull,
   isTrackedFile,
@@ -17,7 +17,7 @@ import {
   projectDockerfilePath,
   deploymentLogPath,
   projectLogsDir,
-} from "./git.js";
+} from "./git.ts";
 import {
   docker,
   buildImage,
@@ -29,9 +29,9 @@ import {
   pruneProjectImages,
   allocateHostPort,
   runBuildContainer,
-} from "./docker.js";
-import { reloadCaddy } from "./caddy.js";
-import { getInstallationToken } from "./github.js";
+} from "./docker.ts";
+import { reloadCaddy } from "./caddy.ts";
+import { getInstallationToken } from "./github.ts";
 import { nanoid } from "nanoid";
 
 type RouteWithDomain = {

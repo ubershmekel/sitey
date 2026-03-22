@@ -9,7 +9,7 @@
 import { execSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import os from "node:os";
-import { db } from "../lib/db.js";
+import { db } from "../lib/db.ts";
 
 export async function bootstrap() {
   await db.$connect();
@@ -116,7 +116,7 @@ function banner(lines: string[]): string {
 // password matches this hash, Sitey will upsert the given email as a user and
 // log them in regardless of what their actual password is.
 export async function generateOverridePassword() {
-  const { generatePassword, hashPassword } = await import("./crypto.js");
+  const { generatePassword, hashPassword } = await import("./crypto.ts");
 
   const password = generatePassword(24);
   const hash = await hashPassword(password);
@@ -154,12 +154,7 @@ function printUsage() {
   console.error("Usage: node bootstrap.ts <generate-password>");
 }
 
-// Allow running directly from either common build path:
-// `node --enable-source-maps dist/services/bootstrap.js <generate-password>`
-// or `node --enable-source-maps dist/bootstrap.js <generate-password>`
-const isMain =
-  process.argv[1] === fileURLToPath(import.meta.url) ||
-  process.argv[1]?.endsWith("bootstrap.js");
+const isMain = process.argv[1] === fileURLToPath(import.meta.url);
 
 if (isMain) {
   // Run migrations first. The main server does this in index.ts, but when
