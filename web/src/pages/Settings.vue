@@ -330,6 +330,7 @@
         Self-hosted PaaS. Domain-first. Vibed with ❤️ on TypeScript + Vue 3 +
         Caddy.
       </p>
+      <p v-if="versionDisplay" class="hint">{{ versionDisplay }}</p>
       <p v-if="installedAt" class="hint">Installed {{ installedAt }}</p>
       <p class="hint">
         Locked out? To generate an override password, run on the host (probably
@@ -413,13 +414,26 @@ async function clearPublicSiteUrl() {
   }
 }
 
+const versionDisplay = ref<string | null>(null);
+async function loadVersion() {
+  try {
+    const v = await trpc.system.getVersion.query();
+    if (v.hash) {
+      const date = v.timestamp ? v.timestamp.slice(0, 10) : "";
+      versionDisplay.value = `Version: ${v.hash}${date ? ` · ${date}` : ""}`;
+    }
+  } catch {
+    console.warn("Failed to load version");
+  }
+}
+
 const installedAt = ref<string | null>(null);
 async function loadInstalledAt() {
   try {
     const status = await trpc.auth.setupStatus.query();
     installedAt.value = status.installedAt ?? null;
   } catch {
-    // non-critical
+    console.warn("Failed to load installedAt");
   }
 }
 
@@ -722,6 +736,7 @@ onUnmounted(() => stopUpdatePolling());
 
 onMounted(() => {
   loadPublicSiteUrl();
+  loadVersion();
   loadInstalledAt();
   loadUsers();
   // Resume polling if an update was already in progress

@@ -1,4 +1,5 @@
 import { statfs, readFile } from "node:fs/promises";
+import { execSync } from "node:child_process";
 import { PassThrough } from "node:stream";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
@@ -37,6 +38,50 @@ async function readUpdateLog(): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+// ── Version info ─────────────────────────────────────────────────────────────
+// Cached per process lifetime (clears on restart, which happens every update).
+type VersionInfo = { hash: string | null; timestamp: string | null };
+let cachedVersion: VersionInfo | null = null;
+
+async function fetchVersionFromUpdater(): Promise<VersionInfo> {
+  const containers = await docker.listContainers({ all: true });
+  const updater = containers.find((c) =>
+    c.Names.some((n) => n.replace(/^\//, "").startsWith("sitey-sitey-updater")),
+  );
+  if (!updater || updater.State !== "running") {
+    return { hash: null, timestamp: null };
+  }
+  const container = docker.getContainer(updater.Id);
+  const exec = await container.exec({
+    Cmd: [
+      "sh",
+      "-c",
+      "cd /sitey-root && git rev-parse --short HEAD && git log -1 --format=%cI",
+    ],
+    AttachStdout: true,
+    AttachStderr: true,
+  });
+  const stream = await exec.start({ hijack: true });
+  const stdout = new PassThrough();
+  const stderr = new PassThrough();
+  (
+    docker.modem as {
+      demuxStream: (s: unknown, o: unknown, e: unknown) => void;
+    }
+  ).demuxStream(stream, stdout, stderr);
+
+  const chunks: Buffer[] = [];
+  stdout.on("data", (chunk: Buffer) => chunks.push(chunk));
+  await new Promise<void>((resolve) => {
+    stream.on("end", resolve);
+    stream.on("error", resolve);
+  });
+
+  const output = Buffer.concat(chunks).toString("utf8").trim();
+  const [hash, timestamp] = output.split(/\r?\n/);
+  return { hash: hash || null, timestamp: timestamp || null };
 }
 
 async function runUpdate(containerId: string): Promise<void> {
@@ -93,6 +138,27 @@ async function runUpdate(containerId: string): Promise<void> {
 }
 
 export const systemRouter = router({
+  getVersion: settledProcedure.query(async () => {
+    if (cachedVersion) return cachedVersion;
+    try {
+      // Dev: local git. Prod: docker exec into the updater (which has /sitey-root).
+      if (process.env.NODE_ENV !== "production") {
+        const hash = execSync("git rev-parse --short HEAD", {
+          encoding: "utf8",
+        }).trim();
+        const timestamp = execSync("git log -1 --format=%cI", {
+          encoding: "utf8",
+        }).trim();
+        cachedVersion = { hash, timestamp };
+      } else {
+        cachedVersion = await fetchVersionFromUpdater();
+      }
+    } catch {
+      cachedVersion = { hash: null, timestamp: null };
+    }
+    return cachedVersion;
+  }),
+
   getPublicSiteUrl: settledProcedure.query(async () => resolvePublicSiteUrl()),
 
   getServerIp: settledProcedure.query(async () => {
