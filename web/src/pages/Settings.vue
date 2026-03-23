@@ -901,6 +901,21 @@ textarea {
   border-bottom: 1px solid var(--border-default);
 }
 
+@media (max-width: 600px) {
+  .user-table-head {
+    display: none;
+  }
+
+  .user-table-row {
+    grid-template-columns: 1fr;
+    gap: 0.5rem;
+  }
+
+  .user-actions {
+    justify-content: flex-start;
+  }
+}
+
 .user-table-row:last-child {
   border-bottom: none;
 }
