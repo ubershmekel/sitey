@@ -265,6 +265,56 @@
       >
     </section>
 
+    <!-- Update Sitey -->
+    <section class="settings-section">
+      <h2>Update Sitey</h2>
+      <p class="section-hint">
+        Pulls the latest code from git, pulls new Docker images, and restarts
+        services. The page will briefly disconnect when the API container
+        restarts.
+      </p>
+
+      <div v-if="updateError" class="alert error">{{ updateError }}</div>
+
+      <button
+        type="button"
+        class="btn-primary"
+        :disabled="updateRunning"
+        @click="triggerUpdate"
+      >
+        {{ updateRunning ? "Updating…" : "Update Sitey" }}
+      </button>
+
+      <pre
+        v-if="updateLog.length > 0"
+        class="block-code"
+        style="
+          margin-top: 0.75rem;
+          max-height: 400px;
+          overflow-y: auto;
+          white-space: pre;
+          overflow-x: auto;
+        "
+        >{{ updateLog.join("\n") }}</pre
+      >
+      <p
+        v-if="updateFinishedAt && updateExitCode === 0"
+        class="section-hint compact"
+        style="margin-top: 0.5rem; color: var(--status-ok-text)"
+      >
+        Update complete. Reload the page if the UI looks stale.
+      </p>
+      <p
+        v-if="
+          updateFinishedAt && updateExitCode !== null && updateExitCode !== 0
+        "
+        class="section-hint compact"
+        style="margin-top: 0.5rem; color: var(--status-err-text)"
+      >
+        Update failed (exit code {{ updateExitCode }}).
+      </p>
+    </section>
+
     <!-- About -->
     <section class="settings-section about">
       <h2>About Sitey</h2>
@@ -293,7 +343,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted } from "vue";
+import { ref, reactive, computed, onMounted, onUnmounted } from "vue";
 import { RouterLink } from "vue-router";
 import Layout from "../components/Layout.vue";
 import ConfirmActionModal from "../components/ConfirmActionModal.vue";
@@ -620,10 +670,71 @@ async function loadCaddyfile() {
   }
 }
 
+// ── Update Sitey ─────────────────────────────────────────────────────────────
+
+const updateRunning = ref(false);
+const updateLog = ref<string[]>([]);
+const updateError = ref("");
+const updateExitCode = ref<number | null>(null);
+const updateFinishedAt = ref<string | null>(null);
+let updatePollInterval: ReturnType<typeof setInterval> | null = null;
+
+async function triggerUpdate() {
+  updateError.value = "";
+  updateLog.value = [];
+  updateExitCode.value = null;
+  updateFinishedAt.value = null;
+  try {
+    await trpc.system.triggerUpdate.mutate();
+    updateRunning.value = true;
+    startUpdatePolling();
+  } catch (e: unknown) {
+    updateError.value =
+      (e as { message?: string })?.message ?? "Failed to start update.";
+  }
+}
+
+async function pollUpdateStatus() {
+  try {
+    const status = await trpc.system.getUpdateStatus.query();
+    updateRunning.value = status.running;
+    updateLog.value = status.log;
+    updateExitCode.value = status.exitCode;
+    updateFinishedAt.value = status.finishedAt;
+    if (!status.running) stopUpdatePolling();
+  } catch {
+    // API may be restarting — keep polling silently
+  }
+}
+
+function startUpdatePolling() {
+  updatePollInterval = setInterval(pollUpdateStatus, 2000);
+}
+
+function stopUpdatePolling() {
+  if (updatePollInterval) {
+    clearInterval(updatePollInterval);
+    updatePollInterval = null;
+  }
+}
+
+onUnmounted(() => stopUpdatePolling());
+
 onMounted(() => {
   loadPublicSiteUrl();
   loadInstalledAt();
   loadUsers();
+  // Resume polling if an update was already in progress
+  trpc.system.getUpdateStatus
+    .query()
+    .then((s) => {
+      if (s.running) {
+        updateRunning.value = true;
+        updateLog.value = s.log;
+        startUpdatePolling();
+      }
+    })
+    .catch(() => {});
 });
 </script>
 

@@ -1,4 +1,5 @@
-import { statfs } from "node:fs/promises";
+import { statfs, readFile } from "node:fs/promises";
+import { PassThrough } from "node:stream";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, settledProcedure } from "../trpc.ts";
@@ -11,6 +12,85 @@ import {
 } from "../services/siteUrl.ts";
 import { docker, decodeDockerLogPayload } from "../services/docker.ts";
 import { db } from "../lib/db.ts";
+
+// ── Updater state ─────────────────────────────────────────────────────────────
+// The update script tees output to /data/.update.log so logs survive the
+// sitey-api restart that happens at the end of an update. On startup and in
+// getUpdateStatus we read from that file as a fallback.
+
+const DATA_ROOT = process.env.DATA_ROOT ?? "/data";
+const UPDATE_LOG_PATH = `${DATA_ROOT}/.update.log`;
+
+const updateState = {
+  running: false,
+  log: [] as string[],
+  startedAt: null as string | null,
+  finishedAt: null as string | null,
+  exitCode: null as number | null,
+};
+
+/** Read the log file left by update-docker.sh (survives restarts). */
+async function readUpdateLog(): Promise<string[]> {
+  try {
+    const content = await readFile(UPDATE_LOG_PATH, "utf8");
+    return content.split(/\r?\n/).filter(Boolean);
+  } catch {
+    return [];
+  }
+}
+
+async function runUpdate(containerId: string): Promise<void> {
+  try {
+    const container = docker.getContainer(containerId);
+    const exec = await container.exec({
+      // git pull first so update-docker.sh always runs at its latest version
+      Cmd: [
+        "sh",
+        "-c",
+        "cd /sitey-root && git pull && sh /sitey-root/deploy/updater/update-docker.sh",
+      ],
+      AttachStdout: true,
+      AttachStderr: true,
+    });
+    const stream = await exec.start({ hijack: true });
+
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    (
+      docker.modem as {
+        demuxStream: (s: unknown, o: unknown, e: unknown) => void;
+      }
+    ).demuxStream(stream, stdout, stderr);
+
+    for (const s of [stdout, stderr]) {
+      s.on("data", (chunk: Buffer) => {
+        const lines = chunk.toString("utf8").split(/\r?\n/).filter(Boolean);
+        updateState.log.push(...lines);
+      });
+    }
+
+    // Note: sitey-api will likely be killed by docker compose up -d before
+    // this promise resolves. The log file written by update-docker.sh is the
+    // durable record; the in-memory state below is best-effort.
+    await new Promise<void>((resolve) => {
+      stream.on("end", resolve);
+      stream.on("error", resolve);
+    });
+
+    try {
+      const info = await exec.inspect();
+      updateState.exitCode = (info as { ExitCode?: number }).ExitCode ?? 0;
+    } catch {
+      updateState.exitCode = 0;
+    }
+  } catch (err) {
+    updateState.log.push(`ERROR: ${(err as Error).message}`);
+    updateState.exitCode = 1;
+  } finally {
+    updateState.running = false;
+    updateState.finishedAt = new Date().toISOString();
+  }
+}
 
 export const systemRouter = router({
   getPublicSiteUrl: settledProcedure.query(async () => resolvePublicSiteUrl()),
@@ -91,6 +171,66 @@ export const systemRouter = router({
       diskTotal,
       diskAvailable,
       diskPath,
+    };
+  }),
+
+  triggerUpdate: settledProcedure.mutation(async () => {
+    if (updateState.running) {
+      throw new TRPCError({
+        code: "CONFLICT",
+        message: "Update already in progress.",
+      });
+    }
+    const containers = await docker.listContainers({ all: true });
+    const updaterContainer = containers.find((c) =>
+      c.Names.some((n) =>
+        n.replace(/^\//, "").startsWith("sitey-sitey-updater"),
+      ),
+    );
+    if (!updaterContainer) {
+      throw new TRPCError({
+        code: "NOT_FOUND",
+        message: "sitey-updater container not found. Is it running?",
+      });
+    }
+    if (updaterContainer.State !== "running") {
+      throw new TRPCError({
+        code: "PRECONDITION_FAILED",
+        message: "sitey-updater container is not running.",
+      });
+    }
+    updateState.running = true;
+    updateState.log = [];
+    updateState.startedAt = new Date().toISOString();
+    updateState.finishedAt = null;
+    updateState.exitCode = null;
+    void runUpdate(updaterContainer.Id);
+    return { started: true };
+  }),
+
+  getUpdateStatus: settledProcedure.query(async () => {
+    // If we have in-memory state (update in progress or just finished), use it.
+    // Otherwise fall back to the log file on disk, which survives restarts.
+    // We infer success/failure from the log content since the in-memory state
+    // is lost when sitey-api is restarted by the update itself.
+    if (updateState.log.length > 0) {
+      return {
+        running: updateState.running,
+        log: [...updateState.log],
+        startedAt: updateState.startedAt,
+        finishedAt: updateState.finishedAt,
+        exitCode: updateState.exitCode,
+      };
+    }
+    const log = await readUpdateLog();
+    const lastLine = log[log.length - 1] ?? "";
+    const completed = lastLine.includes("=== update complete ===");
+    return {
+      running: false,
+      log,
+      startedAt: null,
+      finishedAt: completed ? "recovered" : null,
+      exitCode: completed ? 0 : log.length > 0 ? 1 : null,
     };
   }),
 

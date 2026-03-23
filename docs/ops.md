@@ -62,6 +62,25 @@ after first use.
 
 ## Updating
 
+### From the UI (recommended)
+
+Open **Settings → Update Sitey** and click **Update Sitey**. The button triggers
+the `sitey-updater` sidecar container, which runs three steps and streams the
+output live:
+
+1. `git pull` — fetches the latest code (including any changes to
+   `update-docker.sh` itself, so they take effect immediately)
+2. `docker compose build` — rebuilds images for services defined in docker-compose.yml (except the updater, so it can keep running)
+3. `docker compose up -d` — restarts services with the new images
+
+The page will briefly disconnect when the API container restarts. Reload once it
+comes back.
+
+> **Note:** `sitey-updater` must be running. If you don't see it
+> (`docker compose ps`), start it with `docker compose up -d sitey-updater`.
+
+### From the command line
+
 ```bash
 cd /opt/sitey/deploy
 git pull
@@ -71,6 +90,22 @@ docker compose up -d --build
 Migrations run automatically on startup. If the API fails to start after an
 update (check `docker compose logs sitey-api`), the schema may have changed in a
 way that requires a fresh DB — see **Nuking data** below.
+
+### How the updater sidecar works
+
+`sitey-updater` is a dormant container (`sleep infinity`) built from
+`deploy/updater/Dockerfile`. It has three mounts:
+
+- `/var/run/docker.sock` — so it can run `docker compose` commands
+- `/sitey-root` — the repo root (i.e. `/opt/sitey`), for `git pull` and to read
+  `update-docker.sh` at exec time
+- `/data` — shared data volume, used to write `.update.log` (survives API restart)
+
+When you click **Update Sitey**, `sitey-api` runs `git pull` first (so changes
+to the update script take effect immediately), then calls
+`sh /sitey-root/deploy/updater/update-docker.sh` via docker exec. Because the
+script is read from the mount rather than baked into the image, you never need
+to rebuild the updater image just to change the update logic.
 
 ---
 

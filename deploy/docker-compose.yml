@@ -31,6 +31,17 @@ services:
     networks:
       - sitey-public
 
+  # ── Sitey Updater ─────────────────────────────────────────────────────────
+  # Dormant container. sitey-api execs update-docker.sh into it to trigger updates.
+  sitey-updater:
+    build:
+      context: ./updater
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../:/sitey-root
+      - ${DATA_ROOT:-./data}:/data
+
   # ── Sitey API ─────────────────────────────────────────────────────────────
   sitey-api:
     build:
