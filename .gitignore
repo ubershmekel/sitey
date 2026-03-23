@@ -14,5 +14,6 @@ web/dist/
 .DS_Store
 *.log
 test-results/
+e2e/local/screenshots/
 .claude/settings.local.json
 .tmp-state.json
