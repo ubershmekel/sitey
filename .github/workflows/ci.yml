@@ -21,7 +21,7 @@ jobs:
         run: npm ci
 
       - name: Check formatting
-        run: npm run format:check
+        run: npm run test:format
 
       - name: Typecheck
-        run: npm run typecheck
+        run: npm run test:types
