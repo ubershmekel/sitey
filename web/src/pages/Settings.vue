@@ -196,6 +196,14 @@
       @confirm="confirmUserAction"
     />
 
+    <ConfirmActionModal
+      v-model="updateConfirmOpen"
+      title="Update Sitey?"
+      message="This will pull the latest Sitey code, rebuild docker images, and restart services. The page will disconnect briefly during the update."
+      confirm-label="Update"
+      @confirm="triggerUpdate"
+    />
+
     <!-- Docker disk usage -->
     <section class="settings-section">
       <h2>Docker Disk Usage</h2>
@@ -280,7 +288,7 @@
         type="button"
         class="btn-primary"
         :disabled="updateRunning"
-        @click="triggerUpdate"
+        @click="updateConfirmOpen = true"
       >
         {{ updateRunning ? "Updating…" : "Update Sitey" }}
       </button>
@@ -686,6 +694,7 @@ async function loadCaddyfile() {
 
 // ── Update Sitey ─────────────────────────────────────────────────────────────
 
+const updateConfirmOpen = ref(false);
 const updateRunning = ref(false);
 const updateLog = ref<string[]>([]);
 const updateError = ref("");
