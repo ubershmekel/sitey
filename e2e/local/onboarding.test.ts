@@ -12,12 +12,11 @@
  */
 
 import { test, expect } from "@playwright/test";
+import { ensureLoggedIn } from "./helpers.ts";
 
 // Use 127.0.0.1 not localhost — on Windows, Node.js may resolve localhost → ::1
 // but the mock server binds to 127.0.0.1.
 const MOCK_URL = "http://127.0.0.1:3334";
-const TEST_EMAIL = "admin@sitey-e2e.test";
-const TEST_PASSWORD = "e2e-password-1";
 const TEST_DOMAIN = "*.example.com";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
@@ -32,65 +31,6 @@ async function getMockRequests(
 ): Promise<RequestEntry[]> {
   const res = await request.get(`${MOCK_URL}/__requests`);
   return res.json();
-}
-
-/**
- * Handle the full auth flow from /login:
- *  - First-run wizard (setup): create account.
- *  - Returning user (login): sign in.
- *  - If redirected to /change-password: complete it (defensive only — the
- *    setup wizard always creates accounts with mustChangePassword=false).
- */
-async function ensureLoggedIn(page: import("@playwright/test").Page) {
-  await page.goto("/login");
-  await page.waitForLoadState("networkidle");
-
-  const url = page.url();
-
-  if (url.includes("/change-password")) {
-    // Should not happen in normal E2E flow (setup uses mustChangePassword=false)
-    // but handle defensively.
-    await page.fill('input[autocomplete="current-password"]', TEST_PASSWORD);
-    await page.fill('input[autocomplete="new-password"]', TEST_PASSWORD + "X");
-    await page
-      .locator('input[autocomplete="new-password"]')
-      .nth(1)
-      .fill(TEST_PASSWORD + "X");
-    await page.click('button[type="submit"]');
-    await page.waitForURL("**/", { timeout: 15_000 });
-    return;
-  }
-
-  // Detect setup vs login mode by looking for the "Create account" button text.
-  const submitBtn = page.locator('button[type="submit"]');
-  await submitBtn.waitFor({ timeout: 10_000 });
-  const btnText = await submitBtn.textContent();
-  const isSetup = btnText?.includes("Create account") ?? false;
-
-  await page.fill('input[type="email"]', TEST_EMAIL);
-  await page.fill('input[type="password"]', TEST_PASSWORD);
-  await submitBtn.click();
-
-  // After setup/login the app redirects to "/" or "/change-password"
-  await page.waitForURL(/\/(change-password)?$/, { timeout: 15_000 });
-
-  if (page.url().includes("/change-password")) {
-    // Defensive — won't happen for the setup flow but guard anyway
-    await page.fill('input[autocomplete="current-password"]', TEST_PASSWORD);
-    const newPw = TEST_PASSWORD + "X";
-    await page.locator('input[autocomplete="new-password"]').nth(0).fill(newPw);
-    await page.locator('input[autocomplete="new-password"]').nth(1).fill(newPw);
-    await page.click('button[type="submit"]');
-    await page.waitForURL("**/", { timeout: 15_000 });
-  }
-
-  void isSetup; // used above, suppress lint warning
-
-  // Verify session survives a full page reload (catches dropped-cookie bugs
-  // where login appears to succeed but the session isn't actually stored).
-  await page.reload();
-  await page.waitForLoadState("networkidle");
-  await expect(page).not.toHaveURL(/\/login/, { timeout: 5_000 });
 }
 
 // ── Test 1 ────────────────────────────────────────────────────────────────────
