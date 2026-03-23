@@ -14,7 +14,6 @@ import { test } from "@playwright/test";
 import { ensureLoggedIn } from "./helpers.ts";
 import { ScreenshotTaker } from "./screenshot-taker.ts";
 
-const TEST_DOMAIN_FOR_DETAIL = "*.example.com";
 
 test("screenshot tour — all pages, wide and narrow", async ({ page }) => {
   const shots = new ScreenshotTaker(page);
@@ -33,22 +32,21 @@ test("screenshot tour — all pages, wide and narrow", async ({ page }) => {
   await shots.goto("/settings", "settings");
   await shots.goto("/change-password", "change-password");
 
-  // ── Create a domain so we can screenshot the detail page ──────────────────
+  // ── Domain detail page ────────────────────────────────────────────────────
+  // A domain may already exist (created by onboarding.test.ts). If not, add one.
   await page.goto("/domains");
   await page.waitForLoadState("networkidle");
-  await page.getByRole("button", { name: "Add domain" }).click();
-  await page.locator('input[placeholder="myapp.com"]').fill(TEST_DOMAIN_FOR_DETAIL);
-  await page.getByRole("button", { name: "Add domain", exact: true }).click();
-  await page.waitForSelector('input[placeholder="myapp.com"]', {
-    state: "hidden",
-    timeout: 10_000,
-  });
-
-  // Click into the first domain row to reach the detail page
-  const firstDomainLink = page.locator(".domain-row a, table a, a[href^='/domains/']").first();
-  if (await firstDomainLink.isVisible({ timeout: 3_000 }).catch(() => false)) {
-    await firstDomainLink.click();
-    await shots.snap("domain-detail");
-    await page.goBack();
+  let firstDomainLink = page.locator("a[href^='/domains/']").first();
+  if (!(await firstDomainLink.isVisible({ timeout: 2_000 }).catch(() => false))) {
+    await page.getByRole("button", { name: "Add domain" }).click();
+    await page.locator('input[placeholder="myapp.com"]').fill("*.screenshot.test");
+    await page.getByRole("button", { name: "Add domain", exact: true }).click();
+    await page.waitForSelector('input[placeholder="myapp.com"]', {
+      state: "hidden",
+      timeout: 10_000,
+    });
+    firstDomainLink = page.locator("a[href^='/domains/']").first();
   }
+  await firstDomainLink.click();
+  await shots.snap("domain-detail");
 });
