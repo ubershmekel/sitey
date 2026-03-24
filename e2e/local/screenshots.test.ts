@@ -14,7 +14,6 @@ import { test } from "@playwright/test";
 import { ensureLoggedIn } from "./helpers.ts";
 import { ScreenshotTaker } from "./screenshot-taker.ts";
 
-
 test("screenshot tour — all pages, wide and narrow", async ({ page }) => {
   const shots = new ScreenshotTaker(page);
 
@@ -37,9 +36,13 @@ test("screenshot tour — all pages, wide and narrow", async ({ page }) => {
   await page.goto("/domains");
   await page.waitForLoadState("networkidle");
   let firstDomainLink = page.locator("a[href^='/domains/']").first();
-  if (!(await firstDomainLink.isVisible({ timeout: 2_000 }).catch(() => false))) {
+  if (
+    !(await firstDomainLink.isVisible({ timeout: 2_000 }).catch(() => false))
+  ) {
     await page.getByRole("button", { name: "Add domain" }).click();
-    await page.locator('input[placeholder="myapp.com"]').fill("*.screenshot.test");
+    await page
+      .locator('input[placeholder="myapp.com"]')
+      .fill("*.screenshot.test");
     await page.getByRole("button", { name: "Add domain", exact: true }).click();
     await page.waitForSelector('input[placeholder="myapp.com"]', {
       state: "hidden",
