@@ -800,6 +800,13 @@ h1 {
   font-size: var(--font-tiny);
 }
 
+@media (max-width: 600px) {
+  .meta-row {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+}
+
 .meta-value {
   font-family: monospace;
   word-break: break-all;
@@ -1085,6 +1092,12 @@ textarea {
   grid-template-columns: 220px minmax(0, 1fr);
   gap: 0.35rem 1rem;
   font-size: var(--font-tiny);
+}
+
+@media (max-width: 600px) {
+  .disk-usage-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .about p {
