@@ -2,23 +2,23 @@
   <Layout>
     <div v-if="loading" class="state-msg">Loading...</div>
     <div v-else-if="error" class="alert error">{{ error }}</div>
-    <template v-else-if="project">
+    <template v-else-if="service">
       <div class="breadcrumb">
-        <RouterLink to="/projects">Projects</RouterLink>
+        <RouterLink to="/services">Services</RouterLink>
         <template v-if="primaryDomainRoute?.domain">
           /
           <RouterLink :to="`/domains/${primaryDomainRoute.domain.id}`">
             {{ primaryDomainRoute.domain.hostname }}
           </RouterLink>
         </template>
-        / {{ project.name }}
+        / {{ service.name }}
       </div>
 
       <!-- ── Hero card ─────────────────────────────────────────────── -->
       <div class="hero-card">
         <div class="hero-top">
           <div class="hero-name-row">
-            <h1>{{ project.name }}</h1>
+            <h1>{{ service.name }}</h1>
             <button
               type="button"
               class="btn-ghost-sm title-edit-btn"
@@ -26,16 +26,16 @@
             >
               Edit name
             </button>
-            <span v-if="!project.active" class="status status-inactive"
+            <span v-if="!service.active" class="status status-inactive"
               >Inactive</span
             >
-            <span v-else :class="`status status-${project.status}`">{{
-              containerLabel(project.status, project.deployMode)
+            <span v-else :class="`status status-${service.status}`">{{
+              containerLabel(service.status, service.deployMode)
             }}</span>
           </div>
           <button
             class="btn-primary"
-            :disabled="deploying || !project.active"
+            :disabled="deploying || !service.active"
             @click="triggerDeploy"
           >
             {{ deploying ? "Deploying..." : "Deploy now" }}
@@ -47,14 +47,14 @@
           @submit.prevent="saveTitleEdit"
         >
           <label>
-            Project name
+            Service name
             <input
               v-model="titleDraft"
               type="text"
               required
               pattern="^[a-z0-9-]+$"
               maxlength="40"
-              placeholder="my-project"
+              placeholder="my-service"
             />
           </label>
           <div class="title-edit-actions">
@@ -74,9 +74,9 @@
           </div>
         </form>
 
-        <div v-if="projectUrl" class="hero-url">
+        <div v-if="serviceUrl" class="hero-url">
           <a
-            :href="projectUrl"
+            :href="serviceUrl"
             target="_blank"
             rel="noopener"
             :class="
@@ -85,7 +85,7 @@
                 ? 'url-https'
                 : 'url-http-primary'
             "
-            >{{ projectUrl }}</a
+            >{{ serviceUrl }}</a
           >
           <template
             v-if="
@@ -95,7 +95,7 @@
           >
             <span class="url-sep">·</span>
             <a
-              :href="projectUrl.replace('https://', 'http://')"
+              :href="serviceUrl.replace('https://', 'http://')"
               target="_blank"
               rel="noopener"
               class="url-http"
@@ -132,7 +132,7 @@
           </template>
         </div>
         <div v-else-if="fallbackUrl" class="hero-url hint">
-          No domain route yet — fallback: <code>{{ fallbackUrl }}</code>
+          No domain route yet - fallback: <code>{{ fallbackUrl }}</code>
         </div>
         <div v-else class="hero-url hint">No route assigned yet.</div>
 
@@ -140,24 +140,24 @@
           {{ deployError }}
         </div>
         <div
-          v-if="project.status === 'failed'"
+          v-if="service.status === 'failed'"
           class="deploy-notice deploy-notice-failed"
         >
           Last deploy failed — check build logs below.
         </div>
         <div
           v-else-if="
-            project.status === 'building' || project.status === 'queued'
+            service.status === 'building' || service.status === 'queued'
           "
           class="deploy-notice deploy-notice-building"
         >
           Deploy in progress — site will update once it finishes.
         </div>
         <div
-          v-if="!project.active"
+          v-if="!service.active"
           class="deploy-notice deploy-notice-inactive"
         >
-          This project was deactivated. Routes are not served and the container
+          This service was deactivated. Routes are not served and the container
           is stopped. Activate it from the danger zone below to resume.
         </div>
       </div>
@@ -167,8 +167,8 @@
         <div class="info-row">
           <span class="info-label">Repo</span>
           <span class="info-value mono"
-            >{{ project.repoOwner }}/{{ project.repoName }}:{{
-              project.branch
+            >{{ service.repo.repoOwner }}/{{ service.repo.repoName }}:{{
+              service.branch
             }}</span
           >
         </div>
@@ -176,21 +176,21 @@
           <span class="info-label">Type</span>
           <span class="info-value">{{ deployTypeLabel }}</span>
         </div>
-        <div v-if="project.deployMode === 'server'" class="info-row">
+        <div v-if="service.deployMode === 'server'" class="info-row">
           <span class="info-label">Port</span>
-          <span class="info-value mono">{{ project.containerPort }}</span>
+          <span class="info-value mono">{{ service.containerPort }}</span>
         </div>
         <div
-          v-if="project.deployMode === 'static' && project.buildImage"
+          v-if="service.deployMode === 'static' && service.buildImage"
           class="info-row"
         >
           <span class="info-label">Build image</span>
-          <span class="info-value mono">{{ project.buildImage }}</span>
+          <span class="info-value mono">{{ service.buildImage }}</span>
         </div>
         <div class="info-row">
           <span class="info-label">GitHub</span>
           <span class="info-value">{{
-            project.githubMode === "app" ? "App" : "Webhook"
+            service.repo.githubMode === "app" ? "App" : "Webhook"
           }}</span>
         </div>
       </div>
@@ -226,7 +226,7 @@
           <div class="env-actions">
             <button
               class="btn-primary"
-              :disabled="envSaving || envVarsText === (project.envVars ?? '')"
+              :disabled="envSaving || envVarsText === (service.envVars ?? '')"
               @click="saveEnvVars"
             >
               {{ envSaving ? "Saving..." : "Save" }}
@@ -241,7 +241,7 @@
       <div class="section">
         <h2>Routes</h2>
         <p class="section-hint">
-          Each route maps a domain (or path prefix) to this project.
+          Each route maps a domain (or path prefix) to this service.
         </p>
         <button
           class="btn-primary"
@@ -251,11 +251,11 @@
         >
           + Add route
         </button>
-        <div v-if="project.routes.length === 0" class="empty-msg">
+        <div v-if="service.routes.length === 0" class="empty-msg">
           No domain routes yet.
         </div>
         <div v-else class="route-list">
-          <div v-for="r in project.routes" :key="r.id" class="route-row">
+          <div v-for="r in service.routes" :key="r.id" class="route-row">
             <div class="route-url-wrap">
               <a
                 v-if="routeHasLink(r)"
@@ -313,7 +313,7 @@
       </div>
 
       <!-- ── GitHub Webhook setup ───────────────────────────────────── -->
-      <div v-if="project.githubMode === 'webhook'" class="webhook-card">
+      <div v-if="service.repo.githubMode === 'webhook'" class="webhook-card">
         <h2>GitHub Webhook Setup</h2>
         <p class="hint">
           Add this webhook in your GitHub repo settings to auto-deploy on push.
@@ -362,12 +362,12 @@
       <!-- ── Build deployments ─────────────────────────────────────── -->
       <div class="section">
         <h2>Deployments</h2>
-        <div v-if="project.deployments.length === 0" class="empty-msg">
+        <div v-if="service.deployments.length === 0" class="empty-msg">
           No deployments yet.
         </div>
         <div v-else class="deploy-list">
           <div
-            v-for="d in project.deployments"
+            v-for="d in service.deployments"
             :key="d.id"
             class="deploy-row"
             :class="{ active: selectedDeployId === d.id }"
@@ -407,12 +407,12 @@
       </div>
 
       <!-- ── Docker container logs ─────────────────────────────────── -->
-      <div v-if="project.deployMode === 'server'" class="section">
+      <div v-if="service.deployMode === 'server'" class="section">
         <h2>Docker logs</h2>
         <p class="section-hint">
           View live container output in the
           <RouterLink
-            :to="`/logs?container=sitey-${project.id}`"
+            :to="`/logs?container=sitey-service-${service.id}`"
             class="logs-link"
             >Logs tab</RouterLink
           >.
@@ -421,11 +421,11 @@
 
       <!-- ── Danger zone ───────────────────────────────────────────── -->
       <div class="section">
-        <h2>Project Settings</h2>
+        <h2>Service Settings</h2>
         <p class="section-hint">
           Change deploy/build mode and related runtime/build fields.
         </p>
-        <form class="settings-form" @submit.prevent="saveProjectSettings">
+        <form class="settings-form" @submit.prevent="saveServiceSettings">
           <div class="text-option-group">
             <div class="text-option-label">Deploy type</div>
             <div class="text-option-row">
@@ -554,43 +554,43 @@
 
         <div class="danger-item">
           <div class="danger-item-text">
-            <template v-if="project.active">
-              <strong>Deactivate project</strong>
+            <template v-if="service.active">
+              <strong>Deactivate service</strong>
               <p class="danger-desc">
-                Stops the container and removes Caddy routes so the project no
+                Stops the container and removes Caddy routes so the service no
                 longer serves traffic. All data, configuration, and deployment
                 history are preserved. You can reactivate at any time.
               </p>
             </template>
             <template v-else>
-              <strong>Activate project</strong>
+              <strong>Activate service</strong>
               <p class="danger-desc">
-                Re-enables the project. You will need to trigger a new deploy to
+                Re-enables the service. You will need to trigger a new deploy to
                 start the container and resume serving traffic.
               </p>
             </template>
           </div>
           <button
-            v-if="project.active"
+            v-if="service.active"
             class="btn-danger"
             :disabled="toggling"
-            @click="deactivateProject"
+            @click="deactivateService"
           >
-            {{ toggling ? "Deactivating..." : "Deactivate project" }}
+            {{ toggling ? "Deactivating..." : "Deactivate service" }}
           </button>
           <button
             v-else
             class="btn-activate"
             :disabled="toggling"
-            @click="activateProject"
+            @click="activateService"
           >
-            {{ toggling ? "Activating..." : "Activate project" }}
+            {{ toggling ? "Activating..." : "Activate service" }}
           </button>
         </div>
 
         <div class="danger-item">
           <div class="danger-item-text">
-            <strong>Delete project</strong>
+            <strong>Delete service</strong>
             <p class="danger-desc">
               Stops the container and removes all files. This cannot be undone.
             </p>
@@ -598,9 +598,9 @@
           <button
             class="btn-danger"
             :disabled="deleting"
-            @click="deleteProject"
+            @click="deleteService"
           >
-            {{ deleting ? "Deleting..." : "Delete project" }}
+            {{ deleting ? "Deleting..." : "Delete service" }}
           </button>
         </div>
       </div>
@@ -659,19 +659,19 @@ import Layout from "../components/Layout.vue";
 import AddRouteModal from "../components/AddRouteModal.vue";
 import { trpc } from "../trpc";
 
-type Project = Awaited<ReturnType<typeof trpc.projects.get.query>>;
-type ProjectRoute = Project["routes"][number];
+type Service = Awaited<ReturnType<typeof trpc.services.get.query>>;
+type ServiceRoute = Service["routes"][number];
 type WebhookInfo = Awaited<
-  ReturnType<typeof trpc.projects.getWebhookInfo.query>
+  ReturnType<typeof trpc.services.getWebhookInfo.query>
 >;
 type Domain = Awaited<ReturnType<typeof trpc.domains.list.query>>[number];
 const VIRTUAL_LOOPBACK_DOMAIN_ID = -127001;
 
 const route = useRoute();
 const router = useRouter();
-const projectId = Number(route.params.id);
+const serviceId = Number(route.params.id);
 
-const project = ref<Project | null>(null);
+const service = ref<Service | null>(null);
 const domains = ref<Pick<Domain, "id" | "hostname">[]>([]);
 const loading = ref(true);
 const error = ref("");
@@ -715,10 +715,10 @@ const LOG_POLL_MS = 3000;
 let logPollTimer: ReturnType<typeof setInterval> | null = null;
 
 const primaryDomainRoute = computed(
-  () => project.value?.routes.find((r) => !!r.domain) ?? null,
+  () => service.value?.routes.find((r) => !!r.domain) ?? null,
 );
 
-function routeHostname(r: ProjectRoute): string {
+function routeHostname(r: ServiceRoute): string {
   if (!r.domain?.hostname) return "";
   if (!r.domain.hostname.startsWith("*.")) return r.domain.hostname;
   return r.subdomain
@@ -726,7 +726,7 @@ function routeHostname(r: ProjectRoute): string {
     : r.domain.hostname;
 }
 
-const projectUrl = computed(() => {
+const serviceUrl = computed(() => {
   const r = primaryDomainRoute.value;
   if (!r?.domain) return "";
   const scheme = !r.httpOnly && r.tlsStatus === "active" ? "https" : "http";
@@ -734,59 +734,59 @@ const projectUrl = computed(() => {
 });
 
 const fallbackUrl = computed(() => {
-  if (!project.value?.hostPort) return "";
-  return `http://<server-ip>:${project.value.hostPort}`;
+  if (!service.value?.hostPort) return "";
+  return `http://<server-ip>:${service.value.hostPort}`;
 });
 
 const deployTypeLabel = computed(() => {
-  if (!project.value) return "";
-  if (project.value.deployMode === "static") return "Static site";
-  if (project.value.buildMode === "dockerfile") {
-    const p = project.value.dockerfilePath || "Dockerfile";
+  if (!service.value) return "";
+  if (service.value.deployMode === "static") return "Static site";
+  if (service.value.buildMode === "dockerfile") {
+    const p = service.value.dockerfilePath || "Dockerfile";
     return p === "Dockerfile" ? "Dockerfile" : `Dockerfile (${p})`;
   }
   return "Server app";
 });
 
 const titleDirty = computed(() => {
-  if (!project.value) return false;
-  return titleDraft.value.trim() !== project.value.name;
+  if (!service.value) return false;
+  return titleDraft.value.trim() !== service.value.name;
 });
 
 const settingsDirty = computed(() => {
-  if (!project.value) return false;
+  if (!service.value) return false;
   const modeDirty =
     (editDeployType.value === "static" &&
-      (project.value.deployMode !== "static" ||
-        project.value.buildMode !== "auto")) ||
+      (service.value.deployMode !== "static" ||
+        service.value.buildMode !== "auto")) ||
     (editDeployType.value === "server" &&
-      (project.value.deployMode !== "server" ||
-        project.value.buildMode !== "auto")) ||
+      (service.value.deployMode !== "server" ||
+        service.value.buildMode !== "auto")) ||
     (editDeployType.value === "dockerfile" &&
-      (project.value.deployMode !== "server" ||
-        project.value.buildMode !== "dockerfile"));
+      (service.value.deployMode !== "server" ||
+        service.value.buildMode !== "dockerfile"));
 
   return (
     modeDirty ||
-    editBuildCommand.value.trim() !== (project.value.buildCommand ?? "") ||
-    editOutputDir.value.trim() !== (project.value.outputDir ?? "") ||
-    editBuildImage.value.trim() !== (project.value.buildImage ?? "") ||
+    editBuildCommand.value.trim() !== (service.value.buildCommand ?? "") ||
+    editOutputDir.value.trim() !== (service.value.outputDir ?? "") ||
+    editBuildImage.value.trim() !== (service.value.buildImage ?? "") ||
     editServerRunCommand.value.trim() !==
-      (project.value.serverRunCommand ?? "") ||
-    editDockerfilePath.value.trim() !== (project.value.dockerfilePath ?? "") ||
-    Number(editContainerPort.value) !== Number(project.value.containerPort)
+      (service.value.serverRunCommand ?? "") ||
+    editDockerfilePath.value.trim() !== (service.value.dockerfilePath ?? "") ||
+    Number(editContainerPort.value) !== Number(service.value.containerPort)
   );
 });
 
 const selectedDeployment = computed(
   () =>
-    project.value?.deployments.find((d) => d.id === selectedDeployId.value) ??
+    service.value?.deployments.find((d) => d.id === selectedDeployId.value) ??
     null,
 );
 
 const shouldAutoRefreshLogs = computed(() => {
   if (!selectedDeployId.value) return false;
-  const status = selectedDeployment.value?.status ?? project.value?.status;
+  const status = selectedDeployment.value?.status ?? service.value?.status;
   return status === "building" || status === "queued";
 });
 
@@ -796,7 +796,7 @@ function normalizePathPrefix(input: string): string {
   return raw.startsWith("/") ? raw : `/${raw}`;
 }
 
-function routeLabel(r: ProjectRoute): string {
+function routeLabel(r: ServiceRoute): string {
   const pathPrefix = r.pathPrefix || "";
   const hostname = routeHostname(r);
   if (hostname) {
@@ -806,37 +806,37 @@ function routeLabel(r: ProjectRoute): string {
   return pathPrefix ? `<server>${pathPrefix}` : "<server>";
 }
 
-function routeHasLink(r: ProjectRoute): boolean {
+function routeHasLink(r: ServiceRoute): boolean {
   return !!r.domain?.hostname;
 }
 
-function applyProjectToEditors(proj: Project) {
-  titleDraft.value = proj.name;
-  editBuildCommand.value = proj.buildCommand ?? "";
-  editOutputDir.value = proj.outputDir ?? "";
-  editBuildImage.value = proj.buildImage ?? "";
-  editServerRunCommand.value = proj.serverRunCommand ?? "";
-  editDockerfilePath.value = proj.dockerfilePath ?? "";
-  editContainerPort.value = proj.containerPort;
+function applyServiceToEditors(svc: Service) {
+  titleDraft.value = svc.name;
+  editBuildCommand.value = svc.buildCommand ?? "";
+  editOutputDir.value = svc.outputDir ?? "";
+  editBuildImage.value = svc.buildImage ?? "";
+  editServerRunCommand.value = svc.serverRunCommand ?? "";
+  editDockerfilePath.value = svc.dockerfilePath ?? "";
+  editContainerPort.value = svc.containerPort;
   editDeployType.value =
-    proj.deployMode === "static"
+    svc.deployMode === "static"
       ? "static"
-      : proj.buildMode === "dockerfile"
+      : svc.buildMode === "dockerfile"
         ? "dockerfile"
         : "server";
 }
 
-async function fetchProject() {
+async function fetchService() {
   loading.value = true;
   error.value = "";
   try {
-    const [proj, domainList] = await Promise.all([
-      trpc.projects.get.query({ id: projectId }),
+    const [svc, domainList] = await Promise.all([
+      trpc.services.get.query({ id: serviceId }),
       trpc.domains.list.query(),
     ]);
-    project.value = proj;
-    applyProjectToEditors(proj);
-    envVarsText.value = proj.envVars ?? "";
+    service.value = svc;
+    applyServiceToEditors(svc);
+    envVarsText.value = svc.envVars ?? "";
     domains.value = domainList.map((d) => ({ id: d.id, hostname: d.hostname }));
     if (!domains.value.some((d) => d.hostname === "127.0.0.1")) {
       domains.value.push({
@@ -844,15 +844,15 @@ async function fetchProject() {
         hostname: "127.0.0.1",
       });
     }
-    if (project.value.githubMode === "webhook") {
+    if (service.value.repo.githubMode === "webhook") {
       await refetchWebhookInfo();
     } else {
       webhookInfo.value = null;
       webhookDomainId.value = null;
     }
 
-    if (project.value.deployments[0]) {
-      selectedDeployId.value = project.value.deployments[0].id;
+    if (service.value.deployments[0]) {
+      selectedDeployId.value = service.value.deployments[0].id;
       await fetchLogs();
     } else {
       selectedDeployId.value = null;
@@ -860,14 +860,14 @@ async function fetchProject() {
     }
   } catch (e: unknown) {
     error.value =
-      (e as { message?: string })?.message ?? "Failed to load project";
+      (e as { message?: string })?.message ?? "Failed to load service";
   } finally {
     loading.value = false;
   }
 }
 
-async function saveProjectSettings() {
-  if (!project.value) return;
+async function saveServiceSettings() {
+  if (!service.value) return;
   settingsSaving.value = true;
   settingsError.value = "";
   settingsSaved.value = false;
@@ -875,8 +875,8 @@ async function saveProjectSettings() {
     const deployMode = editDeployType.value === "static" ? "static" : "server";
     const buildMode =
       editDeployType.value === "dockerfile" ? "dockerfile" : "auto";
-    const updated = await trpc.projects.update.mutate({
-      id: projectId,
+    const updated = await trpc.services.update.mutate({
+      id: serviceId,
       deployMode,
       buildMode,
       buildCommand: editBuildCommand.value.trim(),
@@ -886,11 +886,11 @@ async function saveProjectSettings() {
       dockerfilePath: editDockerfilePath.value.trim(),
       containerPort: Number(editContainerPort.value),
     });
-    project.value = {
-      ...project.value,
+    service.value = {
+      ...service.value,
       ...updated,
     };
-    applyProjectToEditors(project.value);
+    applyServiceToEditors(service.value);
     settingsSaved.value = true;
     setTimeout(() => (settingsSaved.value = false), 2000);
   } catch (e: unknown) {
@@ -902,29 +902,29 @@ async function saveProjectSettings() {
 }
 
 function startTitleEdit() {
-  if (!project.value) return;
-  titleDraft.value = project.value.name;
+  if (!service.value) return;
+  titleDraft.value = service.value.name;
   titleError.value = "";
   titleEditing.value = true;
 }
 
 function cancelTitleEdit() {
-  if (project.value) titleDraft.value = project.value.name;
+  if (service.value) titleDraft.value = service.value.name;
   titleError.value = "";
   titleEditing.value = false;
 }
 
 async function saveTitleEdit() {
-  if (!project.value) return;
+  if (!service.value) return;
   titleSaving.value = true;
   titleError.value = "";
   try {
-    const updated = await trpc.projects.update.mutate({
-      id: projectId,
+    const updated = await trpc.services.update.mutate({
+      id: serviceId,
       name: titleDraft.value.trim(),
     });
-    project.value = {
-      ...project.value,
+    service.value = {
+      ...service.value,
       name: updated.name,
     };
     titleDraft.value = updated.name;
@@ -942,11 +942,11 @@ async function saveEnvVars() {
   envError.value = "";
   envSaved.value = false;
   try {
-    await trpc.projects.update.mutate({
-      id: projectId,
+    await trpc.services.update.mutate({
+      id: serviceId,
       envVars: envVarsText.value,
     });
-    if (project.value) project.value.envVars = envVarsText.value;
+    if (service.value) service.value.envVars = envVarsText.value;
     envSaved.value = true;
     setTimeout(() => (envSaved.value = false), 2000);
   } catch (e: unknown) {
@@ -982,15 +982,15 @@ async function addRoute(input: {
       }
     }
 
-    await trpc.projects.addRoute.mutate({
-      projectId,
+    await trpc.services.addRoute.mutate({
+      serviceId,
       domainId,
       pathPrefix: normalizePathPrefix(input.pathPrefix),
       subdomain: input.subdomain.trim().toLowerCase(),
       httpOnly: input.httpOnly,
     });
     addRouteModalOpen.value = false;
-    await fetchProject();
+    await fetchService();
   } catch (e: unknown) {
     routeError.value =
       (e as { message?: string })?.message ?? "Failed to add route";
@@ -1004,8 +1004,8 @@ async function removeRoute(routeId: string) {
   routeSaving.value = true;
   routeError.value = "";
   try {
-    await trpc.projects.removeRoute.mutate({ routeId });
-    await fetchProject();
+    await trpc.services.removeRoute.mutate({ routeId });
+    await fetchService();
   } catch (e: unknown) {
     routeError.value =
       (e as { message?: string })?.message ?? "Failed to remove route";
@@ -1017,9 +1017,9 @@ async function removeRoute(routeId: string) {
 async function retryRouteTls(routeId: string) {
   tlsRetrying.value = true;
   try {
-    const res = await trpc.projects.retryRouteTls.mutate({ routeId });
+    const res = await trpc.services.retryRouteTls.mutate({ routeId });
     // Update the route's tlsStatus in-place so the UI reacts immediately.
-    const route = project.value?.routes.find((r) => r.id === routeId);
+    const route = service.value?.routes.find((r) => r.id === routeId);
     if (route) route.tlsStatus = res.tlsStatus;
     // If still not active, show the troubleshooting modal.
     if (res.tlsStatus !== "active") {
@@ -1027,7 +1027,7 @@ async function retryRouteTls(routeId: string) {
       tlsModal.value = true;
     }
   } catch (e: unknown) {
-    const route = project.value?.routes.find((r) => r.id === routeId);
+    const route = service.value?.routes.find((r) => r.id === routeId);
     tlsModalHostname.value = route ? routeHostname(route) : "";
     tlsModal.value = true;
   } finally {
@@ -1040,11 +1040,11 @@ async function triggerDeploy() {
   deployError.value = "";
   try {
     const res = await trpc.deploy.trigger.mutate({
-      projectId,
+      serviceId,
       triggeredBy: "manual",
     });
     selectedDeployId.value = res.deploymentId;
-    await fetchProject();
+    await fetchService();
   } catch (e: unknown) {
     deployError.value = (e as { message?: string })?.message ?? "Deploy failed";
   } finally {
@@ -1092,8 +1092,8 @@ function stopLogPolling() {
 async function refetchWebhookInfo() {
   webhookError.value = "";
   try {
-    const info = await trpc.projects.getWebhookInfo.query({
-      id: projectId,
+    const info = await trpc.services.getWebhookInfo.query({
+      id: serviceId,
       ...(webhookDomainId.value ? { domainId: webhookDomainId.value } : {}),
     });
     webhookInfo.value = info;
@@ -1104,50 +1104,50 @@ async function refetchWebhookInfo() {
   }
 }
 
-async function deleteProject() {
+async function deleteService() {
   if (
     !confirm(
-      `Delete project "${project.value?.name}"? This will stop the container and remove all files.`,
+      `Delete service "${service.value?.name}"? This will stop the container and remove all files.`,
     )
   )
     return;
   deleting.value = true;
   try {
-    await trpc.projects.delete.mutate({ id: projectId });
+    await trpc.services.delete.mutate({ id: serviceId });
     router.push("/");
   } catch (e: unknown) {
-    alert((e as { message?: string })?.message ?? "Failed to delete project");
+    alert((e as { message?: string })?.message ?? "Failed to delete service");
     deleting.value = false;
   }
 }
 
-async function deactivateProject() {
+async function deactivateService() {
   if (
     !confirm(
-      `Deactivate "${project.value?.name}"? The container will be stopped and routes will no longer serve traffic.`,
+      `Deactivate "${service.value?.name}"? The container will be stopped and routes will no longer serve traffic.`,
     )
   )
     return;
   toggling.value = true;
   try {
-    await trpc.projects.deactivate.mutate({ id: projectId });
-    await fetchProject();
+    await trpc.services.deactivate.mutate({ id: serviceId });
+    await fetchService();
   } catch (e: unknown) {
     alert(
-      (e as { message?: string })?.message ?? "Failed to deactivate project",
+      (e as { message?: string })?.message ?? "Failed to deactivate service",
     );
   } finally {
     toggling.value = false;
   }
 }
 
-async function activateProject() {
+async function activateService() {
   toggling.value = true;
   try {
-    await trpc.projects.activate.mutate({ id: projectId });
-    await fetchProject();
+    await trpc.services.activate.mutate({ id: serviceId });
+    await fetchService();
   } catch (e: unknown) {
-    alert((e as { message?: string })?.message ?? "Failed to activate project");
+    alert((e as { message?: string })?.message ?? "Failed to activate service");
   } finally {
     toggling.value = false;
   }
@@ -1156,7 +1156,7 @@ async function activateProject() {
 async function rotateSecret() {
   if (!confirm("Rotate webhook secret? You will need to update GitHub."))
     return;
-  const res = await trpc.projects.rotateWebhookSecret.mutate({ id: projectId });
+  const res = await trpc.services.rotateWebhookSecret.mutate({ id: serviceId });
   if (webhookInfo.value) webhookInfo.value.webhookSecret = res.webhookSecret;
 }
 
@@ -1196,7 +1196,7 @@ function relativeTime(ts: string | Date) {
 }
 
 onMounted(async () => {
-  await fetchProject();
+  await fetchService();
 });
 watch(
   shouldAutoRefreshLogs,

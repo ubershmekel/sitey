@@ -59,8 +59,9 @@ export const domainsRouter = router({
           routes: {
             orderBy: { createdAt: "desc" },
             include: {
-              project: {
+              service: {
                 include: {
+                  repo: true,
                   deployments: { orderBy: { createdAt: "desc" }, take: 1 },
                 },
               },

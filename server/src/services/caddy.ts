@@ -1,14 +1,14 @@
 /**
  * Caddy Admin API integration.
  *
- * Builds a Caddyfile from DB state (domains + running project containers) and
+ * Builds a Caddyfile from DB state (domains + running service containers) and
  * pushes it to Caddy via POST /load. This decouples cert provisioning from
  * container lifecycle — certs are obtained when a domain is added to the DB,
- * and are NOT dropped when a project container is removed.
+ * and are NOT dropped when a service container is removed.
  *
  * Call reloadCaddy() after:
  *  - Domain created or deleted
- *  - Project container started or stopped
+ *  - Service container started or stopped
  *  - Server startup
  */
 
@@ -182,7 +182,7 @@ export async function getLetsEncryptStatusesFromCaddy(
 }
 
 function appendAdminHandlers(lines: string[]): void {
-  lines.push("    @api path /trpc/* /webhook/* /health/*");
+  lines.push("    @api path /trpc/* /webhook/* /hook/* /health/*");
   lines.push("    handle @api {");
   lines.push(`        reverse_proxy ${SITEY_API_INTERNAL}`);
   lines.push("    }");
@@ -197,11 +197,11 @@ function appendAdminHandlers(lines: string[]): void {
   lines.push("    }");
 }
 
-type ProjectRoute = {
+type CaddyServiceRoute = {
   subdomain: string;
   pathPrefix: string;
   httpOnly: boolean;
-  project: {
+  service: {
     id: number;
     deployMode: string;
     status: string;
@@ -240,7 +240,7 @@ export async function probeRouteTls(route: {
   if (!hostname) return "unchecked";
   const status = await getLetsEncryptStatusFromCaddy(hostname);
   const tlsStatus = status === "active" ? "active" : "error";
-  await db.projectRoute.update({
+  await db.serviceRoute.update({
     where: { id: route.id },
     data: { tlsStatus },
   });
@@ -262,17 +262,17 @@ export function scheduleRouteTlsProbe(route: {
   );
 }
 
-function appendRouteHandler(lines: string[], route: ProjectRoute): void {
-  const project = route.project!;
+function appendRouteHandler(lines: string[], route: CaddyServiceRoute): void {
+  const svc = route.service!;
   const staticReady =
-    project.deployMode === "static" &&
-    (project.status === "running" ||
-      ((project.status === "building" || project.status === "queued") &&
-        project.hasSuccessfulDeployment));
+    svc.deployMode === "static" &&
+    (svc.status === "running" ||
+      ((svc.status === "building" || svc.status === "queued") &&
+        svc.hasSuccessfulDeployment));
   const serverReady =
-    project.deployMode !== "static" &&
-    !!project.containerName &&
-    !!project.containerRunning;
+    svc.deployMode !== "static" &&
+    !!svc.containerName &&
+    !!svc.containerRunning;
 
   if (!staticReady && !serverReady) {
     if (route.pathPrefix) {
@@ -293,11 +293,9 @@ function appendRouteHandler(lines: string[], route: ProjectRoute): void {
     return;
   }
 
-  if (project.deployMode === "static") {
-    const repoBase = `/srv/projects/${project.id}/repo`;
-    const dir = project.outputDir
-      ? `${repoBase}/${project.outputDir}`
-      : repoBase;
+  if (svc.deployMode === "static") {
+    const repoBase = `/srv/services/${svc.id}/repo`;
+    const dir = svc.outputDir ? `${repoBase}/${svc.outputDir}` : repoBase;
     if (route.pathPrefix) {
       // Redirect exact prefix (no trailing slash) so /zen → /zen/
       lines.push(`    handle ${route.pathPrefix} {`);
@@ -314,8 +312,8 @@ function appendRouteHandler(lines: string[], route: ProjectRoute): void {
       lines.push("    file_server");
     }
   } else {
-    const cname = project.containerName!;
-    const port = project.containerPort;
+    const cname = svc.containerName!;
+    const port = svc.containerPort;
     if (route.pathPrefix) {
       // Redirect exact prefix (no trailing slash) so /app → /app/
       lines.push(`    handle ${route.pathPrefix} {`);
@@ -340,7 +338,10 @@ function appendTlsEmailDirective(lines: string[], email: string): void {
   }
 }
 
-function appendSiteBlockBody(lines: string[], routes: ProjectRoute[]): void {
+function appendSiteBlockBody(
+  lines: string[],
+  routes: CaddyServiceRoute[],
+): void {
   if (routes.length > 0) {
     for (const route of routes) appendRouteHandler(lines, route);
     // If every route is path-prefix only, nothing handles unmatched paths.
@@ -375,7 +376,7 @@ function appendSiteBlock(
   lines: string[],
   hostname: string,
   email: string,
-  routes: ProjectRoute[],
+  routes: CaddyServiceRoute[],
   options?: { httpFallback?: boolean; httpOnly?: boolean },
 ): void {
   if (options?.httpOnly) {
@@ -414,12 +415,12 @@ function appendProbeSiteBlock(
   lines.push("");
 }
 
-function toProjectRoutes(
+function toServiceRoutes(
   routes: Array<{
     subdomain: string;
     pathPrefix: string;
     httpOnly: boolean;
-    project: {
+    service: {
       id: number;
       deployMode: string;
       status: string;
@@ -431,21 +432,21 @@ function toProjectRoutes(
     } | null;
   }>,
   runningContainers: Set<string>,
-): ProjectRoute[] {
-  const result: ProjectRoute[] = [];
+): CaddyServiceRoute[] {
+  const result: CaddyServiceRoute[] = [];
   for (const route of routes) {
-    if (!route.project) continue;
-    if (!route.project.active) continue;
-    const p = route.project;
+    if (!route.service) continue;
+    if (!route.service.active) continue;
+    const s = route.service;
     result.push({
       subdomain: route.subdomain,
       pathPrefix: route.pathPrefix,
       httpOnly: route.httpOnly,
-      project: {
-        ...p,
-        hasSuccessfulDeployment: p.deployments.length > 0,
-        containerRunning: p.containerName
-          ? runningContainers.has(p.containerName)
+      service: {
+        ...s,
+        hasSuccessfulDeployment: s.deployments.length > 0,
+        containerRunning: s.containerName
+          ? runningContainers.has(s.containerName)
           : false,
       },
     });
@@ -478,7 +479,7 @@ export async function buildCaddyfile(): Promise<string> {
         routes: {
           orderBy: { createdAt: "asc" },
           include: {
-            project: {
+            service: {
               include: {
                 deployments: {
                   where: { status: "success" },
@@ -520,12 +521,12 @@ export async function buildCaddyfile(): Promise<string> {
 
   // Collect path-prefix routes on wildcard domains that resolve to the mgmt hostname.
   // These are embedded in the management block so the sitey app still handles everything else.
-  const mgmtRoutes: ProjectRoute[] = [];
+  const mgmtRoutes: CaddyServiceRoute[] = [];
   if (siteyNamedDomain) {
     for (const domain of domains) {
       if (!domain.hostname.startsWith("*.")) continue;
-      const projectRoutes = toProjectRoutes(domain.routes, runningContainers);
-      for (const route of projectRoutes) {
+      const serviceRoutes = toServiceRoutes(domain.routes, runningContainers);
+      for (const route of serviceRoutes) {
         const rh = resolveRouteHostname(domain.hostname, route.subdomain);
         if (rh === siteyNamedDomain && route.pathPrefix) mgmtRoutes.push(route);
       }
@@ -553,24 +554,24 @@ export async function buildCaddyfile(): Promise<string> {
   // For wildcard domains, we emit concrete host blocks per route subdomain
   // (for example: app.example.com) instead of a raw '*.example.com' block.
   for (const domain of domains) {
-    const projectRoutes = toProjectRoutes(domain.routes, runningContainers);
+    const serviceRoutes = toServiceRoutes(domain.routes, runningContainers);
 
     const httpFallback = domain.status !== "active";
 
     if (!domain.hostname.startsWith("*.")) {
-      const hostHttpOnly = projectRoutes.some((route) => route.httpOnly);
+      const hostHttpOnly = serviceRoutes.some((route) => route.httpOnly);
       appendSiteBlock(
         lines,
         domain.hostname,
         domain.letsEncryptEmail,
-        projectRoutes,
+        serviceRoutes,
         { httpFallback, httpOnly: hostHttpOnly },
       );
       continue;
     }
 
-    const routesByHostname = new Map<string, ProjectRoute[]>();
-    for (const route of projectRoutes) {
+    const routesByHostname = new Map<string, CaddyServiceRoute[]>();
+    for (const route of serviceRoutes) {
       const routeHostname = resolveRouteHostname(
         domain.hostname,
         route.subdomain,

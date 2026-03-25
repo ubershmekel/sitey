@@ -1,6 +1,6 @@
 <template>
   <div v-if="modelValue" class="modal-backdrop" @click.self="close">
-    <form class="modal" @submit.prevent="addProject">
+    <form class="modal" @submit.prevent="addService">
       <h2>{{ title }}</h2>
 
       <div v-if="addError" class="alert error">{{ addError }}</div>
@@ -46,7 +46,7 @@
       </label>
 
       <label>
-        Project name <span class="hint">(lowercase, hyphens only)</span>
+        Service name <span class="hint">(lowercase, hyphens only)</span>
         <input
           v-model="form.name"
           type="text"
@@ -206,7 +206,7 @@
       <div class="modal-actions">
         <button type="button" class="btn-ghost" @click="close">Cancel</button>
         <button type="submit" class="btn-primary" :disabled="adding">
-          {{ adding ? "Creating..." : "Create project" }}
+          {{ adding ? "Creating..." : "Create service" }}
         </button>
       </div>
     </form>
@@ -230,7 +230,7 @@ const props = withDefaults(
     fixedDomainId?: number | null;
   }>(),
   {
-    title: "New project",
+    title: "New service",
     domains: () => [],
     fixedDomainId: null,
   },
@@ -238,7 +238,7 @@ const props = withDefaults(
 
 const emit = defineEmits<{
   (e: "update:modelValue", value: boolean): void;
-  (e: "created", projectId: number): void;
+  (e: "created", serviceId: number): void;
 }>();
 
 const adding = ref(false);
@@ -250,7 +250,7 @@ const repoLoadError = ref("");
 const reposConfigured = ref(false);
 const repoInstallations = ref<number>(0);
 const repoInstallUrl = ref("");
-const inferredProjectName = ref("");
+const inferredServiceName = ref("");
 const deployType = ref<"static" | "server" | "dockerfile">("server");
 
 const form = ref(emptyForm());
@@ -298,7 +298,7 @@ function parseGithubUrl() {
 
   form.value.repoOwner = match[1];
   form.value.repoName = match[2];
-  inferProjectName(match[2]);
+  inferServiceName(match[2]);
 
   const selected = repoByFullName.value.get(
     `${match[1]}/${match[2]}`.toLowerCase(),
@@ -312,7 +312,7 @@ function parseGithubUrl() {
   fetchBranches();
 }
 
-function inferProjectName(repoName: string) {
+function inferServiceName(repoName: string) {
   const inferred = repoName
     .trim()
     .toLowerCase()
@@ -323,11 +323,11 @@ function inferProjectName(repoName: string) {
   if (!inferred) return;
   if (
     !form.value.name.trim() ||
-    form.value.name === inferredProjectName.value
+    form.value.name === inferredServiceName.value
   ) {
     form.value.name = inferred;
   }
-  inferredProjectName.value = inferred;
+  inferredServiceName.value = inferred;
 }
 
 async function fetchBranches() {
@@ -367,7 +367,7 @@ async function loadRepoSuggestions() {
   }
 }
 
-async function addProject() {
+async function addService() {
   addError.value = "";
   adding.value = true;
   parseGithubUrl();
@@ -375,7 +375,7 @@ async function addProject() {
   try {
     const isStatic = deployType.value === "static";
     const isDockerfile = deployType.value === "dockerfile";
-    const created = await trpc.projects.create.mutate({
+    const created = await trpc.services.create.mutate({
       name: form.value.name.trim(),
       repoOwner: form.value.repoOwner.trim(),
       repoName: form.value.repoName.trim(),
@@ -395,8 +395,8 @@ async function addProject() {
     const routeDomainId = props.fixedDomainId ?? form.value.domainId;
     if (routeDomainId) {
       const selectedDomain = domainById.value.get(routeDomainId);
-      await trpc.projects.addRoute.mutate({
-        projectId: created.id,
+      await trpc.services.addRoute.mutate({
+        serviceId: created.id,
         domainId: routeDomainId,
         httpOnly: selectedDomain?.hostname === "localhost",
       });
@@ -406,7 +406,7 @@ async function addProject() {
     emit("update:modelValue", false);
   } catch (e: unknown) {
     addError.value =
-      (e as { message?: string })?.message ?? "Failed to create project";
+      (e as { message?: string })?.message ?? "Failed to create service";
   } finally {
     adding.value = false;
   }
@@ -418,7 +418,7 @@ watch(
     if (!visible) {
       form.value = emptyForm();
       branches.value = [];
-      inferredProjectName.value = "";
+      inferredServiceName.value = "";
       addError.value = "";
       deployType.value = "server";
       return;

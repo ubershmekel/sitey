@@ -12,7 +12,7 @@ services:
     volumes:
       - ./caddy/Caddyfile.dev:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
-      - ${DATA_ROOT:-./data}/projects:/srv/projects:ro
+      - ${DATA_ROOT:-./data}/services:/srv/services:ro
     ports:
       - "80:80"
       - "443:443"

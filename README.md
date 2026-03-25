@@ -3,7 +3,7 @@
 The easiest way to auto-deploy from GitHub to your server. Designed for vibe
 coders, coders, and kids who can't read good.
 
-You'll get a dashboard with a list of your projects, domains, deployments, and
+You'll get a dashboard with a list of your services, domains, deployments, and
 an easy way to control everything.
 
 ## How to self-host
@@ -46,20 +46,20 @@ docker really) from GitHub to your own VM with automatic HTTPS.
 
 ---
 
-## Adding a domain + project
+## Adding a domain + service
 
 1. Open Sitey in your browser and log in.
 2. Click **+ Add domain** → enter your app's hostname (e.g. `myapp.com`). If
-   you've set up a wildcard DNS record (`*.myapp.com → your IP`), new projects
+   you've set up a wildcard DNS record (`*.myapp.com → your IP`), new services
    will automatically get a random subdomain (e.g. `happy-fox-3k2.myapp.com`) —
    see [Enabling HTTPS](docs/ops.md#enabling-https).
-3. On the domain page, click **+ Add project**:
+3. On the domain page, click **+ Add service**:
    - Enter repo owner/name (e.g. `acme/my-node-app`) and branch.
    - Choose **Build mode**: `auto` generates a Dockerfile for Node.js apps;
      `dockerfile` uses your repo's `Dockerfile`.
    - Set **Container port** (default 3000).
    - Choose **GitHub integration mode** (see below).
-4. Click **Create project**.
+4. Click **Create service**.
 5. Click **▶ Deploy** to trigger your first deployment.
 
 Caddy will automatically obtain a Let's Encrypt certificate and route traffic

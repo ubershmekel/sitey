@@ -79,7 +79,7 @@ for (const { desc, current, previous, expected } of keepTagsCases) {
 }
 
 // ── Retention scenarios ───────────────────────────────────────────────────────
-// Simulates the full keep/drop decision for a project with deploy history
+// Simulates the full keep/drop decision for a service with deploy history
 // v1 → v2 → v3 (current). The DB query applies take:n before calling
 // buildKeepTags, so only the first n items of the history are passed in.
 

@@ -4,10 +4,10 @@
  *
  * Key operations:
  *  - createNetworkIfMissing     — ensure sitey-public network exists
- *  - buildImage                 — docker build for a project
+ *  - buildImage                 — docker build for a service
  *  - runOrReplaceContainer      — start container, kill old one
  *  - stopContainer              — stop + remove a running container
- *  - pruneProjectImages         — remove old images for a project
+ *  - pruneServiceImages         — remove old images for a service
  *
  * Routing / TLS is managed separately via the Caddy Admin API (caddy.ts).
  * Containers no longer carry caddy-docker-proxy labels.
@@ -15,7 +15,7 @@
 
 import path from "node:path";
 import Docker from "dockerode";
-import type { Project } from "../generated/prisma/client.ts";
+import type { Service } from "../generated/prisma/client.ts";
 import { db } from "../lib/db.ts";
 
 export const docker = new Docker({ socketPath: "/var/run/docker.sock" });
@@ -41,13 +41,13 @@ export async function createNetworkIfMissing(): Promise<void> {
 // ── Image build ───────────────────────────────────────────────────────────────
 
 export async function buildImage(opts: {
-  projectId: number;
+  serviceId: number;
   contextPath: string;
   tag: string;
   dockerfile: string;
   onLog: (line: string) => void;
 }): Promise<void> {
-  const { projectId, contextPath, tag, dockerfile, onLog } = opts;
+  const { serviceId, contextPath, tag, dockerfile, onLog } = opts;
 
   onLog(
     `[docker] Building image ${tag} from ${contextPath} (dockerfile: ${dockerfile})`,
@@ -55,7 +55,7 @@ export async function buildImage(opts: {
 
   const stream = await docker.buildImage(
     { context: contextPath, src: ["."] },
-    { t: tag, dockerfile, labels: { "sitey.project": String(projectId) } },
+    { t: tag, dockerfile, labels: { "sitey.service": String(serviceId) } },
   );
 
   await new Promise<void>((resolve, reject) => {
@@ -72,11 +72,11 @@ export async function buildImage(opts: {
 }
 
 // ── Host port allocation ──────────────────────────────────────────────────────
-// Used for projects with no domain — assigns a stable host port so the app is
+// Used for services with no domain — assigns a stable host port so the app is
 // reachable at http://<server-ip>:<hostPort>.
 
 export async function allocateHostPort(): Promise<number> {
-  const highest = await db.project.findFirst({
+  const highest = await db.service.findFirst({
     where: { hostPort: { not: null } },
     orderBy: { hostPort: "desc" },
     select: { hostPort: true },
@@ -87,20 +87,20 @@ export async function allocateHostPort(): Promise<number> {
 // ── Run / replace container ───────────────────────────────────────────────────
 
 export async function runOrReplaceContainer(opts: {
-  project: Project;
+  service: Service;
   imageTag: string;
   containerName: string;
   envVars: Record<string, string>;
   hostPort: number | null;
   onLog: (line: string) => void;
 }): Promise<string> {
-  const { project, imageTag, containerName, envVars, hostPort, onLog } = opts;
+  const { service, imageTag, containerName, envVars, hostPort, onLog } = opts;
 
   await stopAndRemoveContainer(containerName, onLog);
 
   const labels: Record<string, string> = {
     "sitey.managed": "true",
-    "sitey.project": String(project.id),
+    "sitey.service": String(service.id),
   };
   const env = Object.entries(envVars).map(([k, v]) => `${k}=${v}`);
 
@@ -108,7 +108,7 @@ export async function runOrReplaceContainer(opts: {
 
   const portBindings = hostPort
     ? {
-        [`${project.containerPort}/tcp`]: [
+        [`${service.containerPort}/tcp`]: [
           { HostIp: "0.0.0.0", HostPort: String(hostPort) },
         ],
       }
@@ -119,12 +119,12 @@ export async function runOrReplaceContainer(opts: {
     name: containerName,
     Env: env,
     Labels: labels,
-    ExposedPorts: { [`${project.containerPort}/tcp`]: {} },
+    ExposedPorts: { [`${service.containerPort}/tcp`]: {} },
     HostConfig: {
       NetworkMode: SITEY_NETWORK,
       RestartPolicy: { Name: "unless-stopped" },
       PortBindings: portBindings,
-      Binds: [`sitey-data-${project.id}:/data`],
+      Binds: [`sitey-data-${service.id}:/data`],
     },
   });
 
@@ -162,13 +162,13 @@ export async function stopAndRemoveContainer(
 
 // ── Prune old images ──────────────────────────────────────────────────────────
 
-export async function pruneProjectImages(
-  projectId: number,
+export async function pruneServiceImages(
+  serviceId: number,
   keepTags: string[],
   onLog: (line: string) => void,
 ): Promise<void> {
   const images = await docker.listImages({
-    filters: { label: [`sitey.project=${projectId}`] },
+    filters: { label: [`sitey.service=${serviceId}`] },
   });
   for (const img of images) {
     const tags = img.RepoTags ?? [];
@@ -204,11 +204,15 @@ export function decodeDockerLogPayload(logs: unknown): string {
   return (chunks.length ? Buffer.concat(chunks) : logs).toString("utf8");
 }
 
-export async function getProjectContainerLogs(
-  projectId: number,
+export async function getServiceContainerLogs(
+  serviceId: number,
   tail = 200,
 ): Promise<{ lines: string[]; container: string | null }> {
-  const containerNames = [`sitey-project-${projectId}`, `sitey-${projectId}`];
+  const containerNames = [
+    `sitey-service-${serviceId}`,
+    `sitey-project-${serviceId}`,
+    `sitey-${serviceId}`,
+  ];
   try {
     const containers = await docker.listContainers({
       all: true,
@@ -289,9 +293,9 @@ async function resolveHostDataRoot(): Promise<string> {
   return cachedHostDataRoot;
 }
 
-export async function hostProjectRepoPath(projectId: number): Promise<string> {
+export async function hostServiceRepoPath(serviceId: number): Promise<string> {
   const root = await resolveHostDataRoot();
-  return path.posix.join(root, "projects", String(projectId), "repo");
+  return path.posix.join(root, "services", String(serviceId), "repo");
 }
 
 /**
@@ -329,17 +333,17 @@ async function ensureImage(
  * The repo is bind-mounted at /app so build output lands on the host.
  */
 export async function runBuildContainer(opts: {
-  projectId: number;
+  serviceId: number;
   buildImage: string;
   buildCommand: string;
   envVars: Record<string, string>;
   onLog: (line: string) => void;
 }): Promise<void> {
-  const { projectId, buildImage: image, buildCommand, envVars, onLog } = opts;
+  const { serviceId, buildImage: image, buildCommand, envVars, onLog } = opts;
 
   await ensureImage(image, onLog);
 
-  const hostRepo = await hostProjectRepoPath(projectId);
+  const hostRepo = await hostServiceRepoPath(serviceId);
   onLog(`[docker] Running build in ${image}: ${buildCommand}`);
 
   const container = await docker.createContainer({

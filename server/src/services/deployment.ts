@@ -6,17 +6,17 @@
 import fs from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
-import type { Deployment, Project } from "../generated/prisma/client.ts";
+import type { Deployment, Service, Repo } from "../generated/prisma/client.ts";
 import { db } from "../lib/db.ts";
 import { deployQueue } from "../lib/queue.ts";
 import {
   cloneOrPull,
   isTrackedFile,
-  projectRootPath,
-  projectRepoPath,
-  projectDockerfilePath,
+  serviceRootPath,
+  serviceRepoPath,
+  serviceDockerfilePath,
   deploymentLogPath,
-  projectLogsDir,
+  serviceLogsDir,
 } from "./git.ts";
 import {
   docker,
@@ -26,7 +26,7 @@ import {
   createNetworkIfMissing,
   generateDefaultDockerfile,
   generateServerDockerfile,
-  pruneProjectImages,
+  pruneServiceImages,
   allocateHostPort,
   runBuildContainer,
 } from "./docker.ts";
@@ -38,20 +38,20 @@ type RouteWithDomain = {
   domain: { hostname: string } | null;
   pathPrefix: string;
 };
-type ProjectWithRoutes = Project & { routes: RouteWithDomain[] };
+type ServiceWithRoutes = Service & { repo: Repo; routes: RouteWithDomain[] };
 type OnLog = (line: string) => void;
 type DockerBuildSource = {
   contextPath: string;
   dockerfilePath: string;
 };
 
-function containerName(project: Project): string {
-  return `sitey-project-${project.id}`;
+function containerName(service: Service): string {
+  return `sitey-service-${service.id}`;
 }
 
-function imageTag(project: Project, sha: string): string {
+function imageTag(service: Service, sha: string): string {
   const short = sha.slice(0, 12);
-  return `sitey/${project.id}:${short}`;
+  return `sitey/${service.id}:${short}`;
 }
 
 /** Parse the rollback count from a raw SystemConfig value. Exported for testing. */
@@ -75,7 +75,7 @@ export function buildKeepTags(
 }
 
 async function getKeepTags(
-  project: Project,
+  service: Service,
   currentTag: string,
 ): Promise<string[]> {
   const cfg = await db.systemConfig.findUnique({
@@ -86,7 +86,7 @@ async function getKeepTags(
 
   const previous = await db.deployment.findMany({
     where: {
-      projectId: project.id,
+      serviceId: service.id,
       status: "success",
       commitSha: { not: null },
     },
@@ -97,30 +97,30 @@ async function getKeepTags(
 
   return buildKeepTags(
     currentTag,
-    previous.map((d) => imageTag(project, d.commitSha!)),
+    previous.map((d) => imageTag(service, d.commitSha!)),
     n,
   );
 }
 
-function buildManagedDockerfile(project: Project, onLog: OnLog): string {
-  if (project.serverRunCommand) {
+function buildManagedDockerfile(service: Service, onLog: OnLog): string {
+  if (service.serverRunCommand) {
     onLog(
       "[deploy] Auto mode: generating Sitey Dockerfile with custom run command",
     );
     return generateServerDockerfile(
-      project.buildCommand,
-      project.serverRunCommand,
-      project.containerPort,
+      service.buildCommand,
+      service.serverRunCommand,
+      service.containerPort,
       "repo",
     );
   }
 
   onLog("[deploy] Auto mode: generating default Sitey Node.js Dockerfile");
-  return generateDefaultDockerfile(project.containerPort, "repo");
+  return generateDefaultDockerfile(service.containerPort, "repo");
 }
 
 function ensureManagedDockerfile(
-  project: Project,
+  service: Service,
   managedDockerfilePath: string,
   onLog: OnLog,
 ): void {
@@ -134,25 +134,25 @@ function ensureManagedDockerfile(
   fs.mkdirSync(path.dirname(managedDockerfilePath), { recursive: true });
   fs.writeFileSync(
     managedDockerfilePath,
-    buildManagedDockerfile(project, onLog),
+    buildManagedDockerfile(service, onLog),
   );
   onLog(`[deploy] Wrote managed Dockerfile: ${managedDockerfilePath}`);
 }
 
 async function resolveDockerBuildSource(
-  project: Project,
+  service: Service,
   onLog: OnLog,
 ): Promise<DockerBuildSource> {
-  const projectRoot = projectRootPath(project.id);
-  const repoPath = projectRepoPath(project.id);
-  const managedDockerfilePath = projectDockerfilePath(project.id);
-  const dockerfileRelPath = project.dockerfilePath || "Dockerfile";
+  const svcRoot = serviceRootPath(service.id);
+  const repoPath = serviceRepoPath(service.id);
+  const managedDockerfilePath = serviceDockerfilePath(service.id);
+  const dockerfileRelPath = service.dockerfilePath || "Dockerfile";
   const repoDockerfilePath = path.join(repoPath, dockerfileRelPath);
   const repoDockerfileTracked =
     fs.existsSync(repoDockerfilePath) &&
     (await isTrackedFile(repoPath, dockerfileRelPath));
 
-  if (project.buildMode === "dockerfile") {
+  if (service.buildMode === "dockerfile") {
     if (repoDockerfileTracked) {
       onLog(`[deploy] Using tracked Dockerfile: ${dockerfileRelPath}`);
       return { contextPath: repoPath, dockerfilePath: repoDockerfilePath };
@@ -167,8 +167,8 @@ async function resolveDockerBuildSource(
     return { contextPath: repoPath, dockerfilePath: repoDockerfilePath };
   }
 
-  ensureManagedDockerfile(project, managedDockerfilePath, onLog);
-  return { contextPath: projectRoot, dockerfilePath: managedDockerfilePath };
+  ensureManagedDockerfile(service, managedDockerfilePath, onLog);
+  return { contextPath: svcRoot, dockerfilePath: managedDockerfilePath };
 }
 
 // ── .env parser ──────────────────────────────────────────────────────────────
@@ -199,21 +199,21 @@ function parseEnvString(raw: string): Record<string, string> {
 // ── Public API ────────────────────────────────────────────────────────────────
 
 export function enqueueDeployment(
-  project: Project,
+  service: Service,
   deployment: Deployment,
 ): void {
   const jobId = nanoid();
 
   deployQueue.enqueue({
     id: jobId,
-    projectId: project.id,
+    serviceId: service.id,
     deploymentId: deployment.id,
     run: async () => {
-      const fullProject = await db.project.findUniqueOrThrow({
-        where: { id: project.id },
-        include: { routes: { include: { domain: true } } },
+      const fullService = await db.service.findUniqueOrThrow({
+        where: { id: service.id },
+        include: { repo: true, routes: { include: { domain: true } } },
       });
-      await runDeployment(fullProject as ProjectWithRoutes, deployment);
+      await runDeployment(fullService as ServiceWithRoutes, deployment);
     },
   });
 }
@@ -221,12 +221,12 @@ export function enqueueDeployment(
 // ── Core deployment flow ──────────────────────────────────────────────────────
 
 async function runDeployment(
-  project: ProjectWithRoutes,
+  service: ServiceWithRoutes,
   deployment: Deployment,
 ): Promise<void> {
-  const logDir = projectLogsDir(project.id);
+  const logDir = serviceLogsDir(service.id);
   fs.mkdirSync(logDir, { recursive: true });
-  const logPath = deploymentLogPath(project.id, deployment.id);
+  const logPath = deploymentLogPath(service.id, deployment.id);
   const logStream = fs.createWriteStream(logPath, { flags: "a" });
 
   function onLog(line: string) {
@@ -243,8 +243,8 @@ async function runDeployment(
       where: { id: deployment.id },
       data: { status: "failed", finishedAt: new Date(), logPath },
     });
-    await db.project.update({
-      where: { id: project.id },
+    await db.service.update({
+      where: { id: service.id },
       data: { status: "failed", containerId: null, containerName: null },
     });
     try {
@@ -263,8 +263,8 @@ async function runDeployment(
       where: { id: deployment.id },
       data: { status: "building", startedAt: new Date(), logPath },
     });
-    await db.project.update({
-      where: { id: project.id },
+    await db.service.update({
+      where: { id: service.id },
       data: { status: "building" },
     });
 
@@ -272,18 +272,16 @@ async function runDeployment(
     await createNetworkIfMissing();
 
     // 2. Git clone / pull
+    const repo = service.repo;
     onLog(
-      `[deploy] Starting deployment for project ${project.name} (${project.id})`,
+      `[deploy] Starting deployment for service ${service.name} (${service.id})`,
     );
 
-    // For GitHub App projects, mint a short-lived installation token so
+    // For GitHub App repos, mint a short-lived installation token so
     // we can clone/pull private repos.
     let gitToken: string | null = null;
-    if (project.githubMode === "app") {
-      gitToken = await getInstallationToken(
-        project.repoOwner,
-        project.repoName,
-      );
+    if (repo.githubMode === "app") {
+      gitToken = await getInstallationToken(repo.repoOwner, repo.repoName);
       if (gitToken) {
         onLog("[deploy] Acquired GitHub App installation token for clone");
       } else {
@@ -294,10 +292,10 @@ async function runDeployment(
     }
 
     const { sha, message } = await cloneOrPull({
-      repoOwner: project.repoOwner,
-      repoName: project.repoName,
-      branch: project.branch,
-      projectId: project.id,
+      repoOwner: repo.repoOwner,
+      repoName: repo.repoName,
+      branch: service.branch,
+      serviceId: service.id,
       token: gitToken,
       onLog,
     });
@@ -307,18 +305,18 @@ async function runDeployment(
       data: { commitSha: sha, commitMessage: message },
     });
 
-    if (project.deployMode === "static") {
+    if (service.deployMode === "static") {
       // 3. Run build command
-      const repoPath = projectRepoPath(project.id);
-      const buildCmd = project.buildCommand.trim() || 'echo "No build step"';
+      const repoPath = serviceRepoPath(service.id);
+      const buildCmd = service.buildCommand.trim() || 'echo "No build step"';
       onLog(`[deploy] Running build: ${buildCmd}`);
-      const buildEnv = parseEnvString(project.envVars || "");
+      const buildEnv = parseEnvString(service.envVars || "");
 
-      if (project.buildImage) {
+      if (service.buildImage) {
         // Run build inside a Docker container (e.g. oven/bun:1)
         await runBuildContainer({
-          projectId: project.id,
-          buildImage: project.buildImage,
+          serviceId: service.id,
+          buildImage: service.buildImage,
           buildCommand: buildCmd,
           envVars: buildEnv,
           onLog,
@@ -353,46 +351,46 @@ async function runDeployment(
 
       // 5. Mark success
       onLog(
-        `[deploy] Static deployment successful! Serving from ${repoPath}/${project.outputDir}`,
+        `[deploy] Static deployment successful! Serving from ${repoPath}/${service.outputDir}`,
       );
       logStream.end();
       await db.deployment.update({
         where: { id: deployment.id },
         data: { status: "success", finishedAt: new Date() },
       });
-      await db.project.update({
-        where: { id: project.id },
+      await db.service.update({
+        where: { id: service.id },
         data: { status: "running", containerId: null, containerName: null },
       });
       return;
     }
 
     // 3. Resolve Dockerfile strategy
-    const dockerBuild = await resolveDockerBuildSource(project, onLog);
+    const dockerBuild = await resolveDockerBuildSource(service, onLog);
     const dockerfile = path
       .relative(dockerBuild.contextPath, dockerBuild.dockerfilePath)
       .split(path.sep)
       .join("/");
 
     // 4. Build image
-    const tag = imageTag(project, sha);
+    const tag = imageTag(service, sha);
     await buildImage({
-      projectId: project.id,
+      serviceId: service.id,
       contextPath: dockerBuild.contextPath,
       tag,
       dockerfile,
       onLog,
     });
 
-    // 5. Resolve host port fallback (used when the project has no routable routes)
-    const hasRoutableRoutes = project.routes.some(
+    // 5. Resolve host port fallback (used when the service has no routable routes)
+    const hasRoutableRoutes = service.routes.some(
       (r: RouteWithDomain) => r.domain || r.pathPrefix,
     );
-    let hostPort = project.hostPort;
+    let hostPort = service.hostPort;
     if (!hasRoutableRoutes && hostPort === null) {
       hostPort = await allocateHostPort();
-      await db.project.update({
-        where: { id: project.id },
+      await db.service.update({
+        where: { id: service.id },
         data: { hostPort },
       });
       onLog(
@@ -401,17 +399,20 @@ async function runDeployment(
     }
 
     // 6. Run container
-    const envVars = parseEnvString(project.envVars || "");
-    envVars["PORT"] = String(project.containerPort);
+    const envVars = parseEnvString(service.envVars || "");
+    envVars["PORT"] = String(service.containerPort);
     envVars["DATA_DIR"] = "/data";
 
-    const cName = containerName(project);
-    const legacyContainerName = `sitey-${project.id}`;
-    if (legacyContainerName !== cName) {
-      await stopAndRemoveContainer(legacyContainerName, onLog);
+    const cName = containerName(service);
+    // Clean up legacy container names from before the rename
+    const legacyNames = [`sitey-project-${service.id}`, `sitey-${service.id}`];
+    for (const legacy of legacyNames) {
+      if (legacy !== cName) {
+        await stopAndRemoveContainer(legacy, onLog);
+      }
     }
     const containerId = await runOrReplaceContainer({
-      project,
+      service,
       imageTag: tag,
       containerName: cName,
       envVars,
@@ -428,9 +429,9 @@ async function runDeployment(
       );
     }
 
-    // 7. Prune old images for this project
-    const keepTags = await getKeepTags(project, tag);
-    await pruneProjectImages(project.id, keepTags, onLog);
+    // 7. Prune old images for this service
+    const keepTags = await getKeepTags(service, tag);
+    await pruneServiceImages(service.id, keepTags, onLog);
 
     // 8. Push updated Caddy config (new container is now reachable)
     try {
@@ -453,8 +454,8 @@ async function runDeployment(
       where: { id: deployment.id },
       data: { status: "success", finishedAt: new Date() },
     });
-    await db.project.update({
-      where: { id: project.id },
+    await db.service.update({
+      where: { id: service.id },
       data: { status: "running", containerId, containerName: cName },
     });
   } catch (err) {

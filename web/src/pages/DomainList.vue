@@ -30,8 +30,8 @@
               {{ d.letsEncryptStatus ?? d.status }}
             </span>
           </div>
-          <span class="projects-count"
-            >{{ d._count.routes }} project{{
+          <span class="services-count"
+            >{{ d._count.routes }} service{{
               d._count.routes !== 1 ? "s" : ""
             }}</span
           >
@@ -136,7 +136,7 @@ h1 {
   font-size: var(--font-tiny);
 }
 
-.projects-count {
+.services-count {
   font-size: var(--font-tiny);
 }
 

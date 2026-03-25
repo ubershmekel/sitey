@@ -41,7 +41,7 @@ Both should return your server IP.
 
 ## 5. Continue in Sitey
 
-Add your domain in Sitey and deploy a project.
+Add your domain in Sitey and deploy a service.
 
 ## Official provider docs
 

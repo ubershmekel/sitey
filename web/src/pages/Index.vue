@@ -43,7 +43,7 @@
                   (detected: <code>{{ serverIp }}</code> but it might be
                   wrong)</template
                 >. Sitey will automatically issue HTTPS certificates for all
-                your projects.
+                your services.
               </p>
               <div class="inline-action">
                 <template v-if="!hasDomain">
@@ -132,27 +132,27 @@
             </div>
           </div>
 
-          <!-- Step 4: Project -->
-          <div class="step" :class="{ done: hasProject }">
-            <div class="step-check">{{ hasProject ? "✓" : "4" }}</div>
+          <!-- Step 4: Service -->
+          <div class="step" :class="{ done: hasService }">
+            <div class="step-check">{{ hasService ? "✓" : "4" }}</div>
             <div class="step-body">
-              <h3 class="step-heading">Add your first project</h3>
+              <h3 class="step-heading">Add your first service</h3>
               <div class="step-desc">
                 Connect a GitHub repository to a domain and launch your first
                 live deployment.
               </div>
               <div class="inline-action">
-                <template v-if="!hasProject">
+                <template v-if="!hasService">
                   <button
                     class="step-inline-btn"
-                    @click="showAddProject = true"
+                    @click="showAddService = true"
                   >
-                    Add project now ->
+                    Add service now ->
                   </button>
                 </template>
                 <template v-else>
-                  <RouterLink to="/projects" class="step-link"
-                    >View projects -></RouterLink
+                  <RouterLink to="/services" class="step-link"
+                    >View services -></RouterLink
                   >
                 </template>
               </div>
@@ -163,11 +163,11 @@
     </template>
 
     <AddDomainModal v-model="showAddDomain" @created="fetchAll" />
-    <AddProjectModal
-      v-model="showAddProject"
-      title="New project"
+    <AddServiceModal
+      v-model="showAddService"
+      title="New service"
       :domains="domains"
-      @created="onProjectCreated"
+      @created="onServiceCreated"
     />
   </Layout>
 </template>
@@ -176,7 +176,7 @@
 import { ref, computed, onMounted } from "vue";
 import { RouterLink, useRouter } from "vue-router";
 import Layout from "../components/Layout.vue";
-import AddProjectModal from "../components/AddProjectModal.vue";
+import AddServiceModal from "../components/AddServiceModal.vue";
 import AddDomainModal from "../components/AddDomainModal.vue";
 import { trpc } from "../trpc";
 
@@ -188,7 +188,7 @@ const error = ref("");
 const hasDomain = ref(false);
 const hasGitHubAppConfig = ref(false);
 const hasGitHubInstall = ref(false);
-const hasProject = ref(false);
+const hasService = ref(false);
 const expanded = ref(false);
 const siteyUrl = ref("");
 const domains = ref<Pick<Domain, "id" | "hostname">[]>([]);
@@ -196,23 +196,23 @@ const domains = ref<Pick<Domain, "id" | "hostname">[]>([]);
 const serverIp = ref("");
 const isHttp = window.location.protocol === "http:";
 const showAddDomain = ref(false);
-const showAddProject = ref(false);
+const showAddService = ref(false);
 
 const isHttps = window.location.protocol === "https:";
 const hasGitHubReady = computed(
   () => hasGitHubAppConfig.value && hasGitHubInstall.value,
 );
 const allDone = computed(
-  () => hasDomain.value && isHttps && hasGitHubReady.value && hasProject.value,
+  () => hasDomain.value && isHttps && hasGitHubReady.value && hasService.value,
 );
 
 async function fetchAll() {
   loading.value = true;
   error.value = "";
   try {
-    const [projectList, domainList, appConfig, repoInfo, siteUrlInfo, ipInfo] =
+    const [serviceList, domainList, appConfig, repoInfo, siteUrlInfo, ipInfo] =
       await Promise.all([
-        trpc.projects.list.query(),
+        trpc.services.list.query(),
         trpc.domains.list.query(),
         trpc.github.getAppConfig.query(),
         trpc.github.listAppRepos.query().catch(() => null),
@@ -226,7 +226,7 @@ async function fetchAll() {
       repoInfo.configured &&
       repoInfo.installations.length > 0
     );
-    hasProject.value = projectList.filter((p) => !p.protected).length > 0;
+    hasService.value = serviceList.filter((s) => !s.protected).length > 0;
     domains.value = domainList.map((d) => ({ id: d.id, hostname: d.hostname }));
     siteyUrl.value = siteUrlInfo?.effectiveUrl ?? "";
     serverIp.value = ipInfo?.ip ?? "";
@@ -237,8 +237,8 @@ async function fetchAll() {
   }
 }
 
-async function onProjectCreated(projectId: number) {
-  await router.push(`/projects/${projectId}`);
+async function onServiceCreated(serviceId: number) {
+  await router.push(`/services/${serviceId}`);
 }
 
 onMounted(fetchAll);

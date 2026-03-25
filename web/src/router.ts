@@ -41,12 +41,12 @@ const routes = [
     component: () => import("./pages/GithubAppCallback.vue"),
   },
   { path: "/", component: () => import("./pages/Index.vue") },
-  { path: "/projects", component: () => import("./pages/ProjectList.vue") },
+  { path: "/services", component: () => import("./pages/ServiceList.vue") },
   { path: "/domains", component: () => import("./pages/DomainList.vue") },
   { path: "/domains/:id", component: () => import("./pages/DomainDetail.vue") },
   {
-    path: "/projects/:id",
-    component: () => import("./pages/ProjectDetail.vue"),
+    path: "/services/:id",
+    component: () => import("./pages/ServiceDetail.vue"),
   },
   {
     path: "/integrations",

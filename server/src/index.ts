@@ -61,7 +61,11 @@ async function main() {
 
   // Capture raw body for webhook routes (replaces @fastify/rawbody)
   app.addHook("preParsing", async (request, _reply, payload) => {
-    if (!request.url.startsWith("/webhook/")) return payload;
+    if (
+      !request.url.startsWith("/webhook/") &&
+      !request.url.startsWith("/hook/")
+    )
+      return payload;
     const chunks: Buffer[] = [];
     for await (const chunk of payload) {
       chunks.push(
@@ -98,7 +102,7 @@ async function main() {
   // ── Health ─────────────────────────────────────────────────────────────────
   app.get("/health", async () => ({ ok: true, version: "0.1.0" }));
 
-  // ── GitHub App Webhook (no project ID — matched by repo + installation) ────
+  // ── GitHub App Webhook (no service ID — matched by repo owner/name) ────
   app.post("/webhook/github", async (req, reply) => {
     const signature = (req.headers["x-hub-signature-256"] ?? "") as string;
     const event = (req.headers["x-github-event"] ?? "") as string;
@@ -143,44 +147,47 @@ async function main() {
       return reply.send({ ok: true, skipped: true, reason: "no repo info" });
     }
 
-    // Find all app-mode projects matching this repo.
-    // Security comes from the webhook signature above; installationId is not used as a filter
-    // because it changes on reinstall and would silently break deploys.
-    const allAppProjects = await db.project.findMany({
-      where: { githubMode: "app" },
+    // Find all app-mode services whose repo matches the push event.
+    const services = await db.service.findMany({
+      where: {
+        active: true,
+        repo: {
+          githubMode: "app",
+        },
+      },
+      include: { repo: true },
     });
-    const projects = allAppProjects.filter(
-      (p) =>
-        p.repoOwner.toLowerCase() === repoOwner.toLowerCase() &&
-        p.repoName.toLowerCase() === repoName.toLowerCase(),
+    const matched = services.filter(
+      (s) =>
+        s.repo.repoOwner.toLowerCase() === repoOwner.toLowerCase() &&
+        s.repo.repoName.toLowerCase() === repoName.toLowerCase(),
     );
     req.log.info(
-      { repoOwner, repoName, pushedRef, matchedProjectCount: projects.length },
-      "GitHub App webhook: matched projects",
+      { repoOwner, repoName, pushedRef, matchedServiceCount: matched.length },
+      "GitHub App webhook: matched services",
     );
 
     const commitSha = payload.head_commit?.id ?? undefined;
     const commitMessage = payload.head_commit?.message ?? undefined;
     const deploymentIds: string[] = [];
 
-    for (const project of projects) {
-      if (!project.active) continue;
-      const expectedRef = `refs/heads/${project.branch}`;
+    for (const service of matched) {
+      const expectedRef = `refs/heads/${service.branch}`;
       if (pushedRef !== expectedRef) continue;
 
       const deployment = await db.deployment.create({
         data: {
-          projectId: project.id,
+          serviceId: service.id,
           status: "queued",
           commitSha,
           commitMessage,
-          triggeredBy: "webhook",
+          triggeredBy: "hook",
         },
       });
-      enqueueDeployment(project, deployment);
+      enqueueDeployment(service, deployment);
       deploymentIds.push(deployment.id);
       req.log.info(
-        { projectId: project.id, deploymentId: deployment.id },
+        { serviceId: service.id, deploymentId: deployment.id },
         "GitHub App webhook deployment queued",
       );
     }
@@ -188,36 +195,33 @@ async function main() {
     return reply.send({ ok: true, deploymentIds });
   });
 
-  // ── GitHub Per-project Webhook ──────────────────────────────────────────────
-  app.post<{ Params: { projectId: string } }>(
-    "/webhook/github/:projectId",
+  // ── Hook endpoint (opaque publicId — replaces per-service webhook) ──────
+  app.post<{ Params: { publicId: string } }>(
+    "/hook/:publicId",
     async (req, reply) => {
-      const projectId = Number(req.params.projectId);
+      const { publicId } = req.params;
       const signature = (req.headers["x-hub-signature-256"] ?? "") as string;
       const event = (req.headers["x-github-event"] ?? "") as string;
       const rawBodyStr = (req as unknown as { rawBody: string }).rawBody ?? "";
 
-      // Load project
-      const project = await db.project.findUnique({ where: { id: projectId } });
-      if (!project) {
-        return reply.code(404).send({ error: "Project not found" });
-      }
-      if (!project.active) {
-        return reply.send({
-          ok: true,
-          skipped: true,
-          reason: "project inactive",
-        });
+      // Look up the hook endpoint
+      const endpoint = await db.hookEndpoint.findUnique({
+        where: { publicId },
+        include: {
+          repo: { include: { services: true } },
+        },
+      });
+      if (!endpoint) {
+        return reply.code(404).send({ error: "Hook not found" });
       }
 
       // Verify signature
-      const secret = project.webhookSecret;
-      if (secret) {
+      if (endpoint.secret) {
         if (
           !signature ||
-          !verifyWebhookSignature(rawBodyStr, secret, signature)
+          !verifyWebhookSignature(rawBodyStr, endpoint.secret, signature)
         ) {
-          req.log.warn({ projectId }, "Webhook signature verification failed");
+          req.log.warn({ publicId }, "Hook signature verification failed");
           return reply.code(401).send({ error: "Invalid signature" });
         }
       }
@@ -242,38 +246,35 @@ async function main() {
         return reply.code(400).send({ error: "Invalid JSON payload" });
       }
 
-      // Check branch
-      const pushedRef = payload.ref ?? "";
-      const expectedRef = `refs/heads/${project.branch}`;
-      if (pushedRef !== expectedRef) {
-        return reply.send({
-          ok: true,
-          skipped: true,
-          reason: `ref=${pushedRef} not tracked`,
-        });
-      }
-
-      // Create deployment record and enqueue
       const commitSha = payload.head_commit?.id ?? undefined;
       const commitMessage = payload.head_commit?.message ?? undefined;
+      const pushedRef = payload.ref ?? "";
+      const deploymentIds: string[] = [];
 
-      const deployment = await db.deployment.create({
-        data: {
-          projectId,
-          status: "queued",
-          commitSha,
-          commitMessage,
-          triggeredBy: "webhook",
-        },
-      });
+      const repoServices = endpoint.repo?.services ?? [];
+      for (const service of repoServices) {
+        if (!service.active) continue;
+        const expectedRef = `refs/heads/${service.branch}`;
+        if (pushedRef !== expectedRef) continue;
 
-      enqueueDeployment(project, deployment);
-      req.log.info(
-        { projectId, deploymentId: deployment.id },
-        "Webhook deployment queued",
-      );
+        const deployment = await db.deployment.create({
+          data: {
+            serviceId: service.id,
+            status: "queued",
+            commitSha,
+            commitMessage,
+            triggeredBy: "hook",
+          },
+        });
+        enqueueDeployment(service, deployment);
+        deploymentIds.push(deployment.id);
+        req.log.info(
+          { serviceId: service.id, deploymentId: deployment.id, publicId },
+          "Hook deployment queued",
+        );
+      }
 
-      return reply.send({ ok: true, deploymentId: deployment.id });
+      return reply.send({ ok: true, deploymentIds });
     },
   );
 

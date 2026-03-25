@@ -64,7 +64,7 @@ test("initial Caddy config push contains HTTP handler and API proxy", async ({
 }
 
 :80 {
-    @api path /trpc/* /webhook/* /health/*
+    @api path /trpc/* /webhook/* /hook/* /health/*
     handle @api {
         reverse_proxy sitey-api:3001
     }
@@ -132,7 +132,7 @@ test("adding a domain through onboarding updates Caddyfile", async ({
 }
 
 :80 {
-    @api path /trpc/* /webhook/* /health/*
+    @api path /trpc/* /webhook/* /hook/* /health/*
     handle @api {
         reverse_proxy sitey-api:3001
     }
@@ -144,7 +144,7 @@ test("adding a domain through onboarding updates Caddyfile", async ({
 }
 
 sitey.example.com {
-    @api path /trpc/* /webhook/* /health/*
+    @api path /trpc/* /webhook/* /hook/* /health/*
     handle @api {
         reverse_proxy sitey-api:3001
     }

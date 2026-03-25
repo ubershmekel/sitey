@@ -521,47 +521,4 @@ export const githubRouter = router({
       lastError: lastError || null,
     };
   }),
-
-  /** Returns webhook info for manual GitHub webhook setup */
-  getWebhookInfo: settledProcedure
-    .input(
-      z.object({
-        projectId: z.number().int(),
-        domainId: z.number().int().optional(),
-      }),
-    )
-    .query(async ({ input }) => {
-      const project = await db.project.findUniqueOrThrow({
-        where: { id: input.projectId },
-        select: { webhookSecret: true },
-      });
-      const domains = await db.domain.findMany({
-        select: { id: true, hostname: true },
-        orderBy: { createdAt: "asc" },
-      });
-      const webhookDomains = domains.filter(
-        (d: { id: number; hostname: string }) => !isWildcardDomain(d.hostname),
-      );
-      const chosen = input.domainId
-        ? webhookDomains.find(
-            (d: { id: number; hostname: string }) => d.id === input.domainId,
-          )
-        : null;
-      const fallbackHostname =
-        webhookDomains.length === 1 ? webhookDomains[0].hostname : undefined;
-      const baseUrl = chosen?.hostname
-        ? await resolveBaseUrl(chosen.hostname)
-        : await resolveBaseUrl().catch((err) => {
-            if (fallbackHostname) return resolveBaseUrl(fallbackHostname);
-            throw err;
-          });
-      return {
-        webhookUrl: `${baseUrl.url}/webhook/github/${input.projectId}`,
-        webhookSecret: project.webhookSecret,
-        contentType: "application/json",
-        events: ["push"],
-        domains: webhookDomains,
-        effectiveSiteUrlSource: baseUrl.source,
-      };
-    }),
 });

@@ -4,27 +4,27 @@ import fs from "node:fs";
 
 const DATA_ROOT = process.env.DATA_ROOT ?? "/opt/sitey";
 
-export function projectRootPath(projectId: number): string {
-  return path.join(DATA_ROOT, "projects", String(projectId));
+export function serviceRootPath(serviceId: number): string {
+  return path.join(DATA_ROOT, "services", String(serviceId));
 }
 
-export function projectRepoPath(projectId: number): string {
-  return path.join(projectRootPath(projectId), "repo");
+export function serviceRepoPath(serviceId: number): string {
+  return path.join(serviceRootPath(serviceId), "repo");
 }
 
-export function projectLogsDir(projectId: number): string {
-  return path.join(projectRootPath(projectId), "logs");
+export function serviceLogsDir(serviceId: number): string {
+  return path.join(serviceRootPath(serviceId), "logs");
 }
 
-export function projectDockerfilePath(projectId: number): string {
-  return path.join(projectRootPath(projectId), "Dockerfile");
+export function serviceDockerfilePath(serviceId: number): string {
+  return path.join(serviceRootPath(serviceId), "Dockerfile");
 }
 
 export function deploymentLogPath(
-  projectId: number,
+  serviceId: number,
   deploymentId: string,
 ): string {
-  return path.join(projectLogsDir(projectId), `${deploymentId}.log`);
+  return path.join(serviceLogsDir(serviceId), `${deploymentId}.log`);
 }
 
 export async function isTrackedFile(
@@ -41,7 +41,7 @@ export async function isTrackedFile(
 }
 
 /**
- * Clone or pull the latest commits for a project.
+ * Clone or pull the latest commits for a service.
  * Returns the HEAD commit SHA after the operation.
  *
  * When `token` is provided (GitHub App installation token), the clone/fetch
@@ -52,16 +52,16 @@ export async function cloneOrPull(opts: {
   repoOwner: string;
   repoName: string;
   branch: string;
-  projectId: number;
+  serviceId: number;
   token?: string | null;
   onLog: (line: string) => void;
 }): Promise<{ sha: string; message: string }> {
-  const { repoOwner, repoName, branch, projectId, token, onLog } = opts;
+  const { repoOwner, repoName, branch, serviceId, token, onLog } = opts;
   const publicUrl = `https://github.com/${repoOwner}/${repoName}.git`;
   const repoUrl = token
     ? `https://x-access-token:${token}@github.com/${repoOwner}/${repoName}.git`
     : publicUrl;
-  const repoPath = projectRepoPath(projectId);
+  const repoPath = serviceRepoPath(serviceId);
 
   fs.mkdirSync(path.dirname(repoPath), { recursive: true });
 

@@ -36,7 +36,7 @@ docs/guides/
    [Namecheap](./dns/namecheap.md),
    [Amazon Route 53](./dns/route53.md), or
    [GoDaddy](./dns/godaddy.md)
-5. In Sitey, add your domain and create your first project.
+5. In Sitey, add your domain and create your first service.
 
 ## If you need deeper operations docs
 

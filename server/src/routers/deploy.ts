@@ -10,30 +10,30 @@ export const deployRouter = router({
   trigger: settledProcedure
     .input(
       z.object({
-        projectId: z.number().int(),
+        serviceId: z.number().int(),
         commitSha: z.string().optional(),
         commitMessage: z.string().optional(),
-        triggeredBy: z.enum(["manual", "webhook"]).default("manual"),
+        triggeredBy: z.enum(["manual", "hook"]).default("manual"),
       }),
     )
     .mutation(async ({ input }) => {
-      const project = await db.project.findUnique({
-        where: { id: input.projectId },
+      const service = await db.service.findUnique({
+        where: { id: input.serviceId },
       });
-      if (!project)
+      if (!service)
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Project not found",
+          message: "Service not found",
         });
-      if (!project.active)
+      if (!service.active)
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "Cannot deploy an inactive project. Activate it first.",
+          message: "Cannot deploy an inactive service. Activate it first.",
         });
 
       const deployment = await db.deployment.create({
         data: {
-          projectId: input.projectId,
+          serviceId: input.serviceId,
           status: "queued",
           commitSha: input.commitSha ?? null,
           commitMessage: input.commitMessage ?? null,
@@ -41,7 +41,7 @@ export const deployRouter = router({
         },
       });
 
-      enqueueDeployment(project, deployment);
+      enqueueDeployment(service, deployment);
 
       return { deploymentId: deployment.id, status: "queued" };
     }),
@@ -49,13 +49,13 @@ export const deployRouter = router({
   list: settledProcedure
     .input(
       z.object({
-        projectId: z.number().int(),
+        serviceId: z.number().int(),
         limit: z.number().int().min(1).max(100).default(20),
       }),
     )
     .query(({ input }) =>
       db.deployment.findMany({
-        where: { projectId: input.projectId },
+        where: { serviceId: input.serviceId },
         orderBy: { createdAt: "desc" },
         take: input.limit,
       }),
@@ -103,9 +103,9 @@ export const deployRouter = router({
     }),
 
   queueStatus: settledProcedure
-    .input(z.object({ projectId: z.number().int() }))
+    .input(z.object({ serviceId: z.number().int() }))
     .query(({ input }) => ({
-      isRunning: deployQueue.isRunning(input.projectId),
-      queued: deployQueue.queuedFor(input.projectId),
+      isRunning: deployQueue.isRunning(input.serviceId),
+      queued: deployQueue.queuedFor(input.serviceId),
     })),
 });

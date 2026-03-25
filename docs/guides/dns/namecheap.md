@@ -25,7 +25,7 @@ Also add:
 - Value: `<your-server-ip>`
 - TTL: `Automatic`
 
-The wildcard record lets new Sitey projects use subdomains without creating new
+The wildcard record lets new Sitey services use subdomains without creating new
 DNS records each time.
 
 ## 4. Remove conflicting records if needed
@@ -44,7 +44,7 @@ Both should return your server IP.
 
 ## 6. Continue in Sitey
 
-Add your domain in Sitey and deploy a project.
+Add your domain in Sitey and deploy a service.
 
 ## Official provider docs
 

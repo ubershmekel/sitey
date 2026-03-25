@@ -26,7 +26,7 @@ Add another record:
 - TTL: default or `600`
 
 If wildcard is blocked in your current DNS setup, add explicit subdomain A
-records for each project until wildcard is available.
+records for each service until wildcard is available.
 
 ## 4. Remove conflicting records if needed
 
@@ -44,7 +44,7 @@ Both should return your server IP.
 
 ## 6. Continue in Sitey
 
-Add your domain in Sitey and deploy a project.
+Add your domain in Sitey and deploy a service.
 
 ## Official provider docs
 

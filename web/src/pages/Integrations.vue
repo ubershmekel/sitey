@@ -72,7 +72,7 @@
                 found.
               </p>
               <p class="section-hint" v-else>
-                Required before project autocomplete can see repositories.
+                Required for repo autodeploy and autocomplete.
               </p>
             </div>
           </div>
@@ -98,7 +98,7 @@
 
             <div v-if="installations.length === 0" class="pending-box">
               App is created but not installed on any account or organization
-              yet. Project autocomplete will not see repositories until this is
+              yet. Repo autodeploy and autocomplete will not work until this is
               done.
             </div>
 

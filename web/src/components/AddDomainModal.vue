@@ -16,9 +16,9 @@
         <template v-if="serverIp">
           is the detected IP address but it might be wrong.</template
         >
-        After this step, every new project automatically gets a random subdomain
+        After this step, every new service automatically gets a random subdomain
         like <code>happy-fox-3k2.yourdomain.com</code> — just like Netlify or
-        Vercel — with no extra DNS steps per project.
+        Vercel — with no extra DNS steps per service.
       </div>
 
       <label>

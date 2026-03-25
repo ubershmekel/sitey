@@ -1,9 +1,8 @@
 /**
  * First-run bootstrap:
  *  1. Run pending Prisma migrations.
- *  2. Ensure a JWT secret exists in SystemConfig (generate one if not).
- *  3. Call initJwtSecret() so the crypto module is ready before the server starts.
- *  4. Print the server's local IP addresses so the user knows where to connect.
+ *  2. Ensure a built-in "sitey" repo + service + root route exist.
+ *  3. Print the server's local IP addresses so the user knows where to connect.
  */
 
 import { execSync } from "node:child_process";
@@ -14,28 +13,40 @@ import { db } from "../lib/db.ts";
 export async function bootstrap() {
   await db.$connect();
 
-  // ── Sitey built-in project + root route ────────────────────────────────────
-  // The sitey UI is itself a protected project with the catch-all root route
+  // ── Sitey built-in repo + service + root route ──────────────────────────────
+  // The sitey UI is itself a protected service with the catch-all root route
   // (no domain, no path prefix). This ensures it always appears in the UI and
   // that its root route cannot be accidentally deleted.
-  let siteyProject = await db.project.findFirst({ where: { protected: true } });
-  if (!siteyProject) {
-    siteyProject = await db.project.create({
+  let siteyService = await db.service.findFirst({ where: { protected: true } });
+  if (!siteyService) {
+    // Create a repo for the built-in sitey service
+    const siteyRepo = await db.repo.create({
       data: {
         name: "sitey",
+        repoOwner: "",
+        repoName: "",
+        githubMode: "app",
+      },
+    });
+    siteyService = await db.service.create({
+      data: {
+        name: "sitey",
+        repoId: siteyRepo.id,
         protected: true,
         status: "running",
         deployMode: "server",
       },
     });
-    await db.projectRoute.create({
+    await db.serviceRoute.create({
       data: {
-        projectId: siteyProject.id,
+        serviceId: siteyService.id,
         protected: true,
         // domainId=null, subdomain="", pathPrefix="" → the root catch-all
       },
     });
-    console.log("[bootstrap] Created built-in sitey project and root route.");
+    console.log(
+      "[bootstrap] Created built-in sitey repo, service, and root route.",
+    );
   }
 
   // ── Server IP ────────────────────────────────────────────────────────────

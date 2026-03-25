@@ -18,8 +18,8 @@
         >
           {{ editSaving ? "Saving…" : "Save changes" }}
         </button>
-        <button class="btn-primary" @click="showAddProject = true">
-          + Add project
+        <button class="btn-primary" @click="showAddService = true">
+          + Add service
         </button>
       </div>
 
@@ -96,31 +96,31 @@
         </div>
       </div>
 
-      <h2 class="section-title">Projects</h2>
+      <h2 class="section-title">Services</h2>
 
-      <div v-if="domainProjects.length === 0" class="empty-state">
-        <p>No projects yet. Add one to deploy an app to this domain.</p>
-        <button class="btn-primary mt-1" @click="showAddProject = true">
-          Add project
+      <div v-if="domainServices.length === 0" class="empty-state">
+        <p>No services yet. Add one to deploy an app to this domain.</p>
+        <button class="btn-primary mt-1" @click="showAddService = true">
+          Add service
         </button>
       </div>
-      <div v-else class="project-list">
+      <div v-else class="service-list">
         <RouterLink
-          v-for="p in domainProjects"
-          :key="p.id"
-          :to="`/projects/${p.id}`"
-          class="project-card"
+          v-for="s in domainServices"
+          :key="s.id"
+          :to="`/services/${s.id}`"
+          class="service-card"
         >
-          <div class="project-left">
-            <div class="project-name">{{ p.name }}</div>
-            <div class="project-repo">
-              {{ p.repoOwner }}/{{ p.repoName }}:{{ p.branch }}
+          <div class="service-left">
+            <div class="service-name">{{ s.name }}</div>
+            <div class="service-repo">
+              {{ s.repo.repoOwner }}/{{ s.repo.repoName }}:{{ s.branch }}
             </div>
           </div>
-          <div class="project-right">
-            <span :class="`status status-${p.status}`">{{ p.status }}</span>
-            <span v-if="p.deployments[0]" class="last-deploy">
-              {{ relativeTime(p.deployments[0].createdAt) }}
+          <div class="service-right">
+            <span :class="`status status-${s.status}`">{{ s.status }}</span>
+            <span v-if="s.deployments[0]" class="last-deploy">
+              {{ relativeTime(s.deployments[0].createdAt) }}
             </span>
           </div>
         </RouterLink>
@@ -141,11 +141,11 @@
       </div>
     </template>
 
-    <AddProjectModal
-      v-model="showAddProject"
-      title="Add project"
+    <AddServiceModal
+      v-model="showAddService"
+      title="Add service"
       :fixed-domain-id="domainId"
-      @created="handleProjectCreated"
+      @created="handleServiceCreated"
     />
   </Layout>
 </template>
@@ -153,7 +153,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from "vue";
 import { useRoute, useRouter, RouterLink } from "vue-router";
-import AddProjectModal from "../components/AddProjectModal.vue";
+import AddServiceModal from "../components/AddServiceModal.vue";
 import Layout from "../components/Layout.vue";
 import { trpc } from "../trpc";
 
@@ -167,7 +167,7 @@ const domain = ref<Domain | null>(null);
 const loading = ref(true);
 const error = ref("");
 
-const showAddProject = ref(false);
+const showAddService = ref(false);
 
 const editSiteySubdomains = ref(false);
 const editSaving = ref(false);
@@ -276,10 +276,10 @@ async function deleteDomain() {
   }
 }
 
-const domainProjects = computed(() =>
+const domainServices = computed(() =>
   (domain.value?.routes ?? [])
-    .map((r) => r.project)
-    .filter((p) => !p.protected),
+    .map((r) => r.service)
+    .filter((s) => !s.protected),
 );
 
 async function fetchDomain() {
@@ -303,7 +303,7 @@ async function fetchDomain() {
   }
 }
 
-async function handleProjectCreated() {
+async function handleServiceCreated() {
   await fetchDomain();
 }
 
@@ -383,14 +383,14 @@ h1 {
   margin-bottom: 1rem;
 }
 
-.project-list {
+.service-list {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
   margin-bottom: 2rem;
 }
 
-.project-card {
+.service-card {
   background: var(--bg-card);
   border: 1px solid var(--border-default);
   border-radius: 10px;
@@ -403,21 +403,21 @@ h1 {
   transition: border-color 0.15s;
 }
 
-.project-card:hover {
+.service-card:hover {
   border-color: var(--brand);
 }
 
-.project-name {
+.service-name {
   font-weight: 600;
   margin-bottom: 0.2rem;
 }
 
-.project-repo {
+.service-repo {
   font-size: var(--font-tiny);
   font-family: monospace;
 }
 
-.project-right {
+.service-right {
   display: flex;
   align-items: center;
   gap: 1rem;

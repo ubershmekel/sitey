@@ -41,65 +41,88 @@ model Domain {
   siteySubdomainsEnabled Boolean        @default(true)
   createdAt              DateTime       @default(now())
   updatedAt              DateTime       @updatedAt
-  routes                 ProjectRoute[]
+  routes                 ServiceRoute[]
 }
 
-model Project {
-  id            Int            @id @default(autoincrement())
-  name          String
+// ── Repo / Service split ──────────────────────────────────────────────────────
+// Repo = source identity + integration config.
+// Service = deployable unit + runtime/build settings.
 
-  // GitHub source
-  repoOwner     String         @default("")
-  repoName      String         @default("")
-  branch        String         @default("main")
+model Repo {
+  id         Int      @id @default(autoincrement())
+  name       String   @default("")
+  repoOwner  String   @default("")
+  repoName   String   @default("")
+  githubMode String   @default("webhook") // webhook | app
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  services      Service[]
+  hookEndpoints HookEndpoint[]
+}
+
+model Service {
+  id     Int    @id @default(autoincrement())
+  name   String
+
+  repoId Int
+  repo   Repo @relation(fields: [repoId], references: [id], onDelete: Cascade)
+
+  // Default branch for deployments
+  branch String @default("main")
 
   // Deploy mode
-  deployMode    String         @default("server") // server | static
-  buildCommand  String         @default("")       // static: e.g. "npm run build"
-  outputDir     String         @default("")        // static: output directory (empty = repo root)
-  buildImage    String         @default("")       // static: Docker image for build (e.g. oven/bun:1)
+  deployMode    String @default("server") // server | static
+  buildCommand  String @default("")       // e.g. "npm run build"
+  outputDir     String @default("")       // static: output directory (empty = repo root)
+  buildImage    String @default("")       // static: Docker image for build (e.g. oven/bun:1)
 
   // Build / run
-  buildMode        String         @default("auto") // auto | dockerfile
-  dockerfilePath   String         @default("") // path to Dockerfile relative to repo root (empty = "Dockerfile")
-  serverRunCommand String         @default("") // custom CMD for auto-generated server Dockerfile
-  containerPort    Int            @default(3000)
-  hostPort      Int?           // auto-allocated fallback port when the project has no routes
+  buildMode        String @default("auto") // auto | dockerfile
+  dockerfilePath   String @default("") // path to Dockerfile relative to repo root
+  serverRunCommand String @default("") // custom CMD for auto-generated server Dockerfile
+  containerPort    Int    @default(3000)
+  hostPort      Int?           // auto-allocated fallback port when the service has no routes
   envVars       String         @default("") // .env format
 
-  // GitHub integration
-  githubMode    String         @default("webhook") // webhook | app
-  webhookSecret String?
-
   // Runtime state
-  status        String         @default("idle") // idle | building | running | failed | stopped
+  status        String  @default("idle") // idle | building | running | failed | stopped
   containerId   String?
   containerName String?
 
-  // System-managed projects (e.g. the sitey UI itself) cannot be deleted
-  protected     Boolean        @default(false)
+  // System-managed services (e.g. the sitey UI itself) cannot be deleted
+  protected     Boolean @default(false)
 
   // When deactivated, container is stopped and Caddy routes are removed (data is kept)
-  active        Boolean        @default(true)
+  active        Boolean @default(true)
 
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  routes        ProjectRoute[]
-  deployments   Deployment[]
+  routes      ServiceRoute[]
+  deployments Deployment[]
 }
 
-// A route is a (domain, subdomain, pathPrefix) tuple that points traffic to a project.
-// Either field can be absent:
-//   domain=null, pathPrefix=""                         -> catches everything (root), reserved for Sitey
-//   domain=set,  pathPrefix=""                         -> example.com/
-//   domain="*.example.com", subdomain="app", pathPrefix="" -> app.example.com/
-//   domain=null, pathPrefix="/blog"                    -> <server-ip>/blog/
-//   domain=set, pathPrefix="/blog"                     -> example.com/blog/
-model ProjectRoute {
+// Decoupled webhook endpoint with opaque public ID.
+// URL: POST /hook/:publicId
+model HookEndpoint {
+  id         String  @id @default(cuid())
+  publicId   String  @unique           // opaque random ID for URL
+  secret     String                    // for signature verification
+  sourceType String                    // github_webhook | github_app | generic
+  repoId     Int?
+  repo       Repo?   @relation(fields: [repoId], references: [id], onDelete: Cascade)
+  enabled    Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// A route is a (domain, subdomain, pathPrefix) tuple that points traffic to a service.
+model ServiceRoute {
   id          String   @id @default(cuid())
-  projectId   Int
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  serviceId   Int
+  service     Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   domainId    Int?
   domain      Domain?  @relation(fields: [domainId], references: [id], onDelete: Cascade)
@@ -111,7 +134,6 @@ model ProjectRoute {
   protected   Boolean  @default(false)
 
   // TLS certificate status for this specific route hostname.
-  // "unchecked" until a probe confirms the cert is live.
   tlsStatus   String   @default("unchecked") // unchecked | active | error
 
   // Serve this hostname over plain HTTP only (no HTTPS block).
@@ -123,15 +145,15 @@ model ProjectRoute {
 }
 
 model Deployment {
-  id            String    @id @default(cuid())
-  projectId     Int
-  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  id          String    @id @default(cuid())
+  serviceId   Int
+  service     Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
   status        String    @default("queued") // queued | building | running | success | failed
   commitSha     String?
   commitMessage String?
   logPath       String?
-  triggeredBy   String    @default("manual") // manual | webhook
+  triggeredBy   String    @default("manual") // manual | hook
 
   startedAt     DateTime?
   finishedAt    DateTime?

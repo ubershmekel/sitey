@@ -75,15 +75,15 @@ test("setup sitey instance", async ({ page }, testInfo) => {
   });
 
   // Verify navigation works.
-  await mgmtPage.getByRole("link", { name: "Projects" }).click();
+  await mgmtPage.getByRole("link", { name: "Services" }).click();
   await expect(
-    mgmtPage.getByRole("heading", { name: "Projects" }),
+    mgmtPage.getByRole("heading", { name: "Services" }),
   ).toBeVisible();
   await expect(
-    mgmtPage.getByRole("button", { name: "Add project" }),
+    mgmtPage.getByRole("button", { name: "Add service" }),
   ).toBeVisible();
   await mgmtPage.screenshot({
-    path: testInfo.outputPath("https-projects.png"),
+    path: testInfo.outputPath("https-services.png"),
     fullPage: true,
   });
 });

@@ -1,7 +1,7 @@
 import fs from "node:fs";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
-import { customAlphabet } from "nanoid";
+import { customAlphabet, nanoid } from "nanoid";
 import { router, settledProcedure } from "../trpc.ts";
 import { db } from "../lib/db.ts";
 import { generateWebhookSecret } from "../services/crypto.ts";
@@ -15,9 +15,9 @@ import {
 import { enqueueDeployment } from "../services/deployment.ts";
 import {
   stopAndRemoveContainer,
-  pruneProjectImages,
+  pruneServiceImages,
 } from "../services/docker.ts";
-import { projectRootPath } from "../services/git.ts";
+import { serviceRootPath } from "../services/git.ts";
 import {
   normalizeSiteUrl,
   resolvePublicSiteUrl,
@@ -64,7 +64,7 @@ function slugifySubdomainSeed(input: string): string {
     .replace(/[^a-z0-9-]+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-+|-+$/g, "");
-  return cleaned || "project";
+  return cleaned || "service";
 }
 
 function buildSubdomainCandidate(seed: string): string {
@@ -73,18 +73,18 @@ function buildSubdomainCandidate(seed: string): string {
   const trimmedSeed = seed
     .slice(0, Math.max(1, maxSeedLength))
     .replace(/-+$/g, "");
-  const finalSeed = trimmedSeed || "project";
+  const finalSeed = trimmedSeed || "service";
   return `${finalSeed}-${suffix}`;
 }
 
 async function generateUniqueSubdomain(
   domainId: number,
-  projectName: string,
+  serviceName: string,
 ): Promise<string> {
-  const seed = slugifySubdomainSeed(projectName);
+  const seed = slugifySubdomainSeed(serviceName);
   for (let i = 0; i < 20; i += 1) {
     const candidate = buildSubdomainCandidate(seed);
-    const existing = await db.projectRoute.findFirst({
+    const existing = await db.serviceRoute.findFirst({
       where: { domainId, subdomain: candidate },
       select: { id: true },
     });
@@ -96,11 +96,44 @@ async function generateUniqueSubdomain(
   });
 }
 
-export const projectsRouter = router({
+/**
+ * Find or create a Repo record for the given GitHub owner/name.
+ */
+async function findOrCreateRepo(
+  repoOwner: string,
+  repoName: string,
+  githubMode: string,
+): Promise<{ id: number }> {
+  // SQLite LIKE is case-insensitive by default for ASCII
+  const allRepos = await db.repo.findMany({
+    where: { repoOwner, repoName },
+    select: { id: true },
+  });
+  // Fallback: try case-insensitive match manually
+  if (allRepos.length === 0) {
+    const all = await db.repo.findMany({
+      select: { id: true, repoOwner: true, repoName: true },
+    });
+    const match = all.find(
+      (r) =>
+        r.repoOwner.toLowerCase() === repoOwner.toLowerCase() &&
+        r.repoName.toLowerCase() === repoName.toLowerCase(),
+    );
+    if (match) return { id: match.id };
+  } else {
+    return allRepos[0];
+  }
+  return db.repo.create({
+    data: { name: repoName, repoOwner, repoName, githubMode },
+  });
+}
+
+export const servicesRouter = router({
   list: settledProcedure.query(() =>
-    db.project.findMany({
+    db.service.findMany({
       orderBy: { createdAt: "desc" },
       include: {
+        repo: true,
         routes: { include: { domain: true } },
         deployments: { orderBy: { createdAt: "desc" }, take: 1 },
       },
@@ -110,22 +143,23 @@ export const projectsRouter = router({
   get: settledProcedure
     .input(z.object({ id: z.number().int() }))
     .query(async ({ input }) => {
-      const project = await db.project.findUnique({
+      const service = await db.service.findUnique({
         where: { id: input.id },
         include: {
+          repo: true,
           routes: { include: { domain: true } },
           deployments: { orderBy: { createdAt: "desc" }, take: 5 },
         },
       });
-      if (!project)
+      if (!service)
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Project not found",
+          message: "Service not found",
         });
 
       // Trigger background TLS status refresh for stale domains so the
       // frontend gets an up-to-date status on the next fetch.
-      for (const route of project.routes) {
+      for (const route of service.routes) {
         if (route.domain && isDomainStatusStale(route.domain.statusCheckedAt)) {
           scheduleDomainStatusRefresh(route.domain);
         }
@@ -140,7 +174,7 @@ export const projectsRouter = router({
         }
       }
 
-      return project;
+      return service;
     }),
 
   create: settledProcedure
@@ -167,24 +201,52 @@ export const projectsRouter = router({
       }),
     )
     .mutation(async ({ input }) => {
-      const webhookSecret = generateWebhookSecret();
-      const project = await db.project.create({
+      const { repoOwner, repoName, githubMode, ...serviceData } = input;
+
+      // Find or create the Repo
+      const repo = await findOrCreateRepo(repoOwner, repoName, githubMode);
+
+      // Update repo's githubMode if it changed
+      await db.repo.update({
+        where: { id: repo.id },
+        data: { githubMode },
+      });
+
+      const service = await db.service.create({
         data: {
-          ...input,
-          webhookSecret,
+          ...serviceData,
+          repoId: repo.id,
         },
       });
 
+      // Create a HookEndpoint for webhook-mode repos (if one doesn't already exist)
+      if (githubMode === "webhook") {
+        const existingEndpoint = await db.hookEndpoint.findFirst({
+          where: { repoId: repo.id, sourceType: "github_webhook" },
+        });
+        if (!existingEndpoint) {
+          const secret = generateWebhookSecret();
+          await db.hookEndpoint.create({
+            data: {
+              publicId: nanoid(24),
+              secret,
+              sourceType: "github_webhook",
+              repoId: repo.id,
+            },
+          });
+        }
+      }
+
       const deployment = await db.deployment.create({
         data: {
-          projectId: project.id,
+          serviceId: service.id,
           status: "queued",
           triggeredBy: "manual",
         },
       });
-      enqueueDeployment(project, deployment);
+      enqueueDeployment(service, deployment);
 
-      return project;
+      return service;
     }),
 
   update: settledProcedure
@@ -207,12 +269,11 @@ export const projectsRouter = router({
         dockerfilePath: z.string().optional(),
         containerPort: z.number().int().min(1).max(65535).optional(),
         envVars: z.string().optional(),
-        githubMode: z.enum(["webhook", "app"]).optional(),
       }),
     )
     .mutation(async ({ input }) => {
       const { id, ...rest } = input;
-      return db.project.update({
+      return db.service.update({
         where: { id },
         data: rest,
       });
@@ -221,34 +282,35 @@ export const projectsRouter = router({
   delete: settledProcedure
     .input(z.object({ id: z.number().int() }))
     .mutation(async ({ input }) => {
-      const project = await db.project.findUnique({ where: { id: input.id } });
-      if (!project)
+      const service = await db.service.findUnique({ where: { id: input.id } });
+      if (!service)
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Project not found",
+          message: "Service not found",
         });
-      if (project.protected)
+      if (service.protected)
         throw new TRPCError({
           code: "FORBIDDEN",
-          message: "This project cannot be deleted",
+          message: "This service cannot be deleted",
         });
 
       // Stop & remove Docker container (best-effort)
       const noop = () => {};
-      await stopAndRemoveContainer(`sitey-project-${project.id}`, noop);
-      await stopAndRemoveContainer(`sitey-${project.id}`, noop);
-      await pruneProjectImages(project.id, [], noop).catch(noop);
+      await stopAndRemoveContainer(`sitey-service-${service.id}`, noop);
+      await stopAndRemoveContainer(`sitey-project-${service.id}`, noop);
+      await stopAndRemoveContainer(`sitey-${service.id}`, noop);
+      await pruneServiceImages(service.id, [], noop).catch(noop);
 
-      // Delete project from DB (cascades to routes/deployments)
-      await db.project.delete({ where: { id: input.id } });
+      // Delete service from DB (cascades to routes/deployments)
+      await db.service.delete({ where: { id: input.id } });
 
-      // Remove project files on disk (best-effort)
-      const rootPath = projectRootPath(project.id);
+      // Remove service files on disk (best-effort)
+      const rootPath = serviceRootPath(service.id);
       fs.rm(rootPath, { recursive: true, force: true }, () => {});
 
       // Reload Caddy so the route is removed
       reloadCaddy().catch((err) =>
-        console.error("[projects] Caddy reload failed after delete:", err),
+        console.error("[services] Caddy reload failed after delete:", err),
       );
 
       return { ok: true };
@@ -259,22 +321,23 @@ export const projectsRouter = router({
   deactivate: settledProcedure
     .input(z.object({ id: z.number().int() }))
     .mutation(async ({ input }) => {
-      const project = await db.project.findUnique({ where: { id: input.id } });
-      if (!project)
+      const service = await db.service.findUnique({ where: { id: input.id } });
+      if (!service)
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Project not found",
+          message: "Service not found",
         });
-      if (!project.active) return { ok: true };
+      if (!service.active) return { ok: true };
 
-      // Stop & remove Docker container (best-effort, server projects only)
-      if (project.deployMode === "server") {
+      // Stop & remove Docker container (best-effort, server services only)
+      if (service.deployMode === "server") {
         const noop = () => {};
-        await stopAndRemoveContainer(`sitey-project-${project.id}`, noop);
-        await stopAndRemoveContainer(`sitey-${project.id}`, noop);
+        await stopAndRemoveContainer(`sitey-service-${service.id}`, noop);
+        await stopAndRemoveContainer(`sitey-project-${service.id}`, noop);
+        await stopAndRemoveContainer(`sitey-${service.id}`, noop);
       }
 
-      await db.project.update({
+      await db.service.update({
         where: { id: input.id },
         data: {
           active: false,
@@ -286,7 +349,7 @@ export const projectsRouter = router({
 
       // Reload Caddy so routes stop serving traffic
       reloadCaddy().catch((err) =>
-        console.error("[projects] Caddy reload failed after deactivate:", err),
+        console.error("[services] Caddy reload failed after deactivate:", err),
       );
 
       return { ok: true };
@@ -295,15 +358,15 @@ export const projectsRouter = router({
   activate: settledProcedure
     .input(z.object({ id: z.number().int() }))
     .mutation(async ({ input }) => {
-      const project = await db.project.findUnique({ where: { id: input.id } });
-      if (!project)
+      const service = await db.service.findUnique({ where: { id: input.id } });
+      if (!service)
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Project not found",
+          message: "Service not found",
         });
-      if (project.active) return { ok: true };
+      if (service.active) return { ok: true };
 
-      await db.project.update({
+      await db.service.update({
         where: { id: input.id },
         data: { active: true },
       });
@@ -316,7 +379,7 @@ export const projectsRouter = router({
   addRoute: settledProcedure
     .input(
       z.object({
-        projectId: z.number().int(),
+        serviceId: z.number().int(),
         domainId: z.number().int().optional(),
         pathPrefix: z.string().default(""),
         subdomain: z.string().default(""),
@@ -324,14 +387,14 @@ export const projectsRouter = router({
       }),
     )
     .mutation(async ({ input }) => {
-      const project = await db.project.findUnique({
-        where: { id: input.projectId },
+      const service = await db.service.findUnique({
+        where: { id: input.serviceId },
         select: { id: true, name: true },
       });
-      if (!project)
+      if (!service)
         throw new TRPCError({
           code: "NOT_FOUND",
-          message: "Project not found",
+          message: "Service not found",
         });
 
       let domain: { id: number; hostname: string } | null = null;
@@ -350,7 +413,7 @@ export const projectsRouter = router({
       let subdomain = input.subdomain.trim().toLowerCase();
       if (domain && isWildcardDomain(domain.hostname)) {
         if (!subdomain) {
-          subdomain = await generateUniqueSubdomain(domain.id, project.name);
+          subdomain = await generateUniqueSubdomain(domain.id, service.name);
         } else if (!SUBDOMAIN_LABEL_REGEX.test(subdomain)) {
           throw new TRPCError({
             code: "BAD_REQUEST",
@@ -376,7 +439,7 @@ export const projectsRouter = router({
       }
 
       if (input.domainId) {
-        const sameHostRoutes = await db.projectRoute.findMany({
+        const sameHostRoutes = await db.serviceRoute.findMany({
           where: { domainId: input.domainId, subdomain },
           select: { id: true, httpOnly: true },
         });
@@ -395,9 +458,9 @@ export const projectsRouter = router({
 
       let route;
       try {
-        route = await db.projectRoute.create({
+        route = await db.serviceRoute.create({
           data: {
-            projectId: input.projectId,
+            serviceId: input.serviceId,
             domainId: input.domainId,
             pathPrefix: input.pathPrefix,
             subdomain,
@@ -420,7 +483,7 @@ export const projectsRouter = router({
       try {
         await reloadCaddy();
       } catch (err) {
-        console.error("[projects] Caddy reload failed after addRoute:", err);
+        console.error("[services] Caddy reload failed after addRoute:", err);
       }
 
       // Probe TLS for the new route's hostname and persist the result.
@@ -428,7 +491,7 @@ export const projectsRouter = router({
         try {
           route.tlsStatus = await probeRouteTls(route);
         } catch (err) {
-          console.error("[projects] TLS probe failed after addRoute:", err);
+          console.error("[services] TLS probe failed after addRoute:", err);
         }
       }
 
@@ -438,7 +501,7 @@ export const projectsRouter = router({
   removeRoute: settledProcedure
     .input(z.object({ routeId: z.string() }))
     .mutation(async ({ input }) => {
-      const route = await db.projectRoute.findUnique({
+      const route = await db.serviceRoute.findUnique({
         where: { id: input.routeId },
       });
       if (!route)
@@ -448,9 +511,9 @@ export const projectsRouter = router({
           code: "FORBIDDEN",
           message: "This route cannot be removed",
         });
-      await db.projectRoute.delete({ where: { id: input.routeId } });
+      await db.serviceRoute.delete({ where: { id: input.routeId } });
       reloadCaddy().catch((err) =>
-        console.error("[projects] Caddy reload failed after removeRoute:", err),
+        console.error("[services] Caddy reload failed after removeRoute:", err),
       );
       return { ok: true };
     }),
@@ -458,7 +521,7 @@ export const projectsRouter = router({
   retryRouteTls: settledProcedure
     .input(z.object({ routeId: z.string() }))
     .mutation(async ({ input }) => {
-      const route = await db.projectRoute.findUnique({
+      const route = await db.serviceRoute.findUnique({
         where: { id: input.routeId },
         include: { domain: true },
       });
@@ -483,10 +546,23 @@ export const projectsRouter = router({
   rotateWebhookSecret: settledProcedure
     .input(z.object({ id: z.number().int() }))
     .mutation(async ({ input }) => {
-      const secret = generateWebhookSecret();
-      await db.project.update({
+      // Find the HookEndpoint for this service's repo
+      const service = await db.service.findUniqueOrThrow({
         where: { id: input.id },
-        data: { webhookSecret: secret },
+        select: { repoId: true },
+      });
+      const endpoint = await db.hookEndpoint.findFirst({
+        where: { repoId: service.repoId, sourceType: "github_webhook" },
+      });
+      if (!endpoint)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "No webhook endpoint found for this service",
+        });
+      const secret = generateWebhookSecret();
+      await db.hookEndpoint.update({
+        where: { id: endpoint.id },
+        data: { secret },
       });
       return { webhookSecret: secret };
     }),
@@ -496,10 +572,16 @@ export const projectsRouter = router({
       z.object({ id: z.number().int(), domainId: z.number().int().optional() }),
     )
     .query(async ({ input }) => {
-      const project = await db.project.findUniqueOrThrow({
+      const service = await db.service.findUniqueOrThrow({
         where: { id: input.id },
-        select: { webhookSecret: true, githubMode: true },
+        include: { repo: true },
       });
+
+      // Find the HookEndpoint for this service
+      const endpoint = await db.hookEndpoint.findFirst({
+        where: { repoId: service.repoId, sourceType: "github_webhook" },
+      });
+
       const domains = await db.domain.findMany({
         select: { id: true, hostname: true },
         orderBy: { createdAt: "asc" },
@@ -521,10 +603,20 @@ export const projectsRouter = router({
               return resolveWebhookBaseUrl(fallbackHostname);
             throw err;
           });
+
+      // Build the hook URL using the endpoint's publicId
+      if (!endpoint) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "No hook endpoint found for this service",
+        });
+      }
+      const webhookUrl = `${baseUrl}/hook/${endpoint.publicId}`;
+
       return {
-        webhookUrl: `${baseUrl}/webhook/github/${input.id}`,
-        webhookSecret: project.webhookSecret,
-        githubMode: project.githubMode,
+        webhookUrl,
+        webhookSecret: endpoint?.secret ?? null,
+        githubMode: service.repo.githubMode,
         domains: webhookDomains,
       };
     }),

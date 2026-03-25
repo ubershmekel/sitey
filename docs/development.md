@@ -124,7 +124,7 @@ the vertical flow. Side-by-side layouts must be justified — not the default.
 - **No split headers.** Don't use `justify-content: space-between` to push
   actions to the far right. Status badges, primary action buttons (Deploy,
   Save), and destructive buttons (Delete) all live in the main vertical flow.
-- **The page IS the edit form.** Domain and project detail pages render editable
+- **The page IS the edit form.** Domain and service detail pages render editable
   fields inline — there is no separate "Edit" modal or route. A "Save changes"
   button appears near the top alongside other primary actions.
 - **Action row at the top, danger zone at the bottom.** Primary actions (Save,

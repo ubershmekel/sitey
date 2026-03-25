@@ -11,9 +11,9 @@
         <NavIcon name="home" />
         <span class="label">Dashboard</span>
       </RouterLink>
-      <RouterLink to="/projects" class="nav-item" active-class="active">
-        <NavIcon name="projects" />
-        <span class="label">Projects</span>
+      <RouterLink to="/services" class="nav-item" active-class="active">
+        <NavIcon name="services" />
+        <span class="label">Services</span>
       </RouterLink>
       <RouterLink to="/domains" class="nav-item" active-class="active">
         <NavIcon name="domains" />

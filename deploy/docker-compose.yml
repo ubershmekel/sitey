@@ -14,7 +14,7 @@ volumes:
 services:
   # ── Caddy (TLS termination + reverse proxy + static file server) ───────────
   # The sitey-web SPA is baked into this image at /srv/web.
-  # User static sites are served from /srv/projects/<id>/repo/<outputDir>.
+  # User static sites are served from /srv/services/<id>/repo/<outputDir>.
   caddy:
     build:
       context: ..
@@ -27,7 +27,7 @@ services:
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
-      - ${DATA_ROOT:-./data}/projects:/srv/projects:ro
+      - ${DATA_ROOT:-./data}/services:/srv/services:ro
     networks:
       - sitey-public
 

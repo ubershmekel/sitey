@@ -56,11 +56,11 @@ Use a fresh incognito window so session state does not leak between runs.
 3. Set a permanent password when prompted.
 4. Click `+ Add domain` and add `sitey.example.com`.
 5. Open the new domain page and verify TLS status appears (not `error`).
-6. Click `+ Add project`.
+6. Click `+ Add service`.
 7. Fill a test repo (`owner/name`, branch, build mode, container port), then
    create.
 8. Click `Deploy` and wait for status `success`.
-9. Open the project route and verify it serves over `https://`.
+9. Open the service route and verify it serves over `https://`.
 
 ## 3) Screenshot checkpoints (recommended)
 
@@ -68,9 +68,9 @@ Take screenshots at:
 
 1. Login page with reset timestamp visible in browser tab/history.
 2. Domain page showing TLS status.
-3. Project page after create.
+3. Service page after create.
 4. Deployment log/status showing `success`.
-5. Live project URL loaded over `https://`.
+5. Live service URL loaded over `https://`.
 
 Store them in a dated folder (example: `artifacts/smoke/2026-03-13/`).
 
@@ -85,4 +85,4 @@ Store them in a dated folder (example: `artifacts/smoke/2026-03-13/`).
   - Check: `docker compose logs caddy --tail=200`
 - If deploy fails:
   - Check: `docker compose logs sitey-api --tail=200`
-  - Open deployment logs in Sitey UI for the specific project.
+  - Open deployment logs in Sitey UI for the specific service.

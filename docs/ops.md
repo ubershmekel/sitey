@@ -11,8 +11,8 @@ A standard install (via the one-liner or manual steps) puts everything under
 │   ├── docker-compose.yml
 │   └── data/              # DATA_ROOT (default ./data)
 │       ├── sitey.db       # SQLite database
-│       └── projects/
-│           └── <projectId>/
+│       └── services/
+│           └── <serviceId>/
 │               ├── repo/  # git checkout
 │               └── logs/
 │                   └── <deploymentId>.log
@@ -154,10 +154,10 @@ started). To enable HTTPS:
    ```
 
    The wildcard record is optional but **highly recommended** — it lets Sitey
-   auto-assign a random subdomain to every new project (e.g.
+   auto-assign a random subdomain to every new service (e.g.
    `happy-fox-3k2.your.domain.com`), exactly like Netlify or Vercel, with no
-   extra DNS steps per project. Without it you must manually add a route or DNS
-   record for each new project want.
+   extra DNS steps per service. Without it you must manually add a route or DNS
+   record for each new service want.
 
 2. Edit `deploy/caddy/Caddyfile` — replace the `:80` block with:
 
@@ -177,7 +177,7 @@ Caddy will automatically obtain a Let's Encrypt certificate.
 
 ## DANGER: Wipe the data (fresh start)
 
-Wipes all users, projects, domains, deployments, and the generated admin
+Wipes all users, services, domains, deployments, and the generated admin
 password. Deployed app containers are left running.
 
 ```bash
@@ -200,7 +200,7 @@ docker rm -f <container-id>                     # remove as needed
 ### GitHub App (recommended)
 
 1. Create a GitHub App at `https://github.com/settings/apps/new`:
-   - Webhook URL: `http://<your-server>/webhook/github/<projectId>`
+   - Webhook URL: `http://<your-server>/webhook/github/<serviceId>`
    - Webhook secret: any strong random string
    - Permissions: Repository → Contents (read), Metadata (read)
    - Subscribe to: `Push` events
@@ -209,11 +209,11 @@ docker rm -f <container-id>                     # remove as needed
    - Private key (PEM)
    - Webhook secret
 3. Install the App on your repos.
-4. On the project, set `GitHub mode: app` and paste the Installation ID.
+4. On the service, set `GitHub mode: app` and paste the Installation ID.
 
 ### Webhook
 
-1. On the project detail page, find the **GitHub Webhook Setup** card.
+1. On the service detail page, find the **GitHub Webhook Setup** card.
 2. In your GitHub repo → Settings → Webhooks → Add webhook:
    - **Payload URL**: paste from the card
    - **Content type**: `application/json`
@@ -227,16 +227,16 @@ docker rm -f <container-id>                     # remove as needed
 
 ```
 GitHub push
-    └─▶ /webhook/github/:projectId  (signature verified)
+    └─▶ /webhook/github/:serviceId  (signature verified)
          └─▶ DB: create Deployment (queued)
               └─▶ DeploymentQueue
-                   ├─ git clone / pull → /data/projects/:id/repo
+                   ├─ git clone / pull → /data/services/:id/repo
                    ├─ docker build -t sitey/:id:<sha>
                    ├─ docker run (with Caddy labels, on sitey-public network)
                    └─ DB: update status → success / failed
 ```
 
-Logs are written to `/data/projects/:id/logs/:deploymentId.log` and viewable in
+Logs are written to `/data/services/:id/logs/:deploymentId.log` and viewable in
 the UI.
 
 ---
@@ -249,7 +249,7 @@ else, provide your own `Dockerfile`.
 
 ## Environment variables for deployed apps
 
-Set env vars on the project detail page (Settings tab, coming soon) or via the
+Set env vars on the service detail page (Settings tab, coming soon) or via the
 API. They are injected as container env vars at deploy time.
 
 `PORT` is always injected automatically and set to the configured container

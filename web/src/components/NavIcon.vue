@@ -12,7 +12,7 @@
       <polyline points="1.5,8.5 8,2 14.5,8.5" />
       <path d="M3.5 7.8V14h3.3v-3.5h2.4V14h3.3V7.8" />
     </template>
-    <template v-else-if="name === 'projects'">
+    <template v-else-if="name === 'services'">
       <rect x="2" y="2" width="5" height="5" rx="1" />
       <rect x="9" y="2" width="5" height="5" rx="1" />
       <rect x="2" y="9" width="5" height="5" rx="1" />
@@ -47,7 +47,7 @@
 
 <script setup lang="ts">
 defineProps<{
-  name: "home" | "projects" | "domains" | "integrations" | "logs" | "settings";
+  name: "home" | "services" | "domains" | "integrations" | "logs" | "settings";
 }>();
 </script>
 

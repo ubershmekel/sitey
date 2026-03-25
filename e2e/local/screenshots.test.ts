@@ -24,7 +24,7 @@ test("screenshot tour — all pages, wide and narrow", async ({ page }) => {
   await ensureLoggedIn(page);
   await shots.snap("dashboard");
 
-  await shots.goto("/projects", "projects");
+  await shots.goto("/services", "services");
   await shots.goto("/domains", "domains");
   await shots.goto("/integrations", "integrations");
   await shots.goto("/logs", "logs");
