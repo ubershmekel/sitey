@@ -364,7 +364,7 @@ export const githubRouter = router({
       const manifest = {
         name,
         url: siteUrl,
-        hook_attributes: { url: `${siteUrl}/webhook/github`, active: true },
+        hook_attributes: { url: `${siteUrl}/api/webhook/github`, active: true },
         redirect_url: `${siteUrl}/github/app/callback`,
         default_permissions: { contents: "read" },
         default_events: ["push"],

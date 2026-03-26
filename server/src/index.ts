@@ -1,4 +1,4 @@
-import Fastify from "fastify";
+import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import cors from "@fastify/cors";
 import cookie from "@fastify/cookie";
 import { Readable } from "node:stream";
@@ -18,6 +18,11 @@ import { execSync } from "node:child_process";
 
 const PORT = parseInt(process.env.PORT ?? "3001");
 const HOST = "0.0.0.0";
+const API_PREFIX = "/api";
+const API_TRPC_PREFIX = `${API_PREFIX}/trpc`;
+const API_HEALTH_PATH = `${API_PREFIX}/health`;
+const API_GITHUB_WEBHOOK_PATH = `${API_PREFIX}/webhook/github`;
+const API_HOOK_PATH = `${API_PREFIX}/hook/:publicId`;
 
 // Run Prisma migrations before starting (production only — dev uses db:push)
 function runMigrations() {
@@ -37,6 +42,13 @@ function runMigrations() {
     console.error("[startup] Migration failed:", err);
     process.exit(1);
   }
+}
+
+function shouldCaptureRawBody(url: string): boolean {
+  return (
+    url.startsWith(`${API_PREFIX}/webhook/`) ||
+    url.startsWith(`${API_PREFIX}/hook/`)
+  );
 }
 
 async function main() {
@@ -61,11 +73,7 @@ async function main() {
 
   // Capture raw body for webhook routes (replaces @fastify/rawbody)
   app.addHook("preParsing", async (request, _reply, payload) => {
-    if (
-      !request.url.startsWith("/webhook/") &&
-      !request.url.startsWith("/hook/")
-    )
-      return payload;
+    if (!shouldCaptureRawBody(request.url)) return payload;
     const chunks: Buffer[] = [];
     for await (const chunk of payload) {
       chunks.push(
@@ -86,24 +94,30 @@ async function main() {
   });
 
   // ── tRPC ──────────────────────────────────────────────────────────────────
+  const trpcOptions = {
+    router: appRouter,
+    createContext,
+    onError: ({ path, error }) => {
+      if (error.code !== "UNAUTHORIZED" && error.code !== "NOT_FOUND") {
+        app.log.error({ path, error }, "tRPC error");
+      }
+    },
+  } satisfies FastifyTRPCPluginOptions<AppRouter>["trpcOptions"];
+
   await app.register(fastifyTRPCPlugin, {
-    prefix: "/trpc",
-    trpcOptions: {
-      router: appRouter,
-      createContext,
-      onError: ({ path, error }) => {
-        if (error.code !== "UNAUTHORIZED" && error.code !== "NOT_FOUND") {
-          app.log.error({ path, error }, "tRPC error");
-        }
-      },
-    } satisfies FastifyTRPCPluginOptions<AppRouter>["trpcOptions"],
+    prefix: API_TRPC_PREFIX,
+    trpcOptions,
   });
 
   // ── Health ─────────────────────────────────────────────────────────────────
-  app.get("/health", async () => ({ ok: true, version: "0.1.0" }));
+  const healthHandler = async () => ({ ok: true, version: "0.1.0" });
+  app.get(API_HEALTH_PATH, healthHandler);
 
   // ── GitHub App Webhook (no service ID — matched by repo owner/name) ────
-  app.post("/webhook/github", async (req, reply) => {
+  const githubWebhookHandler = async (
+    req: FastifyRequest,
+    reply: FastifyReply,
+  ) => {
     const signature = (req.headers["x-hub-signature-256"] ?? "") as string;
     const event = (req.headers["x-github-event"] ?? "") as string;
     const rawBodyStr = (req as unknown as { rawBody: string }).rawBody ?? "";
@@ -193,90 +207,92 @@ async function main() {
     }
 
     return reply.send({ ok: true, deploymentIds });
-  });
+  };
+  app.post(API_GITHUB_WEBHOOK_PATH, githubWebhookHandler);
 
   // ── Hook endpoint (opaque publicId — replaces per-service webhook) ──────
-  app.post<{ Params: { publicId: string } }>(
-    "/hook/:publicId",
-    async (req, reply) => {
-      const { publicId } = req.params;
-      const signature = (req.headers["x-hub-signature-256"] ?? "") as string;
-      const event = (req.headers["x-github-event"] ?? "") as string;
-      const rawBodyStr = (req as unknown as { rawBody: string }).rawBody ?? "";
+  const hookHandler = async (
+    req: FastifyRequest<{ Params: { publicId: string } }>,
+    reply: FastifyReply,
+  ) => {
+    const { publicId } = req.params;
+    const signature = (req.headers["x-hub-signature-256"] ?? "") as string;
+    const event = (req.headers["x-github-event"] ?? "") as string;
+    const rawBodyStr = (req as unknown as { rawBody: string }).rawBody ?? "";
 
-      // Look up the hook endpoint
-      const endpoint = await db.hookEndpoint.findUnique({
-        where: { publicId },
-        include: {
-          repo: { include: { services: true } },
+    // Look up the hook endpoint
+    const endpoint = await db.hookEndpoint.findUnique({
+      where: { publicId },
+      include: {
+        repo: { include: { services: true } },
+      },
+    });
+    if (!endpoint) {
+      return reply.code(404).send({ error: "Hook not found" });
+    }
+
+    // Verify signature
+    if (endpoint.secret) {
+      if (
+        !signature ||
+        !verifyWebhookSignature(rawBodyStr, endpoint.secret, signature)
+      ) {
+        req.log.warn({ publicId }, "Hook signature verification failed");
+        return reply.code(401).send({ error: "Invalid signature" });
+      }
+    }
+
+    // Only act on push events
+    if (event !== "push") {
+      return reply.send({
+        ok: true,
+        skipped: true,
+        reason: `event=${event}`,
+      });
+    }
+
+    // Parse payload
+    let payload: {
+      ref?: string;
+      head_commit?: { id?: string; message?: string };
+    };
+    try {
+      payload = JSON.parse(rawBodyStr);
+    } catch {
+      return reply.code(400).send({ error: "Invalid JSON payload" });
+    }
+
+    const commitSha = payload.head_commit?.id ?? undefined;
+    const commitMessage = payload.head_commit?.message ?? undefined;
+    const pushedRef = payload.ref ?? "";
+    const deploymentIds: string[] = [];
+
+    const repoServices = endpoint.repo?.services ?? [];
+    for (const service of repoServices) {
+      if (!service.active) continue;
+      const expectedRef = `refs/heads/${service.branch}`;
+      if (pushedRef !== expectedRef) continue;
+
+      const deployment = await db.deployment.create({
+        data: {
+          serviceId: service.id,
+          status: "queued",
+          commitSha,
+          commitMessage,
+          triggeredBy: "hook",
         },
       });
-      if (!endpoint) {
-        return reply.code(404).send({ error: "Hook not found" });
-      }
+      enqueueDeployment(service, deployment);
+      deploymentIds.push(deployment.id);
+      req.log.info(
+        { serviceId: service.id, deploymentId: deployment.id, publicId },
+        "Hook deployment queued",
+      );
+    }
 
-      // Verify signature
-      if (endpoint.secret) {
-        if (
-          !signature ||
-          !verifyWebhookSignature(rawBodyStr, endpoint.secret, signature)
-        ) {
-          req.log.warn({ publicId }, "Hook signature verification failed");
-          return reply.code(401).send({ error: "Invalid signature" });
-        }
-      }
-
-      // Only act on push events
-      if (event !== "push") {
-        return reply.send({
-          ok: true,
-          skipped: true,
-          reason: `event=${event}`,
-        });
-      }
-
-      // Parse payload
-      let payload: {
-        ref?: string;
-        head_commit?: { id?: string; message?: string };
-      };
-      try {
-        payload = JSON.parse(rawBodyStr);
-      } catch {
-        return reply.code(400).send({ error: "Invalid JSON payload" });
-      }
-
-      const commitSha = payload.head_commit?.id ?? undefined;
-      const commitMessage = payload.head_commit?.message ?? undefined;
-      const pushedRef = payload.ref ?? "";
-      const deploymentIds: string[] = [];
-
-      const repoServices = endpoint.repo?.services ?? [];
-      for (const service of repoServices) {
-        if (!service.active) continue;
-        const expectedRef = `refs/heads/${service.branch}`;
-        if (pushedRef !== expectedRef) continue;
-
-        const deployment = await db.deployment.create({
-          data: {
-            serviceId: service.id,
-            status: "queued",
-            commitSha,
-            commitMessage,
-            triggeredBy: "hook",
-          },
-        });
-        enqueueDeployment(service, deployment);
-        deploymentIds.push(deployment.id);
-        req.log.info(
-          { serviceId: service.id, deploymentId: deployment.id, publicId },
-          "Hook deployment queued",
-        );
-      }
-
-      return reply.send({ ok: true, deploymentIds });
-    },
-  );
+    return reply.send({ ok: true, deploymentIds });
+  };
+  app.post(API_HOOK_PATH, hookHandler);
 
   await app.listen({ port: PORT, host: HOST });
   console.log(`[server] Listening on ${HOST}:${PORT}`);

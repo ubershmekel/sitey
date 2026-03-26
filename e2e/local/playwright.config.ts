@@ -4,7 +4,7 @@
  * Three webServer processes (started in order):
  *   1. Mock external server  :3334  — intercepts Caddy admin, GitHub API, IP detect
  *   2. Sitey API             :4001  — real Fastify/tRPC server, isolated test DB
- *   3. Sitey Web             :4000  — real Vite dev server, proxies /trpc → :4001
+ *   3. Sitey Web             :4000  — real Vite dev server, proxies /api → :4001
  *
  * The temp SQLite DB path is generated here (at config evaluation time).
  * `prisma db push` is run synchronously in the config — this is the only way
@@ -124,11 +124,11 @@ export default defineConfig({
       command: "npm run dev",
       cwd: SERVER_DIR,
       env: apiEnv,
-      url: "http://127.0.0.1:4001/health",
+      url: "http://127.0.0.1:4001/api/health",
       reuseExistingServer: false,
       timeout: 60_000,
     },
-    // 3. Sitey Web — Vite dev server on port 4000; proxies /trpc + /health → :4001.
+    // 3. Sitey Web — Vite dev server on port 4000; proxies /api → :4001.
     {
       command: "npm run dev",
       cwd: WEB_DIR,

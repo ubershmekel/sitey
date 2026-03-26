@@ -20,7 +20,7 @@ npm run dev       # starts on :3001
 
 # Start the web (terminal 2)
 cd web
-npm run dev       # starts on :3000 (proxies /trpc and /webhook → :3001)
+npm run dev       # starts on :3000 (proxies /api -> :3001)
 ```
 
 ## Root scripts (`package.json`)
@@ -226,8 +226,7 @@ npm run dev:nocaddy
 ```
 
 - **API** → `http://localhost:3001` (`tsx watch` auto-restarts on file save)
-- **Web** → `http://localhost:3000` (Vite HMR, proxies `/trpc`, `/webhook`,
-  `/health` to `:3001`)
+- **Web** → `http://localhost:3000` (Vite HMR, proxies `/api` to `:3001`)
 
 No Docker needed for everyday UI/API work. On first boot the generated admin
 password is printed to the terminal.

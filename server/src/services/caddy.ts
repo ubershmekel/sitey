@@ -182,8 +182,7 @@ export async function getLetsEncryptStatusesFromCaddy(
 }
 
 function appendAdminHandlers(lines: string[]): void {
-  lines.push("    @api path /trpc/* /webhook/* /hook/* /health/*");
-  lines.push("    handle @api {");
+  lines.push("    handle /api/* {");
   lines.push(`        reverse_proxy ${SITEY_API_INTERNAL}`);
   lines.push("    }");
   lines.push("    handle {");

@@ -611,7 +611,7 @@ export const servicesRouter = router({
           message: "No hook endpoint found for this service",
         });
       }
-      const webhookUrl = `${baseUrl}/hook/${endpoint.publicId}`;
+      const webhookUrl = `${baseUrl}/api/hook/${endpoint.publicId}`;
 
       return {
         webhookUrl,

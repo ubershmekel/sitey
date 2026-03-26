@@ -163,8 +163,7 @@ started). To enable HTTPS:
 
 ```caddyfile
 your.domain.com {
-    @api path /trpc* /webhook* /health*
-    handle @api { reverse_proxy sitey-api:3001 }
+    handle /api/* { reverse_proxy sitey-api:3001 }
     handle     { reverse_proxy sitey-web:80    }
 }
 ```
@@ -200,7 +199,7 @@ docker rm -f <container-id>                     # remove as needed
 ### GitHub App (recommended)
 
 1. Create a GitHub App at `https://github.com/settings/apps/new`:
-   - Webhook URL: `http://<your-server>/webhook/github/<serviceId>`
+   - Webhook URL: `http://<your-server>/api/webhook/github`
    - Webhook secret: any strong random string
    - Permissions: Repository → Contents (read), Metadata (read)
    - Subscribe to: `Push` events
@@ -227,7 +226,7 @@ docker rm -f <container-id>                     # remove as needed
 
 ```
 GitHub push
-    └─▶ /webhook/github/:serviceId  (signature verified)
+    └─▶ /api/webhook/github  (signature verified)
          └─▶ DB: create Deployment (queued)
               └─▶ DeploymentQueue
                    ├─ git clone / pull → /data/services/:id/repo

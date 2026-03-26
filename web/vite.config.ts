@@ -15,15 +15,7 @@ export default defineConfig({
       ? { clientPort: Number(process.env.VITE_HMR_CLIENT_PORT) }
       : {},
     proxy: {
-      "/trpc": {
-        target: apiTarget,
-        changeOrigin: true,
-      },
-      "/webhook": {
-        target: apiTarget,
-        changeOrigin: true,
-      },
-      "/health": {
+      "/api": {
         target: apiTarget,
         changeOrigin: true,
       },

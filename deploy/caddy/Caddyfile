@@ -7,8 +7,7 @@
 }
 
 :80 {
-    @api path /trpc/* /webhook/* /health/*
-    handle @api {
+    handle /api/* {
         reverse_proxy sitey-api:3001
     }
     handle {
@@ -17,3 +16,4 @@
         file_server
     }
 }
+

@@ -104,7 +104,7 @@ model Service {
 }
 
 // Decoupled webhook endpoint with opaque public ID.
-// URL: POST /hook/:publicId
+// URL: POST /api/hook/:publicId
 model HookEndpoint {
   id         String  @id @default(cuid())
   publicId   String  @unique           // opaque random ID for URL
