@@ -5,6 +5,7 @@ import { servicesRouter } from "./services.ts";
 import { deployRouter } from "./deploy.ts";
 import { githubRouter } from "./github.ts";
 import { systemRouter } from "./system.ts";
+import { analyticsRouter } from "./analytics.ts";
 
 export const appRouter = router({
   auth: authRouter,
@@ -13,6 +14,7 @@ export const appRouter = router({
   deploy: deployRouter,
   github: githubRouter,
   system: systemRouter,
+  analytics: analyticsRouter,
 });
 
 export type AppRouter = typeof appRouter;

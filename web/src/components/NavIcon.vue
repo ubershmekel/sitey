@@ -42,12 +42,17 @@
         d="M8 1.5V3M8 13v1.5M1.5 8H3M13 8h1.5M3.4 3.4l1.1 1.1M11.5 11.5l1.1 1.1M12.6 3.4l-1.1 1.1M4.5 11.5l-1.1 1.1"
       />
     </template>
+    <template v-else-if="name === 'analytics'">
+      <rect x="2" y="9" width="3" height="5" rx="0.5" />
+      <rect x="6.5" y="5" width="3" height="9" rx="0.5" />
+      <rect x="11" y="2" width="3" height="12" rx="0.5" />
+    </template>
   </svg>
 </template>
 
 <script setup lang="ts">
 defineProps<{
-  name: "home" | "services" | "domains" | "integrations" | "logs" | "settings";
+  name: "home" | "services" | "domains" | "integrations" | "logs" | "settings" | "analytics";
 }>();
 </script>
 

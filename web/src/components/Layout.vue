@@ -23,6 +23,10 @@
         <NavIcon name="integrations" />
         <span class="label">Integrations</span>
       </RouterLink>
+      <RouterLink to="/analytics" class="nav-item" active-class="active">
+        <NavIcon name="analytics" />
+        <span class="label">Analytics</span>
+      </RouterLink>
       <RouterLink to="/logs" class="nav-item" active-class="active">
         <NavIcon name="logs" />
         <span class="label">Logs</span>

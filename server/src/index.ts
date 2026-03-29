@@ -14,6 +14,7 @@ import { db } from "./lib/db.ts";
 import { enqueueDeployment } from "./services/deployment.ts";
 import { reloadCaddy } from "./services/caddy.ts";
 import { getGithubIntegrationConfig } from "./services/github.ts";
+import { collectAnalytics } from "./services/analytics.ts";
 import { execSync } from "node:child_process";
 
 const PORT = parseInt(process.env.PORT ?? "3001");
@@ -62,6 +63,17 @@ async function main() {
       err.message,
     ),
   );
+
+  // Collect analytics from Caddy access logs every 5 minutes
+  const ANALYTICS_INTERVAL_MS = 5 * 60 * 1000;
+  collectAnalytics().catch((err) =>
+    console.warn("[analytics] Initial collection failed:", err.message),
+  );
+  setInterval(() => {
+    collectAnalytics().catch((err) =>
+      console.warn("[analytics] Collection failed:", err.message),
+    );
+  }, ANALYTICS_INTERVAL_MS);
 
   const app = Fastify({
     logger: {

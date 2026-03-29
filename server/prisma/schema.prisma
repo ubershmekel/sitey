@@ -160,6 +160,18 @@ model Deployment {
   createdAt     DateTime  @default(now())
 }
 
+model DomainStats {
+  id           Int    @id @default(autoincrement())
+  hostname     String
+  date         String // YYYY-MM-DD
+  requestCount Int    @default(0)
+  errorCount   Int    @default(0) // 4xx + 5xx responses
+
+  @@unique([hostname, date])
+  @@index([hostname])
+  @@index([date])
+}
+
 // Key-value store for system-wide settings
 model SystemConfig {
   key       String   @id

@@ -501,6 +501,10 @@ export async function buildCaddyfile(): Promise<string> {
   // Global options — enable admin API so we can push configs
   lines.push("{");
   lines.push("    admin 0.0.0.0:2019");
+  lines.push("    log {");
+  lines.push("        output stdout");
+  lines.push("        format json");
+  lines.push("    }");
   lines.push("}");
   lines.push("");
 
