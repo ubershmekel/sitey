@@ -1,8 +1,11 @@
 #!/bin/sh
 # This script is NOT baked into the sitey-updater Docker image.
 # It is read from the /sitey-root mount at exec time.
-# sitey-api runs `git pull` before invoking this script, so changes
-# committed to this file take effect on the very next update click.
+#
+# RENAMING: This file can be safely renamed. system.ts reads its contents
+# into a shell variable BEFORE `git pull`, then evals from memory after
+# the pull. Each deployed generation only references its own filename, so
+# a rename + system.ts update in the same commit works without breakage.
 #
 # All output is tee'd to /data/.update.log so it survives the sitey-api
 # restart that happens at the end of this script.

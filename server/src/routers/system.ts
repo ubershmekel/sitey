@@ -88,11 +88,13 @@ async function runUpdate(containerId: string): Promise<void> {
   try {
     const container = docker.getContainer(containerId);
     const exec = await container.exec({
-      // git pull first so update-docker.sh always runs at its latest version
+      // Read the update script BEFORE git pull so we reference our own
+      // generation's filename. After pull the file may have been renamed,
+      // but we already have its contents in $S and eval it from memory.
       Cmd: [
         "sh",
         "-c",
-        "cd /sitey-root && git pull && sh /sitey-root/deploy/updater/update-docker.sh",
+        'UPDATE_SCRIPT=$(cat /sitey-root/deploy/updater/update-docker.sh) && cd /sitey-root && git pull && eval "$UPDATE_SCRIPT"',
       ],
       AttachStdout: true,
       AttachStderr: true,

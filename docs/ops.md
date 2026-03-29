@@ -68,10 +68,11 @@ Open **Settings → Update Sitey** and click **Update Sitey**. The button trigge
 the `sitey-updater` sidecar container, which runs three steps and streams the
 output live:
 
-1. `git pull` — fetches the latest code (including any changes to
-   `update-docker.sh` itself, so they take effect immediately)
-2. `docker compose build` — rebuilds images for services defined in docker-compose.yml (except the updater, so it can keep running)
-3. `docker compose up -d` — restarts services with the new images
+1. Read the update script into memory (before pulling, so it references the
+   current generation's filename — see "How the updater sidecar works" below)
+2. `git pull` — fetches the latest code
+3. `docker compose build` — rebuilds images for services defined in docker-compose.yml (except the updater, so it can keep running)
+4. `docker compose up -d` — restarts services with the new images
 
 The page will briefly disconnect when the API container restarts. Reload once it
 comes back.
@@ -101,11 +102,22 @@ way that requires a fresh DB — see **Nuking data** below.
   `update-docker.sh` at exec time
 - `/data` — shared data volume, used to write `.update.log` (survives API restart)
 
-When you click **Update Sitey**, `sitey-api` runs `git pull` first (so changes
-to the update script take effect immediately), then calls
-`sh /sitey-root/deploy/updater/update-docker.sh` via docker exec. Because the
-script is read from the mount rather than baked into the image, you never need
-to rebuild the updater image just to change the update logic.
+When you click **Update Sitey**, `sitey-api` execs into the updater container
+and runs a single shell command that:
+
+1. Reads `update-docker.sh` into a shell variable (`$UPDATE_SCRIPT`)
+2. Runs `git pull`
+3. Evals `$UPDATE_SCRIPT` from memory
+
+The script is read **before** `git pull` so it references the current
+generation's filename, not the incoming one. This means the update script can
+be safely renamed — just update the path in `system.ts` in the same commit.
+After `docker compose up -d` restarts the API, the new `system.ts` takes over
+with whatever the new filename is. Each deployed generation only ever talks to
+itself.
+
+Because the script is read from the mount rather than baked into the image, you
+never need to rebuild the updater image just to change the update logic.
 
 ---
 
