@@ -52,7 +52,7 @@ const routes = [
     path: "/integrations",
     component: () => import("./pages/Integrations.vue"),
   },
-  { path: "/logs", component: () => import("./pages/Logs.vue") },
+  { path: "/logs/:container?", component: () => import("./pages/Logs.vue") },
   { path: "/settings", component: () => import("./pages/Settings.vue") },
 ];
 

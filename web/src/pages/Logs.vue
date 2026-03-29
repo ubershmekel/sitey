@@ -81,7 +81,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick } from "vue";
-import { useRoute } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import Layout from "../components/Layout.vue";
 import { trpc } from "../trpc";
 
@@ -90,6 +90,7 @@ type Container = Awaited<
 >[number];
 
 const route = useRoute();
+const router = useRouter();
 
 const rawContainers = ref<Container[]>([]);
 const containers = computed(() =>
@@ -116,8 +117,8 @@ async function fetchContainers() {
   try {
     rawContainers.value = await trpc.system.listContainers.query();
 
-    // Auto-select from query param ?container=<name>
-    const paramName = route.query.container as string | undefined;
+    // Auto-select from route param /logs/:container
+    const paramName = route.params.container as string | undefined;
     if (paramName && !selectedId.value) {
       const match = containers.value.find((c) => c.name === paramName);
       if (match) selectContainer(match);
@@ -134,6 +135,7 @@ async function selectContainer(c: Container) {
   selectedId.value = c.fullId;
   selectedName.value = c.name;
   logLines.value = [];
+  router.replace({ params: { container: c.name } });
   await fetchLogs();
 }
 

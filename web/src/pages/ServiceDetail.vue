@@ -412,7 +412,7 @@
         <p class="section-hint">
           View live container output in the
           <RouterLink
-            :to="`/logs?container=sitey-service-${service.id}`"
+            :to="`/logs/sitey-service-${service.id}`"
             class="logs-link"
             >Logs tab</RouterLink
           >.
