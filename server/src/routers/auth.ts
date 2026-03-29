@@ -17,7 +17,7 @@ import {
   hashToken,
 } from "../services/crypto.ts";
 
-const SESSION_TTL_DAYS = 7;
+const SESSION_TTL_DAYS = 60;
 const SESSION_MAX_AGE = SESSION_TTL_DAYS * 24 * 60 * 60; // seconds
 
 const passwordSchema = z
