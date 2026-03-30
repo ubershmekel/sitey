@@ -9,6 +9,7 @@ import {
   buildCaddyfile,
   scheduleDomainStatusRefresh,
   isDomainStatusStale,
+  caddyReloader,
 } from "../services/caddy.ts";
 import { isLoopbackHost } from "../services/siteUrl.ts";
 import { docker, decodeDockerLogPayload } from "../services/docker.ts";
@@ -156,6 +157,11 @@ export const domainsRouter = router({
     }),
 
   getCaddyfile: settledProcedure.query(() => buildCaddyfile()),
+
+  getActiveCaddyfile: settledProcedure.query(() => ({
+    caddyfile: caddyReloader.lastPushedCaddyfile,
+    pushedAt: caddyReloader.lastPushedAt?.toISOString() ?? null,
+  })),
 
   getCaddyLogs: settledProcedure
     .input(

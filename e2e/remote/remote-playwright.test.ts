@@ -332,7 +332,10 @@ test("deploy dockerfile app", async ({ page, context }, testInfo) => {
       break;
     } catch (e) {
       if (i < 4) {
-        console.log("[verify] http-hello not ready yet, retrying...");
+        console.log(
+          "[verify] http-hello not ready yet, retrying...",
+          dockerUrl,
+        );
         await page.waitForTimeout(5_000);
       } else {
         throw e;

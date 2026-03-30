@@ -686,8 +686,11 @@ export function scheduleDomainStatusRefresh(domain: {
     .finally(() => inFlightRefreshes.delete(domain.id));
 }
 
-export async function reloadCaddy(): Promise<void> {
-  const caddyfile = await buildCaddyfile();
+// ---------------------------------------------------------------------------
+// Serialised reload — prevents a slow reload from overwriting a newer one
+// ---------------------------------------------------------------------------
+
+async function doPush(caddyfile: string): Promise<void> {
   const adminUrl = new URL(CADDY_ADMIN_URL);
   const adminPort = adminUrl.port || "2019";
 
@@ -717,10 +720,63 @@ export async function reloadCaddy(): Promise<void> {
     const body = await resp.text();
     lastError = `Caddy reload failed (${resp.status}) [Origin: ${origin}]: ${body}`;
 
-    // Some Caddy builds enforce origin more strictly try alternate valid origins.
+    // Some Caddy builds enforce origin more strictly — try alternate valid origins.
     if (resp.status === 403) continue;
     break;
   }
 
   throw new Error(lastError ?? "Caddy reload failed (unknown error)");
+}
+
+/**
+ * Serialises Caddy reloads so concurrent callers never overwrite a newer
+ * config with an older one. Inject build/push for testing.
+ */
+export class CaddyReloader {
+  lastPushedCaddyfile: string | null = null;
+  lastPushedAt: Date | null = null;
+  private reloadInProgress = false;
+  private reloadQueued = false;
+  private readonly buildFn: () => Promise<string>;
+  private readonly pushFn: (caddyfile: string) => Promise<void>;
+
+  constructor({
+    build,
+    push,
+  }: {
+    build: () => Promise<string>;
+    push: (caddyfile: string) => Promise<void>;
+  }) {
+    this.buildFn = build;
+    this.pushFn = push;
+  }
+
+  async reload(): Promise<void> {
+    if (this.reloadInProgress) {
+      this.reloadQueued = true;
+      return;
+    }
+
+    this.reloadInProgress = true;
+    try {
+      do {
+        this.reloadQueued = false;
+        const caddyfile = await this.buildFn();
+        await this.pushFn(caddyfile);
+        this.lastPushedCaddyfile = caddyfile;
+        this.lastPushedAt = new Date();
+      } while (this.reloadQueued);
+    } finally {
+      this.reloadInProgress = false;
+    }
+  }
+}
+
+export const caddyReloader = new CaddyReloader({
+  build: buildCaddyfile,
+  push: doPush,
+});
+
+export function reloadCaddy(): Promise<void> {
+  return caddyReloader.reload();
 }

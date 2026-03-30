@@ -259,12 +259,27 @@
     <section class="settings-section">
       <h2>Active Caddy config</h2>
       <p class="section-hint">
-        The Caddyfile currently pushed to Caddy. Useful for debugging HTTPS /
-        routing issues.
+        The last Caddyfile actually pushed to Caddy. Useful for debugging HTTPS
+        / routing issues.
       </p>
       <button class="btn-ghost" @click="loadCaddyfile">
         {{ caddyfileLoading ? "Loading…" : "Show config" }}
       </button>
+      <p
+        v-if="caddyfilePushedAt"
+        class="section-hint compact"
+        style="margin-top: 0.5rem"
+      >
+        Last pushed: {{ caddyfilePushedAt }}
+      </p>
+      <p
+        v-if="caddyfile && !caddyfilePushedAt"
+        class="section-hint compact"
+        style="margin-top: 0.5rem; color: var(--status-warn-text)"
+      >
+        No config has been pushed yet this session (server may have just
+        started).
+      </p>
       <pre
         v-if="caddyfile"
         class="block-code"
@@ -681,12 +696,17 @@ async function loadDiskUsage() {
 }
 
 const caddyfile = ref("");
+const caddyfilePushedAt = ref<string | null>(null);
 const caddyfileLoading = ref(false);
 
 async function loadCaddyfile() {
   caddyfileLoading.value = true;
   try {
-    caddyfile.value = await trpc.domains.getCaddyfile.query();
+    const result = await trpc.domains.getActiveCaddyfile.query();
+    caddyfile.value = result.caddyfile ?? "(none)";
+    caddyfilePushedAt.value = result.pushedAt
+      ? new Date(result.pushedAt).toLocaleString()
+      : null;
   } finally {
     caddyfileLoading.value = false;
   }
