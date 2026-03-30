@@ -321,17 +321,7 @@ async function runDeployment(
         });
       }
 
-      // 4. Push updated Caddy config (serves repo/<outputDir> directly)
-      try {
-        await reloadCaddy();
-        onLog("[deploy] Caddy config reloaded");
-      } catch (err) {
-        onLog(
-          `[deploy] Warning: Caddy reload failed: ${(err as Error).message}`,
-        );
-      }
-
-      // 5. Mark success
+      // 4. Mark success (must happen before Caddy reload so buildCaddyfile sees status=running)
       onLog(
         `[deploy] Static deployment successful! Serving from ${repoPath}/${service.outputDir}`,
       );
@@ -344,6 +334,16 @@ async function runDeployment(
         where: { id: service.id },
         data: { status: "running", containerId: null, containerName: null },
       });
+
+      // 5. Push updated Caddy config (serves repo/<outputDir> directly)
+      try {
+        await reloadCaddy();
+        onLog("[deploy] Caddy config reloaded");
+      } catch (err) {
+        onLog(
+          `[deploy] Warning: Caddy reload failed: ${(err as Error).message}`,
+        );
+      }
       return;
     }
 
@@ -415,15 +415,7 @@ async function runDeployment(
     const keepTags = await getKeepTags(service, tag);
     await pruneServiceImages(service.id, keepTags, onLog);
 
-    // 8. Push updated Caddy config (new container is now reachable)
-    try {
-      await reloadCaddy();
-      onLog("[deploy] Caddy config reloaded");
-    } catch (err) {
-      onLog(`[deploy] Warning: Caddy reload failed: ${(err as Error).message}`);
-    }
-
-    // 9. Mark success
+    // 8. Mark success (must happen before Caddy reload so buildCaddyfile sees containerName)
     onLog(
       `[deploy] Deployment successful! Container: ${cName} (${containerId.slice(0, 12)})`,
     );
@@ -440,6 +432,14 @@ async function runDeployment(
       where: { id: service.id },
       data: { status: "running", containerId, containerName: cName },
     });
+
+    // 9. Push updated Caddy config (new container is now reachable)
+    try {
+      await reloadCaddy();
+      onLog("[deploy] Caddy config reloaded");
+    } catch (err) {
+      onLog(`[deploy] Warning: Caddy reload failed: ${(err as Error).message}`);
+    }
   } catch (err) {
     await fail((err as Error).message);
   }
