@@ -723,6 +723,7 @@ const updateFinishedAt = ref<string | null>(null);
 let updatePollInterval: ReturnType<typeof setInterval> | null = null;
 
 async function triggerUpdate() {
+  updateConfirmOpen.value = false;
   updateError.value = "";
   updateLog.value = [];
   updateExitCode.value = null;
