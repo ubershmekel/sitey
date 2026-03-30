@@ -4,16 +4,19 @@
  *   2. Configure Namecheap DNS (wildcard A record)
  *   3. Install Sitey on the server (main-branch or worktree mode)
  *   4. Run Playwright tests against the live instance
- *   5. Tear down the server (always, even on failure)
+ *   5. Tear down the server (skipped with --leave-up)
  *
  * Config: e2e/remote/full-loop.env  (copy from full-loop.env.example)
- * Run:    npm run test:e2e-cloud:main-branch   pull from origin/main (installer path)
- *         npm run test:e2e-cloud:worktree       upload local worktree to server
+ * Run:    npm run test:e2e-cloud:worktree           upload local worktree, tear down after
+ *         npm run test:e2e-cloud:worktree-leave-up  upload local worktree, leave server running
+ *
+ * On startup, run-log.json is read and any stale resources from previous runs
+ * (up to 3 entries) are cleaned up automatically to prevent leaks.
  */
 
 import { spawn } from "node:child_process";
 import net from "node:net";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -25,10 +28,12 @@ import { setWildcardRecord, deleteWildcardRecord } from "./infra/namecheap.ts";
 // ---------------------------------------------------------------------------
 
 const WORKTREE_MODE = process.argv.includes("--worktree");
+const LEAVE_UP = process.argv.includes("--leave-up");
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
 const envPath = resolve("e2e/remote/full-loop.env");
+const runLogPath = resolve(scriptDir, "run-log.json");
 
 if (!existsSync(envPath)) {
   console.error("Missing e2e/remote/full-loop.env");
@@ -92,6 +97,93 @@ const dnsPropagationMs = parseInt(
   10,
 );
 const sshKeyPath = config.SSH_PRIVATE_KEY_PATH.replace(/^~/, homedir());
+
+// ---------------------------------------------------------------------------
+// Run log — tracks created resources so stale ones can be cleaned on startup
+// ---------------------------------------------------------------------------
+
+interface RunLogEntry {
+  serverId: number;
+  serverIp: string;
+  subdomain: string;
+  sld: string;
+  tld: string;
+  createdAt: string;
+}
+
+function loadRunLog(): RunLogEntry[] {
+  try {
+    if (existsSync(runLogPath)) {
+      return JSON.parse(readFileSync(runLogPath, "utf8")) as RunLogEntry[];
+    }
+  } catch {
+    // corrupted log — start fresh
+  }
+  return [];
+}
+
+function saveRunLog(entries: RunLogEntry[]): void {
+  writeFileSync(runLogPath, JSON.stringify(entries, null, 2) + "\n", "utf8");
+}
+
+function appendRunLog(entry: RunLogEntry): void {
+  const entries = loadRunLog();
+  entries.push(entry);
+  saveRunLog(entries);
+}
+
+function removeFromRunLog(serverId: number): void {
+  const entries = loadRunLog().filter((e) => e.serverId !== serverId);
+  saveRunLog(entries);
+}
+
+/**
+ * On startup, clean up any resources from previous runs (up to the most recent
+ * `limit` entries) to prevent leaks from crashed or --leave-up runs.
+ */
+async function cleanupStaleResources(limit = 3): Promise<void> {
+  const entries = loadRunLog();
+  if (entries.length === 0) return;
+
+  const toClean = entries.slice(-limit);
+  log(
+    `Found ${entries.length} stale resource(s) in run-log; cleaning up ${toClean.length}...`,
+  );
+
+  const cleaned: number[] = [];
+  for (const entry of toClean) {
+    log(
+      `  Cleaning up server ${entry.serverId} (${entry.serverIp}) / subdomain ${entry.subdomain}.${entry.sld}.${entry.tld}...`,
+    );
+
+    try {
+      await deleteServer(config.HCLOUD_TOKEN, entry.serverId);
+      log(`    Server ${entry.serverId} deleted.`);
+    } catch (err) {
+      log(`    WARNING: could not delete server ${entry.serverId}: ${err}`);
+    }
+
+    try {
+      await deleteWildcardRecord({
+        apiUser: config.NAMECHEAP_API_USER,
+        apiKey: config.NAMECHEAP_API_KEY,
+        clientIp: config.NAMECHEAP_CLIENT_IP,
+        sld: entry.sld,
+        tld: entry.tld,
+        subdomain: entry.subdomain,
+      });
+      log(`    DNS records for ${entry.subdomain} removed.`);
+    } catch (err) {
+      log(`    WARNING: could not remove DNS for ${entry.subdomain}: ${err}`);
+    }
+
+    cleaned.push(entry.serverId);
+  }
+
+  const remaining = entries.filter((e) => !cleaned.includes(e.serverId));
+  saveRunLog(remaining);
+  log(`Stale resource cleanup done.`);
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -359,7 +451,12 @@ function since(start: number): string {
 // ---------------------------------------------------------------------------
 
 let serverId: number | null = null;
+let serverIp: string | null = null;
+let resourcesProvisioned = false;
 const totalStart = Date.now();
+
+// Clean up stale resources from previous runs before provisioning anything new.
+await cleanupStaleResources(3);
 
 try {
   let stepStart = Date.now();
@@ -372,6 +469,7 @@ try {
     sshKey: config.HETZNER_SSH_KEY,
   });
   serverId = server.id;
+  serverIp = server.ip;
   log(`Server ready: id=${server.id}  ip=${server.ip}  (${since(stepStart)})`);
 
   stepStart = Date.now();
@@ -386,6 +484,17 @@ try {
     ip: server.ip,
   });
   log(`DNS updated. (${since(stepStart)})`);
+
+  // Record in run-log so a future run can clean up if this one crashes or is left up.
+  appendRunLog({
+    serverId: server.id,
+    serverIp: server.ip,
+    subdomain,
+    sld,
+    tld,
+    createdAt: new Date().toISOString(),
+  });
+  resourcesProvisioned = true;
 
   stepStart = Date.now();
   log("Waiting for SSH...");
@@ -417,33 +526,47 @@ try {
   await runPlaywright(server.ip, password);
   log(`All tests passed. (${since(stepStart)})`);
 } finally {
-  if (serverId !== null) {
-    log(`Deleting Hetzner server ${serverId}...`);
-    try {
-      await deleteServer(config.HCLOUD_TOKEN, serverId);
-      log("Server deleted.");
-    } catch (err) {
-      console.error("[full-loop] WARNING: failed to delete server:", err);
-      console.error(
-        `[full-loop] Delete manually at cloud.hetzner.com (id=${serverId})`,
-      );
+  if (LEAVE_UP && resourcesProvisioned) {
+    log("");
+    log("=".repeat(60));
+    log("--leave-up: server is intentionally left running.");
+    log(`  Server IP : ${serverIp}`);
+    log(`  Domain    : ${wildcardDomainRun}`);
+    log(`  Server ID : ${serverId}`);
+    log(`  SSH       : ssh -i ${sshKeyPath} root@${serverIp}`);
+    log(`  Resources recorded in run-log.json — next run will clean them up.`);
+    log("=".repeat(60));
+    log(`Total time: ${since(totalStart)}`);
+  } else {
+    if (serverId !== null) {
+      log(`Deleting Hetzner server ${serverId}...`);
+      try {
+        await deleteServer(config.HCLOUD_TOKEN, serverId);
+        log("Server deleted.");
+        if (resourcesProvisioned) removeFromRunLog(serverId);
+      } catch (err) {
+        console.error("[full-loop] WARNING: failed to delete server:", err);
+        console.error(
+          `[full-loop] Delete manually at cloud.hetzner.com (id=${serverId})`,
+        );
+      }
     }
-  }
 
-  log(`Removing Namecheap DNS records for ${wildcardDomainRun}...`);
-  try {
-    await deleteWildcardRecord({
-      apiUser: config.NAMECHEAP_API_USER,
-      apiKey: config.NAMECHEAP_API_KEY,
-      clientIp: config.NAMECHEAP_CLIENT_IP,
-      sld,
-      tld,
-      subdomain,
-    });
-    log("DNS records removed.");
-  } catch (err) {
-    console.error("[full-loop] WARNING: failed to remove DNS records:", err);
-  }
+    log(`Removing Namecheap DNS records for ${wildcardDomainRun}...`);
+    try {
+      await deleteWildcardRecord({
+        apiUser: config.NAMECHEAP_API_USER,
+        apiKey: config.NAMECHEAP_API_KEY,
+        clientIp: config.NAMECHEAP_CLIENT_IP,
+        sld,
+        tld,
+        subdomain,
+      });
+      log("DNS records removed.");
+    } catch (err) {
+      console.error("[full-loop] WARNING: failed to remove DNS records:", err);
+    }
 
-  log(`Total time: ${since(totalStart)}`);
+    log(`Total time: ${since(totalStart)}`);
+  }
 }

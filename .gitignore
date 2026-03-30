@@ -9,6 +9,7 @@ deploy/data/
 *.db-wal
 deploy/.env
 e2e/remote/full-loop.env
+e2e/remote/run-log.json
 server/src/generated/
 web/dist/
 .DS_Store
