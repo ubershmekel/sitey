@@ -12,6 +12,7 @@ import {
   setConfiguredPublicSiteUrl,
 } from "../services/siteUrl.ts";
 import { docker, decodeDockerLogPayload } from "../services/docker.ts";
+import { buildCaddyfile, caddyReloader } from "../services/caddy.ts";
 import { db } from "../lib/db.ts";
 
 // ── Updater state ─────────────────────────────────────────────────────────────
@@ -301,6 +302,63 @@ export const systemRouter = router({
       exitCode: completed ? 0 : log.length > 0 ? 1 : null,
     };
   }),
+
+  getCaddyfile: settledProcedure.query(() => buildCaddyfile()),
+
+  getActiveCaddyfile: settledProcedure.query(() => ({
+    caddyfile: caddyReloader.lastPushedCaddyfile,
+    pushedAt: caddyReloader.lastPushedAt?.toISOString() ?? null,
+  })),
+
+  getCaddyLogs: settledProcedure
+    .input(
+      z.object({
+        tail: z.number().int().min(1).max(1000).default(200),
+      }),
+    )
+    .query(async ({ input }) => {
+      const candidates = await docker.listContainers({
+        all: true,
+        filters: { label: ["com.docker.compose.service=caddy"] },
+      });
+
+      const selected =
+        candidates.find((c) => c.State === "running") ?? candidates[0];
+      if (!selected?.Id) {
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Caddy container not found",
+        });
+      }
+
+      try {
+        const logs = await docker.getContainer(selected.Id).logs({
+          stdout: true,
+          stderr: true,
+          timestamps: false,
+          tail: input.tail,
+        });
+        const raw = decodeDockerLogPayload(logs);
+        const lines = raw
+          .split(/\r?\n/)
+          .map((line) =>
+            line
+              .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/g, "")
+              .trimEnd(),
+          )
+          .filter(Boolean);
+
+        return {
+          container: selected.Names?.[0]?.replace(/^\//, "") ?? "caddy",
+          lines,
+        };
+      } catch (err) {
+        throw new TRPCError({
+          code: "INTERNAL_SERVER_ERROR",
+          message: `Failed to read Caddy logs: ${(err as Error).message}`,
+        });
+      }
+    }),
 
   getContainerLogs: settledProcedure
     .input(

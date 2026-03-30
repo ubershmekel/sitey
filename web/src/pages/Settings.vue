@@ -702,7 +702,7 @@ const caddyfileLoading = ref(false);
 async function loadCaddyfile() {
   caddyfileLoading.value = true;
   try {
-    const result = await trpc.domains.getActiveCaddyfile.query();
+    const result = await trpc.system.getActiveCaddyfile.query();
     caddyfile.value = result.caddyfile ?? "(none)";
     caddyfilePushedAt.value = result.pushedAt
       ? new Date(result.pushedAt).toLocaleString()

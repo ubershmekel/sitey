@@ -220,7 +220,7 @@ async function loadCaddyLogs() {
   caddyLogsLoading.value = true;
   caddyLogsError.value = "";
   try {
-    const res = await trpc.domains.getCaddyLogs.query({ tail: 200 });
+    const res = await trpc.system.getCaddyLogs.query({ tail: 200 });
     caddyLogLines.value = res.lines;
   } catch (e: unknown) {
     caddyLogsError.value =

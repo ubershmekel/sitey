@@ -26,7 +26,7 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
   return next({ ctx: { ...ctx, user: ctx.user } });
 });
 
-/** Requires auth AND completed password change. */
+/** Requires auth. */
 export const settledProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (ctx.user.mustChangePassword) {
     throw new TRPCError({
