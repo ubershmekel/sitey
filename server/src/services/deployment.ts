@@ -24,8 +24,7 @@ import {
   runOrReplaceContainer,
   stopAndRemoveContainer,
   createNetworkIfMissing,
-  generateDefaultDockerfile,
-  generateServerDockerfile,
+  generateDockerfile,
   pruneServiceImages,
   allocateHostPort,
   runBuildContainer,
@@ -102,21 +101,14 @@ async function getKeepTags(
   );
 }
 
-function buildManagedDockerfile(service: Service, onLog: OnLog): string {
-  if (service.serverRunCommand) {
-    onLog(
-      "[deploy] Auto mode: generating Sitey Dockerfile with custom run command",
-    );
-    return generateServerDockerfile(
-      service.buildCommand,
-      service.serverRunCommand,
-      service.containerPort,
-      "repo",
-    );
-  }
-
-  onLog("[deploy] Auto mode: generating default Sitey Node.js Dockerfile");
-  return generateDefaultDockerfile(service.containerPort, "repo");
+function buildManagedDockerfile(service: Service): string {
+  return generateDockerfile(
+    service.buildCommand,
+    service.serverRunCommand,
+    service.containerPort,
+    "repo",
+    service.buildImage || undefined,
+  );
 }
 
 function ensureManagedDockerfile(
@@ -124,18 +116,8 @@ function ensureManagedDockerfile(
   managedDockerfilePath: string,
   onLog: OnLog,
 ): void {
-  if (fs.existsSync(managedDockerfilePath)) {
-    onLog(
-      `[deploy] Auto mode: using existing managed Dockerfile: ${managedDockerfilePath}`,
-    );
-    return;
-  }
-
   fs.mkdirSync(path.dirname(managedDockerfilePath), { recursive: true });
-  fs.writeFileSync(
-    managedDockerfilePath,
-    buildManagedDockerfile(service, onLog),
-  );
+  fs.writeFileSync(managedDockerfilePath, buildManagedDockerfile(service));
   onLog(`[deploy] Wrote managed Dockerfile: ${managedDockerfilePath}`);
 }
 

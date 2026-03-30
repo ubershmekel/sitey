@@ -92,7 +92,7 @@
             :class="{ active: deployType === 'dockerfile' }"
             @click="deployType = 'dockerfile'"
           >
-            Dockerfile
+            Repo Dockerfile
           </button>
         </div>
         <div class="text-option-help">
@@ -124,17 +124,32 @@
           <input v-model="form.outputDir" type="text" placeholder="dist" />
         </label>
         <label>
-          Build image
-          <span class="hint">(optional, e.g. <code>oven/bun:1</code>)</span>
+          Docker image
+          <span class="hint"
+            >(optional, e.g. <code>oven/bun:1</code>,
+            <code>node:22-alpine</code>)</span
+          >
           <input
             v-model="form.buildImage"
             type="text"
-            placeholder="Leave empty to use Node.js 24"
+            placeholder="Leave empty for Node.js 24"
           />
         </label>
       </template>
 
       <template v-else-if="deployType === 'server'">
+        <label>
+          Docker image
+          <span class="hint"
+            >(optional, e.g. <code>node:22-alpine</code>,
+            <code>python:3.12-slim</code>, <code>oven/bun:1</code>)</span
+          >
+          <input
+            v-model="form.buildImage"
+            type="text"
+            placeholder="Leave empty for Node.js 24"
+          />
+        </label>
         <label>
           Build command <span class="hint">(optional, e.g. npm run build)</span>
           <input
@@ -375,20 +390,35 @@ async function addService() {
   try {
     const isStatic = deployType.value === "static";
     const isDockerfile = deployType.value === "dockerfile";
+    const deployMode = isStatic ? "static" : "server";
+    const buildMode = isDockerfile ? "dockerfile" : "auto";
+    const outputDir = isStatic ? form.value.outputDir.trim() || "dist" : "";
+    let buildImage = "";
+    let serverRunCommand = "";
+    let dockerfilePath = "";
+
+    if (isDockerfile) {
+      dockerfilePath = form.value.dockerfilePath.trim();
+    } else {
+      buildImage = form.value.buildImage.trim();
+      if (!isStatic) {
+        serverRunCommand = form.value.serverRunCommand.trim();
+      }
+    }
+
     const created = await trpc.services.create.mutate({
       name: form.value.name.trim(),
       repoOwner: form.value.repoOwner.trim(),
       repoName: form.value.repoName.trim(),
       branch: form.value.branch.trim() || "main",
       githubMode: reposConfigured.value ? "app" : "webhook",
-      deployMode: isStatic ? "static" : "server",
+      deployMode,
       buildCommand: form.value.buildCommand.trim(),
-      outputDir: isStatic ? form.value.outputDir.trim() || "dist" : "",
-      buildImage: isStatic ? form.value.buildImage.trim() : "",
-      serverRunCommand:
-        isStatic || isDockerfile ? "" : form.value.serverRunCommand.trim(),
-      buildMode: isDockerfile ? "dockerfile" : "auto",
-      dockerfilePath: isDockerfile ? form.value.dockerfilePath.trim() : "",
+      outputDir,
+      buildImage,
+      serverRunCommand,
+      buildMode,
+      dockerfilePath,
       containerPort: form.value.containerPort,
     });
 

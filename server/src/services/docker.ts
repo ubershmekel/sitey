@@ -379,67 +379,33 @@ export async function runBuildContainer(opts: {
 
 // ── Dockerfile generators ─────────────────────────────────────────────────────
 
-/** Server Dockerfile with optional build step and custom run command */
-export function generateServerDockerfile(
+/**
+ * Generate a Dockerfile with sensible defaults.
+ * - If buildCommand and serverRunCommand are provided: single-stage with custom commands
+ * - If neither provided: multi-stage Node.js build (npm run build → node server.js)
+ * - baseImage defaults to node:24-bookworm-slim; can be overridden for non-Node apps
+ */
+export function generateDockerfile(
   buildCommand: string,
   serverRunCommand: string,
   containerPort = 3000,
   sourceRoot = ".",
+  baseImage = "node:24-bookworm-slim",
 ): string {
+  const fullSource = sourceRoot === "." ? "." : `${sourceRoot}/.`;
+
+  if (!buildCommand.trim() && !serverRunCommand.trim()) {
+    throw new Error(
+      "generateDockerfile requires buildCommand or serverRunCommand",
+    );
+  }
   const buildStep = buildCommand.trim() ? `RUN ${buildCommand.trim()}\n` : "";
   const cmd = serverRunCommand.trim();
-  // package.json and package-lock.json
-  const packageJsonSource =
-    sourceRoot === "." ? "package*.json" : `${sourceRoot}/package*.json`;
-  const fullSource = sourceRoot === "." ? "." : `${sourceRoot}/.`;
-  return `FROM node:24-bookworm-slim AS deps
+  return `FROM ${baseImage}
 WORKDIR /app
-COPY ${packageJsonSource} ./
-RUN npm ci --omit=dev
-
-FROM node:24-bookworm-slim AS builder
-WORKDIR /app
-COPY ${packageJsonSource} ./
-RUN npm ci
 COPY ${fullSource} .
-${buildStep}
-FROM node:24-bookworm-slim AS runner
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=builder /app .
-ENV NODE_ENV=production
-ENV PORT=${containerPort}
+${buildStep}ENV PORT=${containerPort}
 EXPOSE ${containerPort}
 CMD ["sh", "-c", "${cmd}"]
-`;
-}
-
-export function generateDefaultDockerfile(
-  containerPort = 3000,
-  sourceRoot = ".",
-): string {
-  const packageJsonSource =
-    sourceRoot === "." ? "package*.json" : `${sourceRoot}/package*.json`;
-  const fullSource = sourceRoot === "." ? "." : `${sourceRoot}/.`;
-  return `FROM node:24-bookworm-slim AS deps
-WORKDIR /app
-COPY ${packageJsonSource} ./
-RUN npm ci --omit=dev
-
-FROM node:24-bookworm-slim AS builder
-WORKDIR /app
-COPY ${packageJsonSource} ./
-RUN npm ci
-COPY ${fullSource} .
-RUN npm run build --if-present
-
-FROM node:24-bookworm-slim
-WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=builder /app .
-ENV NODE_ENV=production
-ENV PORT=${containerPort}
-EXPOSE ${containerPort}
-CMD ["node", "server.js"]
 `;
 }
