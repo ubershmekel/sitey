@@ -40,17 +40,8 @@ log "Host deploy dir: $HOST_DEPLOY"
 
 cd /sitey-root/deploy
 
-# Exclude the updater itself — recreating our own container kills this exec.
-# The updater rarely needs rebuilding since its script is mounted, not baked in.
-SERVICES=$(docker compose config --services | grep -v sitey-updater | tr '\n' ' ')
+SERVICES="caddy sitey-api"
 
-log "[1/2] docker compose build"
-log "Rebuild images for services built from source"
-docker compose build $SERVICES 2>&1 | tee -a "$LOG"
-
-log "[2/2] docker compose up -d"
-log "Recreate containers whose images or config have changed"
-log "Restarting: $SERVICES"
 # build: uses container paths (sends file context to daemon as tar) — works fine.
 # up: bind mount paths must be HOST paths, so we use --project-directory to
 # resolve relative paths against the host filesystem.
@@ -60,10 +51,21 @@ ENV_FILE=""
 if [ -f /sitey-root/deploy/.env ]; then
   ENV_FILE="--env-file /sitey-root/deploy/.env"
 fi
-docker compose \
-  -f /sitey-root/deploy/docker-compose.yml \
-  $ENV_FILE \
-  --project-directory "$HOST_DEPLOY" \
-  up -d $SERVICES 2>&1 | tee -a "$LOG"
+
+DC="docker compose -f /sitey-root/deploy/docker-compose.yml $ENV_FILE"
+DC_HOST="$DC --project-directory $HOST_DEPLOY"
+
+log "[1/3] docker compose build"
+log "Rebuild images for services built from source"
+docker compose build sitey-web-builder $SERVICES 2>&1 | tee -a "$LOG"
+
+log "[2/3] sitey-web-builder"
+log "Build and deploy SPA to data volume (Caddy stays up)"
+$DC_HOST up sitey-web-builder 2>&1 | tee -a "$LOG"
+
+log "[3/3] docker compose up -d"
+log "Recreate containers whose images or config have changed"
+log "Restarting: $SERVICES"
+$DC_HOST up -d $SERVICES 2>&1 | tee -a "$LOG"
 
 log "=== update complete ==="

@@ -31,7 +31,7 @@ const SITEY_API_INTERNAL =
   process.env.SITEY_API_INTERNAL ??
   (IS_HOST_RUN_DEV ? "host.docker.internal:3001" : "sitey-api:3001");
 // When set, Caddy proxies the web SPA to this host instead of serving /srv/web.
-// Keep this opt-in so Caddy can fall back to baked /srv/web when Vite isn't running.
+// In production /srv/web is a bind-mounted volume; in dev it proxies to Vite.
 const SITEY_WEB_INTERNAL = process.env.SITEY_WEB_INTERNAL ?? "";
 const WILDCARD_STATUS_PROBE_LABEL = "sitey-dns-check";
 
@@ -280,12 +280,12 @@ function appendRouteHandler(lines: string[], route: CaddyServiceRoute): void {
       lines.push(`        redir ${route.pathPrefix}/ 308`);
       lines.push("    }");
       lines.push(`    handle_path ${route.pathPrefix}/* {`);
-      lines.push("        root * /srv");
+      lines.push("        root * /srv/web");
       lines.push("        rewrite * /pending.html");
       lines.push("        file_server");
       lines.push("    }");
     } else {
-      lines.push("    root * /srv");
+      lines.push("    root * /srv/web");
       lines.push("    rewrite * /pending.html");
       lines.push("    file_server");
     }
@@ -351,7 +351,7 @@ function appendSiteBlockBody(
       lines.push("        error 404");
       lines.push("    }");
       lines.push("    handle_errors {");
-      lines.push("        root * /srv");
+      lines.push("        root * /srv/web");
       lines.push("        rewrite * /404.html");
       lines.push("        templates");
       lines.push("        file_server");

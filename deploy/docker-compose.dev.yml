@@ -8,6 +8,10 @@
 #   npm run dev:docker -- --build
 
 services:
+  # Disable the one-shot SPA builder in dev — Vite dev server handles this.
+  sitey-web-builder:
+    entrypoint: ["true"]
+
   caddy:
     volumes:
       - ./caddy/Caddyfile.dev:/etc/caddy/Caddyfile:ro

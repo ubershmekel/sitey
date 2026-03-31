@@ -12,13 +12,27 @@ volumes:
 
 # ─── Services ─────────────────────────────────────────────────────────────────
 services:
-  # ── Caddy (TLS termination + reverse proxy + static file server) ───────────
-  # The sitey-web SPA is baked into this image at /srv/web.
-  # User static sites are served from /srv/services/<id>/repo/<outputDir>.
-  caddy:
+  # ── Sitey Web (SPA builder) ───────────────────────────────────────────────
+  # One-shot container: builds the Vue SPA and copies dist to $DATA_ROOT/web/.
+  # Caddy serves from there, so web updates never require restarting Caddy.
+  sitey-web-builder:
     build:
       context: ..
-      dockerfile: deploy/caddy/Dockerfile
+      dockerfile: web/Dockerfile
+    volumes:
+      - ${DATA_ROOT:-./data}/web:/output
+    restart: "no"
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ── Caddy (TLS termination + reverse proxy + static file server) ───────────
+  # User static sites are served from /srv/services/<id>/repo/<outputDir>.
+  # The sitey-web SPA is served from $DATA_ROOT/web (built by sitey-web-builder).
+  caddy:
+    image: caddy:alpine
     restart: unless-stopped
     ports:
       - "80:80"
@@ -27,6 +41,7 @@ services:
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
+      - ${DATA_ROOT:-./data}/web:/srv/web:ro
       - ${DATA_ROOT:-./data}/services:/srv/services:ro
     networks:
       - sitey-public
