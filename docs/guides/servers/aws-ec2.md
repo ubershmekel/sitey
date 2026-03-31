@@ -1,7 +1,6 @@
 # AWS EC2 Server Onboarding
 
-This guide gets you from a fresh AWS account to a running Sitey instance on
-EC2.
+This guide gets you from a fresh AWS account to a running Sitey instance on EC2.
 
 ## 1. Before you start
 

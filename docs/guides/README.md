@@ -1,7 +1,7 @@
 # Guide to Self-Hosting
 
-This guide set helps first-time operators go from "no server" to a working
-Sitey install with a real domain and HTTPS.
+This guide set helps first-time operators go from "no server" to a working Sitey
+install with a real domain and HTTPS.
 
 ## Information architecture
 
@@ -20,11 +20,10 @@ docs/guides/
 
 ## Recommended onboarding flow
 
-1. Choose how you will access your server.
-   SSH key auth is recommended, but not required.
-   If you want SSH key auth, use: [SSH keys guide](./ssh-keys.md)
-2. Create your server (pick one):
-   [Hetzner](./servers/hetzner.md) or [AWS EC2](./servers/aws-ec2.md)
+1. Choose how you will access your server. SSH key auth is recommended, but not
+   required. If you want SSH key auth, use: [SSH keys guide](./ssh-keys.md)
+2. Create your server (pick one): [Hetzner](./servers/hetzner.md) or
+   [AWS EC2](./servers/aws-ec2.md)
 3. Log into the server (SSH, provider console, or another method) and install
    Sitey:
 
@@ -32,10 +31,8 @@ docs/guides/
    curl -fsSL https://raw.githubusercontent.com/ubershmekel/sitey/main/deploy/install-ubuntu.sh | bash
    ```
 
-4. Point DNS for your domain (pick one):
-   [Namecheap](./dns/namecheap.md),
-   [Amazon Route 53](./dns/route53.md), or
-   [GoDaddy](./dns/godaddy.md)
+4. Point DNS for your domain (pick one): [Namecheap](./dns/namecheap.md),
+   [Amazon Route 53](./dns/route53.md), or [GoDaddy](./dns/godaddy.md)
 5. In Sitey, add your domain and create your first service.
 
 ## If you need deeper operations docs

@@ -71,7 +71,8 @@ output live:
 1. Read the update script into memory (before pulling, so it references the
    current generation's filename — see "How the updater sidecar works" below)
 2. `git pull` — fetches the latest code
-3. `docker compose build` — rebuilds images for services defined in docker-compose.yml (except the updater, so it can keep running)
+3. `docker compose build` — rebuilds images for services defined in
+   docker-compose.yml (except the updater, so it can keep running)
 4. `docker compose up -d` — restarts services with the new images
 
 The page will briefly disconnect when the API container restarts. Reload once it
@@ -100,7 +101,8 @@ way that requires a fresh DB — see **Nuking data** below.
 - `/var/run/docker.sock` — so it can run `docker compose` commands
 - `/sitey-root` — the repo root (i.e. `/opt/sitey`), for `git pull` and to read
   `update-docker.sh` at exec time
-- `/data` — shared data volume, used to write `.update.log` (survives API restart)
+- `/data` — shared data volume, used to write `.update.log` (survives API
+  restart)
 
 When you click **Update Sitey**, `sitey-api` execs into the updater container
 and runs a single shell command that:
@@ -110,10 +112,10 @@ and runs a single shell command that:
 3. Evals `$UPDATE_SCRIPT` from memory
 
 The script is read **before** `git pull` so it references the current
-generation's filename, not the incoming one. This means the update script can
-be safely renamed — just update the path in `system.ts` in the same commit.
-After `docker compose up -d` restarts the API, the new `system.ts` takes over
-with whatever the new filename is. Each deployed generation only ever talks to
+generation's filename, not the incoming one. This means the update script can be
+safely renamed — just update the path in `system.ts` in the same commit. After
+`docker compose up -d` restarts the API, the new `system.ts` takes over with
+whatever the new filename is. Each deployed generation only ever talks to
 itself.
 
 Because the script is read from the mount rather than baked into the image, you

@@ -13,5 +13,7 @@
   - Note: Prisma CLI needs `DATABASE_URL` env var — the `dev` script loads it
     via `--env-file .env` but Prisma scripts don't. Set it inline if needed.
 - `npm run dev` — starts web :3000 + API :3001
-- `npm run typecheck` — run before committing api/auth/store/router changes; catches cross-file drift (e.g. accessing a store property that was removed) that might not surface during `npm run dev`
+- `npm run typecheck` — run before committing api/auth/store/router changes;
+  catches cross-file drift (e.g. accessing a store property that was removed)
+  that might not surface during `npm run dev`
 - `npm install` — installs all workspaces
