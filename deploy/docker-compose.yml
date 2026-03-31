@@ -30,6 +30,11 @@ services:
       - ${DATA_ROOT:-./data}/services:/srv/services:ro
     networks:
       - sitey-public
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "10"
 
   # ── Sitey Updater ─────────────────────────────────────────────────────────
   # Dormant container. sitey-api execs update-docker.sh into it to trigger updates.
@@ -41,6 +46,11 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
       - ../:/sitey-root
       - ${DATA_ROOT:-./data}:/data
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "10"
 
   # ── Sitey API ─────────────────────────────────────────────────────────────
   sitey-api:
@@ -72,3 +82,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - sitey-public
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "10"
