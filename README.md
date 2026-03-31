@@ -36,13 +36,13 @@ docker really) from GitHub to your own VM with automatic HTTPS.
 
 ## Stack
 
-| Layer         | Technology                                 |
-| ------------- | ------------------------------------------ |
-| API           | TypeScript + Fastify + tRPC v11            |
-| DB            | SQLite + Prisma                            |
-| Frontend      | Vue 3 + Pinia (Vite)                       |
-| Reverse proxy | Caddy (caddy-docker-proxy) + Let's Encrypt |
-| Deployments   | Docker-in-Docker via socket mount          |
+| Layer         | Technology                      |
+| ------------- | ------------------------------- |
+| API           | TypeScript + Fastify + tRPC v11 |
+| DB            | SQLite + Prisma                 |
+| Frontend      | Vue 3 + Pinia + Vite            |
+| Reverse proxy | Caddy + Let's Encrypt           |
+| Deployments   | Docker + Dockerode              |
 
 ---
 
