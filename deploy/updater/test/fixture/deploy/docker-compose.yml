@@ -1,0 +1,37 @@
+name: sitey-updater-test
+
+services:
+  toy-app:
+    build: ./app
+    restart: unless-stopped
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "1"
+
+  toy-builder:
+    build: ./app
+    restart: "no"
+    volumes:
+      - ./data/builder-output:/output
+    command:
+      ["sh", "-c", "cp /etc/marker /output/marker && echo 'builder done'"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "1"
+
+  updater:
+    image: docker:cli
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ../../fixture:/sitey-root
+      - ./data:/data
+    command: ["sleep", "infinity"]
+    logging:
+      driver: json-file
+      options:
+        max-size: "1m"
+        max-file: "1"

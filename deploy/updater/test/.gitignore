@@ -1,0 +1,4 @@
+fixture/deploy/data/
+fixture/deploy/updater/
+fixture/deploy/app/marker
+run-log.json
