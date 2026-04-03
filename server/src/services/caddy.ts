@@ -337,10 +337,8 @@ function appendTlsEmailDirective(lines: string[], email: string): void {
   }
 }
 
-function appendSiteBlockBody(
-  lines: string[],
-  routes: CaddyServiceRoute[],
-): void {
+function buildSiteBlockBodyLines(routes: CaddyServiceRoute[]): string[] {
+  const lines: string[] = [];
   if (routes.length > 0) {
     for (const route of routes) appendRouteHandler(lines, route);
     // If every route is path-prefix only, nothing handles unmatched paths.
@@ -360,6 +358,52 @@ function appendSiteBlockBody(
   } else {
     appendAdminHandlers(lines);
   }
+  return lines;
+}
+
+type RenderedSiteBlock = {
+  labels: string[];
+  bodyLines: string[];
+  tlsEmail?: string;
+};
+
+export function mergeRenderedSiteBlocks(
+  blocks: RenderedSiteBlock[],
+): RenderedSiteBlock[] {
+  const merged: RenderedSiteBlock[] = [];
+  const indexBySignature = new Map<string, number>();
+
+  for (const block of blocks) {
+    const signature = JSON.stringify({
+      tlsEmail: block.tlsEmail ?? "",
+      body: block.bodyLines,
+    });
+    const existingIndex = indexBySignature.get(signature);
+    if (existingIndex == null) {
+      indexBySignature.set(signature, merged.length);
+      merged.push({
+        labels: [...block.labels],
+        bodyLines: [...block.bodyLines],
+        tlsEmail: block.tlsEmail,
+      });
+      continue;
+    }
+
+    merged[existingIndex].labels.push(...block.labels);
+  }
+
+  return merged;
+}
+
+function appendRenderedSiteBlock(
+  lines: string[],
+  block: RenderedSiteBlock,
+): void {
+  lines.push(`${block.labels.join(", ")} {`);
+  if (block.tlsEmail) appendTlsEmailDirective(lines, block.tlsEmail);
+  lines.push(...block.bodyLines);
+  lines.push("}");
+  lines.push("");
 }
 
 /**
@@ -372,46 +416,47 @@ function appendSiteBlockBody(
  * redirect kicks in.
  */
 function appendSiteBlock(
-  lines: string[],
+  blocks: RenderedSiteBlock[],
   hostname: string,
   email: string,
   routes: CaddyServiceRoute[],
   options?: { httpFallback?: boolean; httpOnly?: boolean },
 ): void {
+  const bodyLines = buildSiteBlockBodyLines(routes);
   if (options?.httpOnly) {
-    lines.push(`http://${hostname} {`);
-    appendSiteBlockBody(lines, routes);
-    lines.push("}");
-    lines.push("");
+    blocks.push({
+      labels: [`http://${hostname}`],
+      bodyLines,
+    });
     return;
   }
 
   // Plain-HTTP fallback — keeps the site reachable while cert is pending.
   if (options?.httpFallback) {
-    lines.push(`http://${hostname} {`);
-    appendSiteBlockBody(lines, routes);
-    lines.push("}");
-    lines.push("");
+    blocks.push({
+      labels: [`http://${hostname}`],
+      bodyLines,
+    });
   }
 
   // Main (HTTPS) block — Caddy provisions the cert in the background.
-  lines.push(`${hostname} {`);
-  appendTlsEmailDirective(lines, email);
-  appendSiteBlockBody(lines, routes);
-  lines.push("}");
-  lines.push("");
+  blocks.push({
+    labels: [hostname],
+    bodyLines,
+    tlsEmail: email?.trim() || undefined,
+  });
 }
 
 function appendProbeSiteBlock(
-  lines: string[],
+  blocks: RenderedSiteBlock[],
   hostname: string,
   email: string,
 ): void {
-  lines.push(`${hostname} {`);
-  appendTlsEmailDirective(lines, email);
-  lines.push("    respond 204");
-  lines.push("}");
-  lines.push("");
+  blocks.push({
+    labels: [hostname],
+    bodyLines: ["    respond 204"],
+    tlsEmail: email?.trim() || undefined,
+  });
 }
 
 function toServiceRoutes(
@@ -497,6 +542,7 @@ export async function buildCaddyfile(): Promise<string> {
   ]);
 
   const lines: string[] = [];
+  const siteBlocks: RenderedSiteBlock[] = [];
 
   // Global options — enable admin API so we can push configs
   lines.push("{");
@@ -560,7 +606,7 @@ export async function buildCaddyfile(): Promise<string> {
     if (!domain.hostname.startsWith("*.")) {
       const hostHttpOnly = serviceRoutes.some((route) => route.httpOnly);
       appendSiteBlock(
-        lines,
+        siteBlocks,
         domain.hostname,
         domain.letsEncryptEmail,
         serviceRoutes,
@@ -587,7 +633,7 @@ export async function buildCaddyfile(): Promise<string> {
       !routesByHostname.has(probeHostname) &&
       probeHostname !== siteyNamedDomain
     ) {
-      appendProbeSiteBlock(lines, probeHostname, domain.letsEncryptEmail);
+      appendProbeSiteBlock(siteBlocks, probeHostname, domain.letsEncryptEmail);
     }
 
     if ((domain as any).siteySubdomainsEnabled) {
@@ -597,20 +643,36 @@ export async function buildCaddyfile(): Promise<string> {
         siteyDomain &&
         sanitizeDnsName(siteyDomain) === sanitizeDnsName(siteySubdomain);
       if (!mgmtOwnsIt && !routesByHostname.has(siteySubdomain)) {
-        appendSiteBlock(lines, siteySubdomain, domain.letsEncryptEmail, [], {
-          httpFallback,
-        });
+        appendSiteBlock(
+          siteBlocks,
+          siteySubdomain,
+          domain.letsEncryptEmail,
+          [],
+          {
+            httpFallback,
+          },
+        );
       }
     }
 
     for (const [hostname, hostRoutes] of routesByHostname.entries()) {
       if (hostname === siteyNamedDomain) continue; // management block already owns this hostname
       const hostHttpOnly = hostRoutes.some((route) => route.httpOnly);
-      appendSiteBlock(lines, hostname, domain.letsEncryptEmail, hostRoutes, {
-        httpFallback,
-        httpOnly: hostHttpOnly,
-      });
+      appendSiteBlock(
+        siteBlocks,
+        hostname,
+        domain.letsEncryptEmail,
+        hostRoutes,
+        {
+          httpFallback,
+          httpOnly: hostHttpOnly,
+        },
+      );
     }
+  }
+
+  for (const block of mergeRenderedSiteBlocks(siteBlocks)) {
+    appendRenderedSiteBlock(lines, block);
   }
 
   return lines.join("\n");

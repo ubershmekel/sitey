@@ -1,6 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { CaddyReloader } from "../src/services/caddy.ts";
+import {
+  CaddyReloader,
+  mergeRenderedSiteBlocks,
+} from "../src/services/caddy.ts";
 
 function deferred() {
   let resolve!: () => void;
@@ -105,4 +108,57 @@ test("lastPushedCaddyfile stays null after failed push", async () => {
   await assert.rejects(() => reloader.reload());
   assert.equal(reloader.lastPushedCaddyfile, null);
   assert.equal(reloader.lastPushedAt, null);
+});
+
+test("mergeRenderedSiteBlocks: combines matching blocks into one site label list", () => {
+  const merged = mergeRenderedSiteBlocks([
+    {
+      labels: ["www.redditp.com"],
+      bodyLines: ["    root * /srv/services/3/repo", "    file_server"],
+    },
+    {
+      labels: ["redditp.com"],
+      bodyLines: ["    root * /srv/services/3/repo", "    file_server"],
+    },
+    {
+      labels: ["vc.redditp.com"],
+      bodyLines: ["    reverse_proxy sitey-api:3001"],
+      tlsEmail: "ops@example.com",
+    },
+    {
+      labels: ["testing.redditp.com"],
+      bodyLines: ["    reverse_proxy sitey-api:3001"],
+      tlsEmail: "ops@example.com",
+    },
+  ]);
+
+  assert.deepEqual(merged, [
+    {
+      labels: ["www.redditp.com", "redditp.com"],
+      bodyLines: ["    root * /srv/services/3/repo", "    file_server"],
+      tlsEmail: undefined,
+    },
+    {
+      labels: ["vc.redditp.com", "testing.redditp.com"],
+      bodyLines: ["    reverse_proxy sitey-api:3001"],
+      tlsEmail: "ops@example.com",
+    },
+  ]);
+});
+
+test("mergeRenderedSiteBlocks: keeps blocks separate when TLS settings differ", () => {
+  const merged = mergeRenderedSiteBlocks([
+    {
+      labels: ["a.example.com"],
+      bodyLines: ["    respond 204"],
+      tlsEmail: "a@example.com",
+    },
+    {
+      labels: ["b.example.com"],
+      bodyLines: ["    respond 204"],
+      tlsEmail: "b@example.com",
+    },
+  ]);
+
+  assert.equal(merged.length, 2);
 });
