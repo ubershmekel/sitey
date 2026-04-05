@@ -26,7 +26,7 @@
     "test:e2e-cloud:worktree": "node e2e/remote/full-loop.ts --worktree",
     "test:e2e-cloud:worktree-leave-up": "node e2e/remote/full-loop.ts --worktree --leave-up",
     "test:updater": "node deploy/updater/test/run-test.ts",
-    "test:all": "npm run test:format && npm run test:types && npm run test:unit && npm run test:e2e-local && npm run test:e2e-cloud:worktree"
+    "test:all": "node scripts/test-all.ts"
   },
   "lint-staged": {
     "*": "prettier --write --ignore-unknown"
