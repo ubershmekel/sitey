@@ -29,31 +29,53 @@ const routes = [
   {
     path: "/login",
     component: () => import("./pages/Login.vue"),
-    meta: { public: true },
+    meta: { public: true, title: "Login" },
   },
   {
     path: "/change-password",
     component: () => import("./pages/ChangePassword.vue"),
-    meta: { public: true },
+    meta: { public: true, title: "Change Password" },
   },
   {
     path: "/github/app/callback",
     component: () => import("./pages/GithubAppCallback.vue"),
   },
   { path: "/", component: () => import("./pages/Index.vue") },
-  { path: "/services", component: () => import("./pages/ServiceList.vue") },
-  { path: "/domains", component: () => import("./pages/DomainList.vue") },
-  { path: "/domains/:id", component: () => import("./pages/DomainDetail.vue") },
+  {
+    path: "/services",
+    component: () => import("./pages/ServiceList.vue"),
+    meta: { title: "Services" },
+  },
+  {
+    path: "/domains",
+    component: () => import("./pages/DomainList.vue"),
+    meta: { title: "Domains" },
+  },
+  {
+    path: "/domains/:id",
+    component: () => import("./pages/DomainDetail.vue"),
+    meta: { title: "Domains" },
+  },
   {
     path: "/services/:id",
     component: () => import("./pages/ServiceDetail.vue"),
+    meta: { title: "Services" },
   },
   {
     path: "/integrations",
     component: () => import("./pages/Integrations.vue"),
+    meta: { title: "Integrations" },
   },
-  { path: "/logs/:container?", component: () => import("./pages/Logs.vue") },
-  { path: "/settings", component: () => import("./pages/Settings.vue") },
+  {
+    path: "/logs/:container?",
+    component: () => import("./pages/Logs.vue"),
+    meta: { title: "Logs" },
+  },
+  {
+    path: "/settings",
+    component: () => import("./pages/Settings.vue"),
+    meta: { title: "Settings" },
+  },
 ];
 
 export const router = createRouter({
@@ -89,8 +111,13 @@ router.onError((error) => {
   console.error(error);
 });
 
-router.afterEach(() => {
+router.afterEach((to) => {
   // Successful navigation means recovery state can be cleared.
   pendingRoutePath = null;
   sessionStorage.removeItem(ROUTE_ERROR_RECOVERY_KEY);
+
+  const label = localStorage.getItem("sitey_label") ?? "";
+  const page = (to.meta.title as string) ?? "";
+  const parts = [label, page].filter(Boolean);
+  document.title = parts.length ? parts.join(" · ") : "Sitey";
 });

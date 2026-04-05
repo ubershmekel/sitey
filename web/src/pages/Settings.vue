@@ -288,6 +288,46 @@
       >
     </section>
 
+    <!-- Appearance (browser-local) -->
+    <section class="settings-section">
+      <h2>Appearance</h2>
+      <p class="section-hint">
+        Saved in this browser only. Useful for telling multiple Sitey hosts
+        apart.
+      </p>
+      <div class="settings-form">
+        <label>
+          Tab title label
+          <input
+            v-model="appearanceLabel"
+            type="text"
+            placeholder="e.g. Prod, Staging…"
+            autocomplete="off"
+            maxlength="40"
+            @input="applyAppearance"
+          />
+        </label>
+        <div class="favicon-options">
+          <button
+            v-for="opt in faviconOptions"
+            :key="opt.filename"
+            type="button"
+            class="favicon-option"
+            :class="{ selected: appearanceFavicon === opt.filename }"
+            @click="pickFavicon(opt.filename)"
+            :title="opt.label"
+          >
+            <img
+              :src="`/${opt.filename}`"
+              :alt="opt.label"
+              width="32"
+              height="32"
+            />
+          </button>
+        </div>
+      </div>
+    </section>
+
     <!-- Update Sitey -->
     <section class="settings-section">
       <h2>Update Sitey</h2>
@@ -435,6 +475,39 @@ async function clearPublicSiteUrl() {
   } finally {
     publicSiteUrl.saving = false;
   }
+}
+
+// ── Appearance (browser-local) ────────────────────────────────────────────────
+
+const faviconOptions = [
+  { filename: "favicon.png", label: "Pink (default)" },
+  { filename: "favicon2.png", label: "Green" },
+  { filename: "favicon3.png", label: "Blue" },
+  { filename: "favicon4.png", label: "Yellow" },
+  { filename: "favicon5.png", label: "Black" },
+  { filename: "favicon6.png", label: "White" },
+];
+
+const appearanceLabel = ref(localStorage.getItem("sitey_label") ?? "");
+const appearanceFavicon = ref(
+  localStorage.getItem("sitey_favicon") ?? "favicon1.png",
+);
+
+function applyAppearance() {
+  const label = appearanceLabel.value.trim();
+  if (label) localStorage.setItem("sitey_label", label);
+  else localStorage.removeItem("sitey_label");
+  // Trigger router afterEach title logic by re-running it manually
+  const page = window.location.pathname === "/settings" ? "Settings" : "";
+  const parts = [label, page].filter(Boolean);
+  document.title = parts.length ? parts.join(" · ") : "Sitey";
+}
+
+function pickFavicon(filename: string) {
+  appearanceFavicon.value = filename;
+  localStorage.setItem("sitey_favicon", filename);
+  const link = document.querySelector<HTMLLinkElement>("link[rel='icon']");
+  if (link) link.href = `/${filename}`;
 }
 
 const versionDisplay = ref<string | null>(null);
@@ -1136,5 +1209,40 @@ textarea {
   color: var(--status-ok-text);
   margin-top: 0.5rem;
   word-break: break-all;
+}
+
+.favicon-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.favicon-picker-label {
+  font-size: var(--font-tiny);
+}
+
+.favicon-options {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.favicon-option {
+  background: var(--bg-elevated);
+  border: 2px solid var(--border-default);
+  border-radius: 8px;
+  padding: 4px;
+  cursor: pointer;
+  transition: border-color 0.15s;
+  line-height: 0;
+}
+
+.favicon-option:hover {
+  border-color: var(--brand);
+}
+
+.favicon-option.selected {
+  border-color: var(--brand);
+  background: var(--bg-input);
 }
 </style>
