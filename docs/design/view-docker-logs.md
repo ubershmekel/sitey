@@ -33,3 +33,8 @@ Or
 
 In JSON parsed mode, we will convert "time" and "ts" to a time ago or ISO8601
 and turn the data into an easy to view but still easy to copy-paste format.
+
+# Files
+
+- web/src/pages/Logs.vue - the UI
+- server/src/routers/system.ts - the API endpoints to list and get logs

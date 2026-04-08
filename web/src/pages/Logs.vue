@@ -2,7 +2,6 @@
   <Layout>
     <div class="page-header">
       <h1>Docker Logs</h1>
-      <button class="btn-ghost btn-sm" @click="fetchContainers">Refresh</button>
     </div>
 
     <div v-if="containersLoading" class="state-msg">Loading containers...</div>
@@ -30,6 +29,12 @@
           </div>
           <div class="container-image">{{ c.image }}</div>
         </button>
+        <button
+          class="btn-ghost btn-sm refresh-list-btn"
+          @click="fetchContainers"
+        >
+          Refresh list
+        </button>
       </div>
 
       <!-- Log viewer -->
@@ -41,6 +46,10 @@
           <div class="log-pane-header">
             <span class="log-pane-title">{{ selectedName }}</span>
             <div class="log-pane-actions">
+              <label class="parse-label">
+                <input type="checkbox" v-model="parseJson" />
+                Parse JSON
+              </label>
               <label class="tail-label">
                 Lines
                 <select
@@ -71,7 +80,7 @@
             <div v-else-if="logLines.length === 0" class="log-empty">
               No log output.
             </div>
-            <pre v-else class="log-content">{{ logLines.join("\n") }}</pre>
+            <pre v-else class="log-content">{{ displayLines.join("\n") }}</pre>
           </div>
         </template>
       </div>
@@ -88,6 +97,59 @@ import { trpc } from "../trpc";
 type Container = Awaited<
   ReturnType<typeof trpc.system.listContainers.query>
 >[number];
+
+function timeAgo(date: Date): string {
+  const diff = Date.now() - date.getTime();
+  if (diff < 60_000) return "just now";
+  if (diff < 3_600_000) return `${Math.round(diff / 60_000)}m ago`;
+  if (diff < 86_400_000) return `${Math.round(diff / 3_600_000)}h ago`;
+  return `${Math.round(diff / 86_400_000)}d ago`;
+}
+
+function normLevel(level: unknown): string {
+  if (typeof level === "string") return level.toUpperCase();
+  if (typeof level === "number") {
+    if (level < 20) return "TRACE";
+    if (level < 30) return "DEBUG";
+    if (level < 40) return "INFO";
+    if (level < 50) return "WARN";
+    if (level < 60) return "ERROR";
+    return "FATAL";
+  }
+  return String(level);
+}
+
+function formatJsonLine(line: string): string {
+  let obj: Record<string, unknown>;
+  try {
+    obj = JSON.parse(line);
+  } catch {
+    return line;
+  }
+  if (typeof obj !== "object" || obj === null || Array.isArray(obj))
+    return line;
+
+  const skip = new Set(["ts", "time", "level", "msg"]);
+
+  // Convert timestamp: ts = unix seconds float, time = unix ms
+  let timeStr = "";
+  const tsRaw = obj.ts ?? obj.time;
+  if (typeof tsRaw === "number") {
+    const ms = obj.time !== undefined ? tsRaw : tsRaw * 1000;
+    const date = new Date(ms);
+    timeStr = `[${date.toISOString()} ${timeAgo(date)}] `;
+  }
+
+  const level = obj.level !== undefined ? `${normLevel(obj.level)} ` : "";
+  const msg = obj.msg ? `${String(obj.msg)}  ` : "";
+
+  const rest = Object.entries(obj)
+    .filter(([k]) => !skip.has(k))
+    .map(([k, v]) => `${k}=${JSON.stringify(v)}`)
+    .join("  ");
+
+  return `${timeStr}${level}${msg}${rest}`.trimEnd();
+}
 
 const route = useRoute();
 const router = useRouter();
@@ -108,8 +170,13 @@ const selectedId = ref("");
 const selectedName = ref("");
 const logLines = ref<string[]>([]);
 const logsLoading = ref(false);
-const tailLines = ref(300);
+const tailLines = ref(100);
+const parseJson = ref(false);
 const logBox = ref<HTMLElement | null>(null);
+
+const displayLines = computed(() =>
+  parseJson.value ? logLines.value.map(formatJsonLine) : logLines.value,
+);
 
 async function fetchContainers() {
   containersLoading.value = true;
@@ -331,6 +398,15 @@ h1 {
   flex-shrink: 0;
 }
 
+.parse-label {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: var(--font-tiny);
+  cursor: pointer;
+  user-select: none;
+}
+
 .tail-label {
   display: flex;
   align-items: center;
@@ -366,6 +442,12 @@ h1 {
 }
 
 /* Misc */
+
+.refresh-list-btn {
+  margin-top: auto;
+  width: 100%;
+  justify-content: center;
+}
 
 .empty-msg {
   font-size: var(--font-tiny);
