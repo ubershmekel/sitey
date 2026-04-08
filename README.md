@@ -93,6 +93,14 @@ when the container starts.
 
 ---
 
+## The Big Idea
+
+All the best server hosting experiences (Vercel, Netlify, Render, Railway, etc)
+are built around the idea of vendor-lock-in. They make it easy and cheap to
+start and then things get expensive once you scale and it's hard to leave. Sitey
+is an attempt to build the same friendly experience on your own server, so you
+pay the minimal cost of whatever the cheapest cloud provider right now is.
+
 ## Operations
 
 For manual install, updating, HTTPS setup, data paths, account recovery, and
