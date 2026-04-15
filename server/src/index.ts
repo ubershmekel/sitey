@@ -12,7 +12,7 @@ import { bootstrap } from "./services/bootstrap.ts";
 import { verifyWebhookSignature } from "./services/crypto.ts";
 import { db } from "./lib/db.ts";
 import { enqueueDeployment } from "./services/deployment.ts";
-import { reloadCaddy } from "./services/caddy.ts";
+import { reloadCaddy, getManagementOrigin } from "./services/caddy.ts";
 import { getGithubIntegrationConfig } from "./services/github.ts";
 import { execSync } from "node:child_process";
 
@@ -23,6 +23,29 @@ const API_TRPC_PREFIX = `${API_PREFIX}/trpc`;
 const API_HEALTH_PATH = `${API_PREFIX}/health`;
 const API_GITHUB_WEBHOOK_PATH = `${API_PREFIX}/webhook/github`;
 const API_HOOK_PATH = `${API_PREFIX}/hook/:publicId`;
+
+// ── Origin allowlist (cross-subdomain CSRF prevention) ────────────────────────
+// The management origin is kept current by caddy.ts — it's updated on every
+// Caddy reload, which must happen whenever the domain configuration changes.
+// Null until the first reload (and whenever no named domain is configured),
+// which also means no wildcard subdomains exist yet → no attack surface.
+// Only enforced in production — in dev/test there are no real sibling subdomains.
+const IS_PRODUCTION = process.env.NODE_ENV === "production";
+
+function isAllowedOrigin(origin: string | undefined): boolean {
+  if (!origin) return true; // no Origin header = server-to-server, not a browser XHR
+  const mgmt = getManagementOrigin();
+  if (!mgmt) return true; // no domain configured — sibling subdomain attack surface absent
+  return origin === mgmt;
+}
+
+// Webhook paths authenticate via HMAC signature — exempt from Origin check.
+function isWebhookPath(url: string): boolean {
+  return (
+    url.startsWith(`${API_PREFIX}/webhook/`) ||
+    url.startsWith(`${API_PREFIX}/hook/`)
+  );
+}
 
 // Run Prisma migrations before starting (production only — dev uses db:push)
 function runMigrations() {
@@ -88,10 +111,30 @@ async function main() {
   await app.register(cookie);
 
   await app.register(cors, {
-    origin: true, // reflect request origin — no domain required at boot
+    // In production: only reflect the management origin (prevents sibling-subdomain CSRF).
+    // In dev/test: allow all origins — no real wildcard subdomains exist.
+    // See docs/design/security.md for the threat model.
+    origin: IS_PRODUCTION
+      ? (origin, cb) => cb(null, isAllowedOrigin(origin))
+      : true,
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
   });
+
+  // Defense in depth: block cross-origin browser requests to API routes.
+  // Webhook routes are exempt because they authenticate via HMAC signature.
+  // Only enforced in production for the same reason as CORS above.
+  if (IS_PRODUCTION) {
+    app.addHook("onRequest", async (req, reply) => {
+      const origin = req.headers.origin;
+      if (!origin || isWebhookPath(req.url)) return;
+      if (!isAllowedOrigin(origin)) {
+        return reply
+          .code(403)
+          .send({ error: "Forbidden: cross-origin request not allowed" });
+      }
+    });
+  }
 
   // ── tRPC ──────────────────────────────────────────────────────────────────
   const trpcOptions = {

@@ -515,6 +515,14 @@ async function listRunningContainerNames(): Promise<Set<string>> {
   }
 }
 
+// Populated on every buildCaddyfile() call — the single source of truth for
+// which origin may make credentialed requests to the API.
+// Null until the first Caddy reload (and whenever no named domain is configured).
+let _lastManagementOrigin: string | null = null;
+export function getManagementOrigin(): string | null {
+  return _lastManagementOrigin;
+}
+
 export async function buildCaddyfile(): Promise<string> {
   const [domains, siteUrlResolution, runningContainers] = await Promise.all([
     db.domain.findMany({
@@ -563,6 +571,9 @@ export async function buildCaddyfile(): Promise<string> {
     siteyDomain && !isIpAddress(siteyDomain)
       ? sanitizeDnsName(siteyDomain)
       : null;
+  _lastManagementOrigin = siteyNamedDomain
+    ? `https://${siteyNamedDomain}`
+    : null;
 
   // Collect path-prefix routes on wildcard domains that resolve to the mgmt hostname.
   // These are embedded in the management block so the sitey app still handles everything else.
