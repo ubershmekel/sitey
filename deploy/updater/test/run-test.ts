@@ -304,9 +304,12 @@ try {
   scenario3_scriptDeletion();
   console.log("\n✅ All scenarios passed\n");
 } catch (e) {
+  const log = readLog();
+  if (log) {
+    console.error("\nUpdate log:");
+    console.error(log);
+  }
   console.error("\n❌ Test failed:", (e as Error).message);
-  console.error("\nUpdate log:");
-  console.error(readLog() || "(empty)");
   process.exit(1);
 } finally {
   teardown();
