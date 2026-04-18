@@ -1,12 +1,13 @@
-import { test, expect, Page, TestInfo } from "@playwright/test";
+import { test, expect, type Page, type TestInfo } from "@playwright/test";
+import { wildDomainToSiteyUrl } from "./infra/sitey.ts";
 
 const BASE_URL = `http://${process.env.SITEY_HOST}`;
 const PASSWORD = process.env.SITEY_PASSWORD;
 const EMAIL = process.env.SITEY_EMAIL;
-const DOMAIN = process.env.SITEY_DOMAIN;
+const DOMAIN = process.env.SITEY_DOMAIN || "";
 
 function mgmtBase(): string {
-  return `https://sitey.${DOMAIN!.replace("*.", "")}`;
+  return wildDomainToSiteyUrl(DOMAIN);
 }
 
 async function loginOnMgmt(page: Page) {

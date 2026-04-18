@@ -22,6 +22,7 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer, deleteServer } from "./infra/hetzner.ts";
 import { setWildcardRecord, deleteWildcardRecord } from "./infra/namecheap.ts";
+import { wildDomainToSiteyUrl } from "./infra/sitey.ts";
 
 // ---------------------------------------------------------------------------
 // Config
@@ -458,6 +459,7 @@ const totalStart = Date.now();
 // Clean up stale resources from previous runs before provisioning anything new.
 await cleanupStaleResources(3);
 
+let password = "";
 try {
   let stepStart = Date.now();
   log(`Creating Hetzner server (${serverType} @ ${location})...`);
@@ -515,7 +517,7 @@ try {
   if (!passwordMatch) {
     throw new Error("Could not parse password from install output");
   }
-  const password = passwordMatch[1];
+  password = passwordMatch[1];
   log(`Install complete. (${since(stepStart)})`);
 
   log(`Waiting ${dnsPropagationMs / 1000}s for DNS propagation...`);
@@ -527,11 +529,14 @@ try {
   log(`All tests passed. (${since(stepStart)})`);
 } finally {
   if (LEAVE_UP && resourcesProvisioned) {
+    const siteyUrl = wildDomainToSiteyUrl(wildcardDomainRun);
     log("");
     log("=".repeat(60));
     log("--leave-up: server is intentionally left running.");
     log(`  Server IP : ${serverIp}`);
     log(`  Domain    : ${wildcardDomainRun}`);
+    log(`  Sitey URL : ${siteyUrl}`);
+    log(`  Password  : ${password}`);
     log(`  Server ID : ${serverId}`);
     log(`  SSH       : ssh -i ${sshKeyPath} root@${serverIp}`);
     log(`  Resources recorded in run-log.json — next run will clean them up.`);

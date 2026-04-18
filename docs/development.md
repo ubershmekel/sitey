@@ -32,7 +32,7 @@ Scripts that operate across the whole monorepo.
 | `dev:nocaddy`               | Everyday development — starts API (:3001) and Web (:3000) natively with hot-reload. No Docker required.                                |
 | `dev:docker`                | Full stack with Caddy in Docker — equivalent to the production compose file but with the dev Caddyfile. Use when you need TLS routing. |
 | `build`                     | Build both packages for production (`web/dist` + `server/dist`). Run before a Docker image build.                                      |
-| `typecheck`                 | Check TypeScript across server, web, and e2e. Run before pushing.                                                                      |
+| `test:types`                | Check TypeScript across server, web, and e2e. Run before pushing.                                                                      |
 | `format`                    | Auto-format every file with Prettier.                                                                                                  |
 | `format:check`              | Verify formatting without writing (used in CI).                                                                                        |
 | `db:migrate`                | Run `prisma migrate deploy` on the server workspace (production migrations).                                                           |

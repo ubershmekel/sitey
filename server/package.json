@@ -9,7 +9,7 @@
   "main": "src/index.ts",
   "scripts": {
     "dev": "node --watch --env-file .env src/index.ts",
-    "typecheck": "tsc --noEmit",
+    "test:types": "tsc --noEmit",
     "start": "node src/index.ts",
     "bootstrap:generate-password": "node src/services/bootstrap.ts generate-password",
     "db:migrate": "prisma migrate deploy",

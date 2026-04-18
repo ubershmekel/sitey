@@ -20,7 +20,7 @@
     "db:migrate": "npm run db:migrate -w server",
     "db:studio": "npm run db:studio -w server",
     "test:format": "prettier --check .",
-    "test:types": "npm run db:generate -w server && npm run typecheck -w server && npm run typecheck -w web && tsc --noEmit -p e2e/local/tsconfig.json && npm run db:check -w server",
+    "test:types": "npm run db:generate -w server && npm run test:types -w server && npm run test:types -w web && tsc --noEmit -p e2e/local/tsconfig.json && tsc --noEmit -p e2e/remote/tsconfig.json && npm run db:check -w server",
     "test:unit": "npm run test -w server",
     "test:e2e-local": "playwright test --config e2e/local/playwright.config.ts",
     "test:e2e-cloud:worktree": "node e2e/remote/full-loop.ts --worktree",
