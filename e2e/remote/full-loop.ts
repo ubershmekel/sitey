@@ -9,6 +9,7 @@
  * Config: e2e/remote/full-loop.env  (copy from full-loop.env.example)
  * Run:    npm run test:e2e-cloud:worktree           upload local worktree, tear down after
  *         npm run test:e2e-cloud:worktree-leave-up  upload local worktree, leave server running
+ *         npm run test:e2e-cloud:clean-up           clean up resources left running
  *
  * On startup, run-log.json is read and any stale resources from previous runs
  * (up to 3 entries) are cleaned up automatically to prevent leaks.
@@ -30,6 +31,7 @@ import { wildDomainToSiteyUrl } from "./infra/sitey.ts";
 
 const WORKTREE_MODE = process.argv.includes("--worktree");
 const LEAVE_UP = process.argv.includes("--leave-up");
+const CLEAN_UP_ONLY = process.argv.includes("--clean-up");
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(scriptDir, "../..");
@@ -144,12 +146,14 @@ function removeFromRunLog(serverId: number): void {
  */
 async function cleanupStaleResources(limit = 3): Promise<void> {
   const entries = loadRunLog();
-  if (entries.length === 0) return;
 
-  const toClean = entries.slice(-limit);
+  const count = Math.min(limit, entries.length);
+  const toClean = entries.slice(-count);
   log(
     `Found ${entries.length} stale resource(s) in run-log; cleaning up ${toClean.length}...`,
   );
+
+  if (entries.length === 0) return;
 
   const cleaned: number[] = [];
   for (const entry of toClean) {
@@ -458,6 +462,12 @@ const totalStart = Date.now();
 
 // Clean up stale resources from previous runs before provisioning anything new.
 await cleanupStaleResources(3);
+
+if (CLEAN_UP_ONLY) {
+  log("Done with --clean-up; exiting.");
+  log(`Total time: ${since(totalStart)}`);
+  process.exit(0);
+}
 
 let password = "";
 try {

@@ -38,6 +38,7 @@ Scripts that operate across the whole monorepo.
 | `db:migrate`                | Run `prisma migrate deploy` on the server workspace (production migrations).                                                           |
 | `db:studio`                 | Open Prisma Studio browser UI against the dev DB.                                                                                      |
 | `test:e2e`                  | Run the Playwright E2E suite (spins up mock server + API on :4001 + Web on :4000).                                                     |
+| `test:e2e-cloud:clean-up`   | Delete Hetzner and Namecheap resources recorded by `test:e2e-cloud:worktree-leave-up`.                                                 |
 | `test:e2e:mockserver`       | Start the mock external server standalone on :3334. Useful for debugging E2E failures in isolation.                                    |
 | `test:remote-wipe-and-test` | SSH into a remote server, wipe state, and re-run the install. See [Remote reset helper](#remote-reset-helper-test-runs).               |
 | `test:remote-test-install`  | SSH into a remote server and run the installer without wiping first.                                                                   |
