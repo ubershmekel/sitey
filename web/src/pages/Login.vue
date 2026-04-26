@@ -164,19 +164,6 @@ label {
   gap: 0.4rem;
 }
 
-input {
-  background: var(--bg-input);
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 0.6rem 0.75rem;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-input:focus {
-  border-color: var(--brand);
-}
-
 .alert.error {
   background: var(--status-err-bg);
   border: 1px solid var(--status-err-border);

@@ -399,7 +399,14 @@ export function generateDockerfile(
       "generateDockerfile requires buildCommand or serverRunCommand",
     );
   }
-  const buildStep = buildCommand.trim() ? `RUN ${buildCommand.trim()}\n` : "";
+  // Use && instead of multiple RUN lines to allow "cd folder" to affect subsequent commands
+  const buildRunLine = buildCommand
+    .trim()
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .join(" && ");
+  const buildStep = buildCommand.trim() ? `RUN ${buildRunLine}\n` : "";
   const cmd = serverRunCommand.trim();
   return `FROM ${baseImage}
 WORKDIR /app

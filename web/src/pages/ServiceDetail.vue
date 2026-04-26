@@ -468,10 +468,10 @@
 
           <label v-if="editDeployType === 'static'">
             Build command <span class="hint">(optional)</span>
-            <input
+            <textarea
               v-model="editBuildCommand"
-              type="text"
               placeholder="npm run build"
+              rows="3"
             />
           </label>
           <label v-if="editDeployType === 'static'">
@@ -490,10 +490,10 @@
 
           <label v-if="editDeployType === 'server'">
             Build command <span class="hint">(optional)</span>
-            <input
+            <textarea
               v-model="editBuildCommand"
-              type="text"
               placeholder="npm run build"
+              rows="3"
             />
           </label>
           <label v-if="editDeployType === 'server'">
@@ -1767,21 +1767,6 @@ label {
   display: flex;
   flex-direction: column;
   gap: 0.4rem;
-}
-
-input,
-select {
-  background: var(--bg-input);
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 0.6rem 0.75rem;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-input:focus,
-select:focus {
-  border-color: var(--brand);
 }
 
 .btn-danger {

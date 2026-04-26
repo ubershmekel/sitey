@@ -175,11 +175,13 @@ textarea {
 input,
 select,
 textarea {
+  background: var(--bg-input);
   color: var(--text-primary);
 }
 
-select {
-  background: var(--bg-input);
+input,
+select,
+textarea {
   border: 1px solid var(--border-strong);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
@@ -187,8 +189,16 @@ select {
   transition: border-color 0.15s;
 }
 
-select:focus {
+input:focus,
+select:focus,
+textarea:focus {
   border-color: var(--brand);
+}
+
+textarea {
+  resize: vertical;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 ::placeholder {

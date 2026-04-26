@@ -112,11 +112,12 @@
 
       <template v-if="deployType === 'static'">
         <label>
-          Build command <span class="hint">(optional)</span>
-          <input
+          Build command
+          <span class="hint">(optional, newlines are replaced with &&)</span>
+          <textarea
             v-model="form.buildCommand"
-            type="text"
-            placeholder="npm run build"
+            placeholder="npm run install && npm run build"
+            rows="3"
           />
         </label>
         <label>
@@ -151,11 +152,12 @@
           />
         </label>
         <label>
-          Build command <span class="hint">(optional, e.g. npm run build)</span>
-          <input
+          Build command
+          <span class="hint">(optional, newlines are replaced with &&)</span>
+          <textarea
             v-model="form.buildCommand"
-            type="text"
-            placeholder="npm run build"
+            placeholder="npm install && npm run build"
+            rows="3"
           />
         </label>
         <label>
@@ -499,21 +501,6 @@ label {
 
 .hint a {
   color: var(--brand);
-}
-
-input,
-select {
-  background: var(--bg-input);
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 0.6rem 0.75rem;
-  outline: none;
-  transition: border-color 0.15s;
-}
-
-input:focus,
-select:focus {
-  border-color: var(--brand);
 }
 
 .modal-actions {
