@@ -69,139 +69,7 @@
         </datalist>
       </label>
 
-      <!-- Deploy type -->
-      <div class="text-option-group">
-        <div class="text-option-label">Deploy type</div>
-        <div class="text-option-row">
-          <button
-            type="button"
-            :class="{ active: deployType === 'static' }"
-            @click="deployType = 'static'"
-          >
-            Static site
-          </button>
-          <button
-            type="button"
-            :class="{ active: deployType === 'server' }"
-            @click="deployType = 'server'"
-          >
-            Server app
-          </button>
-          <button
-            type="button"
-            :class="{ active: deployType === 'dockerfile' }"
-            @click="deployType = 'dockerfile'"
-          >
-            Repo Dockerfile
-          </button>
-        </div>
-        <div class="text-option-help">
-          <span v-if="deployType === 'static'"
-            >Build your site and serve the output as static files via
-            Caddy.</span
-          >
-          <span v-else-if="deployType === 'server'"
-            >Sitey generates a Dockerfile from your run command and runs it in a
-            container.</span
-          >
-          <span v-else
-            >Use your own <code>Dockerfile</code> from the repository.</span
-          >
-        </div>
-      </div>
-
-      <template v-if="deployType === 'static'">
-        <label>
-          Build command
-          <span class="hint">(optional, newlines are replaced with &&)</span>
-          <textarea
-            v-model="form.buildCommand"
-            placeholder="npm run install && npm run build"
-            rows="3"
-          />
-        </label>
-        <label>
-          Output directory <span class="hint">(relative to repo root)</span>
-          <input v-model="form.outputDir" type="text" placeholder="dist" />
-        </label>
-        <label>
-          Docker image
-          <DockerImageHint />
-          <input
-            v-model="form.buildImage"
-            type="text"
-            placeholder="Leave empty for Node.js 24"
-          />
-        </label>
-      </template>
-
-      <template v-else-if="deployType === 'server'">
-        <label>
-          Docker image
-          <DockerImageHint />
-          <input
-            v-model="form.buildImage"
-            type="text"
-            placeholder="Leave empty for Node.js 24"
-          />
-        </label>
-        <label>
-          Build command
-          <span class="hint">(optional, newlines are replaced with &&)</span>
-          <textarea
-            v-model="form.buildCommand"
-            placeholder="npm install && npm run build"
-            rows="3"
-          />
-        </label>
-        <label>
-          Start command <span class="hint">(e.g. node server.js)</span>
-          <input
-            v-model="form.serverRunCommand"
-            type="text"
-            required
-            placeholder="node server.js"
-          />
-        </label>
-        <label>
-          Container port
-          <span class="hint"
-            >(port your app listens on inside the generated container)</span
-          >
-          <input
-            v-model.number="form.containerPort"
-            type="number"
-            min="1"
-            max="65535"
-            required
-          />
-        </label>
-      </template>
-
-      <template v-else>
-        <!-- dockerfile -->
-        <label>
-          Dockerfile path <span class="hint">(relative to repo root)</span>
-          <input
-            v-model="form.dockerfilePath"
-            type="text"
-            placeholder="Dockerfile"
-          />
-        </label>
-        <label>
-          Container port
-          <span class="hint"
-            >(port your app listens on inside the container)</span
-          >
-          <input
-            v-model.number="form.containerPort"
-            type="number"
-            min="1"
-            max="65535"
-            required
-          />
-        </label>
-      </template>
+      <ServiceSettingsFields v-model="settings" />
 
       <label v-if="allowDomainSelection">
         Domain
@@ -227,7 +95,9 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { trpc } from "../trpc";
-import DockerImageHint from "./DockerImageHint.vue";
+import ServiceSettingsFields, {
+  type ServiceSettings,
+} from "./ServiceSettingsFields.vue";
 
 type AppRepo = Awaited<
   ReturnType<typeof trpc.github.listAppRepos.query>
@@ -263,9 +133,21 @@ const reposConfigured = ref(false);
 const repoInstallations = ref<number>(0);
 const repoInstallUrl = ref("");
 const inferredServiceName = ref("");
-const deployType = ref<"static" | "server" | "dockerfile">("server");
 
 const form = ref(emptyForm());
+const settings = ref<ServiceSettings>(defaultSettings());
+
+function defaultSettings(): ServiceSettings {
+  return {
+    deployType: "server",
+    buildCommand: "",
+    outputDir: "dist",
+    buildImage: "",
+    serverRunCommand: "",
+    containerPort: 3000,
+    dockerfilePath: "",
+  };
+}
 
 const repoByFullName = computed(() => {
   return new Map(
@@ -288,12 +170,6 @@ function emptyForm() {
     repoName: "",
     domainId: null as number | null,
     branch: "main",
-    buildCommand: "",
-    outputDir: "dist",
-    buildImage: "",
-    serverRunCommand: "",
-    dockerfilePath: "",
-    containerPort: 3000,
   };
 }
 
@@ -385,21 +261,22 @@ async function addService() {
   parseGithubUrl();
 
   try {
-    const isStatic = deployType.value === "static";
-    const isDockerfile = deployType.value === "dockerfile";
+    const s = settings.value;
+    const isStatic = s.deployType === "static";
+    const isDockerfile = s.deployType === "dockerfile";
     const deployMode = isStatic ? "static" : "server";
     const buildMode = isDockerfile ? "dockerfile" : "auto";
-    const outputDir = isStatic ? form.value.outputDir.trim() || "dist" : "";
+    const outputDir = isStatic ? s.outputDir.trim() || "dist" : "";
     let buildImage = "";
     let serverRunCommand = "";
     let dockerfilePath = "";
 
     if (isDockerfile) {
-      dockerfilePath = form.value.dockerfilePath.trim();
+      dockerfilePath = s.dockerfilePath.trim();
     } else {
-      buildImage = form.value.buildImage.trim();
+      buildImage = s.buildImage.trim();
       if (!isStatic) {
-        serverRunCommand = form.value.serverRunCommand.trim();
+        serverRunCommand = s.serverRunCommand.trim();
       }
     }
 
@@ -410,13 +287,13 @@ async function addService() {
       branch: form.value.branch.trim() || "main",
       githubMode: reposConfigured.value ? "app" : "webhook",
       deployMode,
-      buildCommand: form.value.buildCommand.trim(),
+      buildCommand: s.buildCommand.trim(),
       outputDir,
       buildImage,
       serverRunCommand,
       buildMode,
       dockerfilePath,
-      containerPort: form.value.containerPort,
+      containerPort: s.containerPort,
     });
 
     const routeDomainId = props.fixedDomainId ?? form.value.domainId;
@@ -444,10 +321,10 @@ watch(
   async (visible) => {
     if (!visible) {
       form.value = emptyForm();
+      settings.value = defaultSettings();
       branches.value = [];
       inferredServiceName.value = "";
       addError.value = "";
-      deployType.value = "server";
       return;
     }
 

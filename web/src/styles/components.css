@@ -170,6 +170,7 @@ textarea {
   font: inherit;
   font-size: var(--font-medium);
   color: inherit;
+  display: block;
 }
 
 input,
@@ -177,6 +178,7 @@ select,
 textarea {
   background: var(--bg-input);
   color: var(--text-primary);
+  width: 100%;
 }
 
 input,

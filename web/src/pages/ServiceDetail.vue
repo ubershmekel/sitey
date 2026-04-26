@@ -426,114 +426,7 @@
           Change deploy/build mode and related runtime/build fields.
         </p>
         <form class="settings-form" @submit.prevent="saveServiceSettings">
-          <div class="text-option-group">
-            <div class="text-option-label">Deploy type</div>
-            <div class="text-option-row">
-              <button
-                type="button"
-                :class="{ active: editDeployType === 'static' }"
-                @click="editDeployType = 'static'"
-              >
-                Static site
-              </button>
-              <button
-                type="button"
-                :class="{ active: editDeployType === 'server' }"
-                @click="editDeployType = 'server'"
-              >
-                Server app
-              </button>
-              <button
-                type="button"
-                :class="{ active: editDeployType === 'dockerfile' }"
-                @click="editDeployType = 'dockerfile'"
-              >
-                Dockerfile
-              </button>
-            </div>
-            <div class="text-option-help">
-              <span v-if="editDeployType === 'static'"
-                >Build your site and serve the output as static files via
-                Caddy.</span
-              >
-              <span v-else-if="editDeployType === 'server'"
-                >Sitey generates a Dockerfile from your run command and runs it
-                in a container.</span
-              >
-              <span v-else
-                >Use your own <code>Dockerfile</code> from the repository.</span
-              >
-            </div>
-          </div>
-
-          <label v-if="editDeployType === 'static'">
-            Build command <span class="hint">(optional)</span>
-            <textarea
-              v-model="editBuildCommand"
-              placeholder="npm run build"
-              rows="3"
-            />
-          </label>
-          <label v-if="editDeployType === 'static'">
-            Output directory <span class="hint">(relative to repo root)</span>
-            <input v-model="editOutputDir" type="text" placeholder="dist" />
-          </label>
-          <label v-if="editDeployType === 'static'">
-            Build image
-            <DockerImageHint />
-            <input
-              v-model="editBuildImage"
-              type="text"
-              placeholder="Leave empty to use Node.js 24"
-            />
-          </label>
-
-          <label v-if="editDeployType === 'server'">
-            Build command <span class="hint">(optional)</span>
-            <textarea
-              v-model="editBuildCommand"
-              placeholder="npm run build"
-              rows="3"
-            />
-          </label>
-          <label v-if="editDeployType === 'server'">
-            Start command <span class="hint">(e.g. node server.js)</span>
-            <input
-              v-model="editServerRunCommand"
-              type="text"
-              required
-              placeholder="node server.js"
-            />
-          </label>
-          <label v-if="editDeployType === 'server'">
-            Container port
-            <input
-              v-model.number="editContainerPort"
-              type="number"
-              min="1"
-              max="65535"
-              required
-            />
-          </label>
-
-          <label v-if="editDeployType === 'dockerfile'">
-            Dockerfile path <span class="hint">(relative to repo root)</span>
-            <input
-              v-model="editDockerfilePath"
-              type="text"
-              placeholder="Dockerfile"
-            />
-          </label>
-          <label v-if="editDeployType === 'dockerfile'">
-            Container port
-            <input
-              v-model.number="editContainerPort"
-              type="number"
-              min="1"
-              max="65535"
-              required
-            />
-          </label>
+          <ServiceSettingsFields v-model="editSettings" />
 
           <button
             class="btn-primary"
@@ -657,7 +550,9 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 import { useRoute, useRouter, RouterLink } from "vue-router";
 import Layout from "../components/Layout.vue";
 import AddRouteModal from "../components/AddRouteModal.vue";
-import DockerImageHint from "../components/DockerImageHint.vue";
+import ServiceSettingsFields, {
+  type ServiceSettings,
+} from "../components/ServiceSettingsFields.vue";
 import { trpc } from "../trpc";
 
 type Service = Awaited<ReturnType<typeof trpc.services.get.query>>;
@@ -699,13 +594,15 @@ const titleEditing = ref(false);
 const titleDraft = ref("");
 const titleSaving = ref(false);
 const titleError = ref("");
-const editDeployType = ref<"static" | "server" | "dockerfile">("server");
-const editBuildCommand = ref("");
-const editOutputDir = ref("");
-const editBuildImage = ref("");
-const editServerRunCommand = ref("");
-const editDockerfilePath = ref("");
-const editContainerPort = ref(3000);
+const editSettings = ref<ServiceSettings>({
+  deployType: "server",
+  buildCommand: "",
+  outputDir: "",
+  buildImage: "",
+  serverRunCommand: "",
+  containerPort: 3000,
+  dockerfilePath: "",
+});
 const settingsSaving = ref(false);
 const settingsSaved = ref(false);
 const settingsError = ref("");
@@ -756,26 +653,24 @@ const titleDirty = computed(() => {
 
 const settingsDirty = computed(() => {
   if (!service.value) return false;
+  const s = editSettings.value;
+  const svc = service.value;
   const modeDirty =
-    (editDeployType.value === "static" &&
-      (service.value.deployMode !== "static" ||
-        service.value.buildMode !== "auto")) ||
-    (editDeployType.value === "server" &&
-      (service.value.deployMode !== "server" ||
-        service.value.buildMode !== "auto")) ||
-    (editDeployType.value === "dockerfile" &&
-      (service.value.deployMode !== "server" ||
-        service.value.buildMode !== "dockerfile"));
+    (s.deployType === "static" &&
+      (svc.deployMode !== "static" || svc.buildMode !== "auto")) ||
+    (s.deployType === "server" &&
+      (svc.deployMode !== "server" || svc.buildMode !== "auto")) ||
+    (s.deployType === "dockerfile" &&
+      (svc.deployMode !== "server" || svc.buildMode !== "dockerfile"));
 
   return (
     modeDirty ||
-    editBuildCommand.value.trim() !== (service.value.buildCommand ?? "") ||
-    editOutputDir.value.trim() !== (service.value.outputDir ?? "") ||
-    editBuildImage.value.trim() !== (service.value.buildImage ?? "") ||
-    editServerRunCommand.value.trim() !==
-      (service.value.serverRunCommand ?? "") ||
-    editDockerfilePath.value.trim() !== (service.value.dockerfilePath ?? "") ||
-    Number(editContainerPort.value) !== Number(service.value.containerPort)
+    s.buildCommand.trim() !== (svc.buildCommand ?? "") ||
+    s.outputDir.trim() !== (svc.outputDir ?? "") ||
+    s.buildImage.trim() !== (svc.buildImage ?? "") ||
+    s.serverRunCommand.trim() !== (svc.serverRunCommand ?? "") ||
+    s.dockerfilePath.trim() !== (svc.dockerfilePath ?? "") ||
+    Number(s.containerPort) !== Number(svc.containerPort)
   );
 });
 
@@ -813,18 +708,20 @@ function routeHasLink(r: ServiceRoute): boolean {
 
 function applyServiceToEditors(svc: Service) {
   titleDraft.value = svc.name;
-  editBuildCommand.value = svc.buildCommand ?? "";
-  editOutputDir.value = svc.outputDir ?? "";
-  editBuildImage.value = svc.buildImage ?? "";
-  editServerRunCommand.value = svc.serverRunCommand ?? "";
-  editDockerfilePath.value = svc.dockerfilePath ?? "";
-  editContainerPort.value = svc.containerPort;
-  editDeployType.value =
-    svc.deployMode === "static"
-      ? "static"
-      : svc.buildMode === "dockerfile"
-        ? "dockerfile"
-        : "server";
+  editSettings.value = {
+    deployType:
+      svc.deployMode === "static"
+        ? "static"
+        : svc.buildMode === "dockerfile"
+          ? "dockerfile"
+          : "server",
+    buildCommand: svc.buildCommand ?? "",
+    outputDir: svc.outputDir ?? "",
+    buildImage: svc.buildImage ?? "",
+    serverRunCommand: svc.serverRunCommand ?? "",
+    containerPort: svc.containerPort,
+    dockerfilePath: svc.dockerfilePath ?? "",
+  };
 }
 
 async function fetchService() {
@@ -873,19 +770,19 @@ async function saveServiceSettings() {
   settingsError.value = "";
   settingsSaved.value = false;
   try {
-    const deployMode = editDeployType.value === "static" ? "static" : "server";
-    const buildMode =
-      editDeployType.value === "dockerfile" ? "dockerfile" : "auto";
+    const s = editSettings.value;
+    const deployMode = s.deployType === "static" ? "static" : "server";
+    const buildMode = s.deployType === "dockerfile" ? "dockerfile" : "auto";
     const updated = await trpc.services.update.mutate({
       id: serviceId,
       deployMode,
       buildMode,
-      buildCommand: editBuildCommand.value.trim(),
-      outputDir: editOutputDir.value.trim(),
-      buildImage: editBuildImage.value.trim(),
-      serverRunCommand: editServerRunCommand.value.trim(),
-      dockerfilePath: editDockerfilePath.value.trim(),
-      containerPort: Number(editContainerPort.value),
+      buildCommand: s.buildCommand.trim(),
+      outputDir: s.outputDir.trim(),
+      buildImage: s.buildImage.trim(),
+      serverRunCommand: s.serverRunCommand.trim(),
+      dockerfilePath: s.dockerfilePath.trim(),
+      containerPort: Number(s.containerPort),
     });
     service.value = {
       ...service.value,
