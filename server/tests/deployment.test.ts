@@ -195,6 +195,34 @@ test("static deploy: runs build, marks success, no container", async () => {
   assert.equal(runningUpdate.containerName, null);
 });
 
+test("static deploy: fails when outputDir is missing after build", async () => {
+  const serviceUpdates: Record<string, unknown>[] = [];
+
+  const deps = makeDeps({
+    db: {
+      deployment: { update: async () => ({}), findMany: async () => [] },
+      service: {
+        update: async (args: { data: Record<string, unknown> }) => {
+          serviceUpdates.push(args.data);
+          return args.data;
+        },
+      },
+      systemConfig: { findUnique: async () => null },
+    } as unknown as DeployDeps["db"],
+    spawnBuild: async () => {},
+    existsSync: () => false,
+  });
+
+  await runDeployment(
+    makeService({ deployMode: "static", outputDir: "dist" }),
+    makeDeployment(),
+    deps,
+  );
+
+  const failedUpdate = serviceUpdates.find((u) => u.status === "failed");
+  assert.ok(failedUpdate, "service should be marked failed");
+});
+
 test("git failure: marks deployment and service failed", async () => {
   const deploymentUpdates: Record<string, unknown>[] = [];
   const serviceUpdates: Record<string, unknown>[] = [];

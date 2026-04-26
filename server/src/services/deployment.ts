@@ -313,6 +313,15 @@ async function deployStatic(
     await deps.spawnBuild(buildCmd, repoPath, buildEnv, onLog);
   }
 
+  if (service.outputDir) {
+    const outputPath = path.join(repoPath, service.outputDir);
+    if (!deps.existsSync(outputPath)) {
+      throw new Error(
+        `Build finished but output directory "${service.outputDir}" was not found. Check your build command and output directory setting.`,
+      );
+    }
+  }
+
   onLog(
     `[deploy] Static deployment successful! Serving from ${repoPath}/${service.outputDir}`,
   );
