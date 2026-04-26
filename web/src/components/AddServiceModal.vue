@@ -126,10 +126,7 @@
         </label>
         <label>
           Docker image
-          <span class="hint"
-            >(optional, e.g. <code>oven/bun:1</code>,
-            <code>node:22-alpine</code>)</span
-          >
+          <DockerImageHint />
           <input
             v-model="form.buildImage"
             type="text"
@@ -141,10 +138,7 @@
       <template v-else-if="deployType === 'server'">
         <label>
           Docker image
-          <span class="hint"
-            >(optional, e.g. <code>node:22-alpine</code>,
-            <code>python:3.12-slim</code>, <code>oven/bun:1</code>)</span
-          >
+          <DockerImageHint />
           <input
             v-model="form.buildImage"
             type="text"
@@ -233,6 +227,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { trpc } from "../trpc";
+import DockerImageHint from "./DockerImageHint.vue";
 
 type AppRepo = Awaited<
   ReturnType<typeof trpc.github.listAppRepos.query>

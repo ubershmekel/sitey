@@ -480,7 +480,7 @@
           </label>
           <label v-if="editDeployType === 'static'">
             Build image
-            <span class="hint">(optional, e.g. <code>oven/bun:1</code>)</span>
+            <DockerImageHint />
             <input
               v-model="editBuildImage"
               type="text"
@@ -657,6 +657,7 @@ import { ref, computed, onMounted, onUnmounted, watch, nextTick } from "vue";
 import { useRoute, useRouter, RouterLink } from "vue-router";
 import Layout from "../components/Layout.vue";
 import AddRouteModal from "../components/AddRouteModal.vue";
+import DockerImageHint from "../components/DockerImageHint.vue";
 import { trpc } from "../trpc";
 
 type Service = Awaited<ReturnType<typeof trpc.services.get.query>>;
