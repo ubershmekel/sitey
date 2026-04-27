@@ -58,7 +58,7 @@ async function createAndDeploy(
   const typeLabel = {
     static: "Static site",
     server: "Server app",
-    dockerfile: "Repo Dockerfile",
+    dockerfile: "Dockerfile",
   }[opts.deployType];
   await page.getByRole("button", { name: typeLabel }).click();
 
