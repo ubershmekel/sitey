@@ -200,14 +200,39 @@ export const systemRouter = router({
 
   listContainers: settledProcedure.query(async () => {
     const containers = await docker.listContainers({ all: true });
-    return containers.map((c) => ({
-      id: c.Id.slice(0, 12),
-      fullId: c.Id,
-      name: (c.Names[0] ?? c.Id.slice(0, 12)).replace(/^\//, ""),
-      image: c.Image,
-      state: c.State, // running | exited | paused | ...
-      status: c.Status, // human-readable, e.g. "Up 2 hours"
-    }));
+    // The container names are things like "sitey-service-3"
+    // So try to show the names the user gave those services.
+    const serviceIds = containers
+      .map((c) => {
+        const n = (c.Names[0] ?? "").replace(/^\//, "");
+        const m = n.match(/^sitey-service-(\d+)$/);
+        return m ? parseInt(m[1], 10) : null;
+      })
+      .filter((id): id is number => id !== null);
+    const services =
+      serviceIds.length > 0
+        ? await db.service.findMany({
+            where: { id: { in: serviceIds } },
+            select: { id: true, name: true },
+          })
+        : [];
+    const serviceNameById = new Map(services.map((s) => [s.id, s.name]));
+    return containers.map((c) => {
+      const n = (c.Names[0] ?? c.Id.slice(0, 12)).replace(/^\//, "");
+      const m = n.match(/^sitey-service-(\d+)$/);
+      const serviceName = m
+        ? (serviceNameById.get(parseInt(m[1], 10)) ?? null)
+        : null;
+      return {
+        id: c.Id.slice(0, 12),
+        fullId: c.Id,
+        name: n,
+        image: c.Image,
+        serviceName,
+        state: c.State,
+        status: c.Status,
+      };
+    });
   }),
 
   getDiskUsage: settledProcedure.query(async () => {

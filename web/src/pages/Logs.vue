@@ -22,12 +22,12 @@
           :class="{ active: selectedId === c.fullId }"
           @click="selectContainer(c)"
         >
-          <div class="container-name">{{ c.name }}</div>
+          <div class="container-name">{{ c.serviceName ?? c.name }}</div>
+          <div v-if="c.serviceName" class="container-image">{{ c.name }}</div>
           <div class="container-meta">
             <span :class="`state-dot state-${c.state}`"></span>
             <span class="container-status">{{ c.status }}</span>
           </div>
-          <div class="container-image">{{ c.image }}</div>
         </button>
         <button
           class="btn-ghost btn-sm refresh-list-btn"
