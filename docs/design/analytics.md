@@ -81,8 +81,8 @@ volumes:
   - ${DATA_ROOT:-./data}/caddy-logs:/var/log/caddy:ro # read-only tail
 ```
 
-In each generated **user** site block (not the management block — see Mapping),
-emit:
+In **every** generated site block (user blocks and the management block alike —
+see Mapping for why we don't special-case the panel), emit:
 
 ```caddyfile
     log {
@@ -91,13 +91,41 @@ emit:
             roll_keep 3
             roll_keep_for 168h
         }
-        format json
+        format filter {
+            wrap json
+            fields {
+                request>remote_ip   delete
+                request>remote_port delete
+                request>client_ip   delete
+                request>headers     delete
+                request>uri         query {
+                    delete *
+                }
+            }
+        }
     }
 ```
+
+**Privacy is enforced at write time, not just at ingest.** Caddy's default
+`format json` is _not_ anonymous: it records `request.remote_ip` /
+`request.client_ip`, the request headers (including `User-Agent`), and the full
+`request.uri` _with_ the query string. Dropping those fields only in sitey-api
+would still leave them sitting in the raw `${DATA_ROOT}/caddy-logs/access.log`
+for the whole roll window (up to ~168h / 60MB). So we use a `format filter`
+(`wrap json`) that **deletes** the IP, port, and header fields and strips every
+query parameter from `request>uri` _before_ the line is ever written to disk.
+The raw file therefore never contains an IP, a user-agent, a cookie, or a query
+string — which is what lets the privacy claim below hold. (Caddy already redacts
+`Cookie`/`Authorization` by default, but we delete the whole `headers` object
+rather than rely on that.)
 
 A single shared `access.log` (rather than one file per site) keeps the tailer
 simple — one file, one offset. `roll_size`/`roll_keep` bound the raw file to
 ~60MB regardless of traffic; once ingested we don't need the raw lines.
+
+> Caddy log-filtering reference:
+> [log directive](https://caddyserver.com/docs/caddyfile/directives/log) ·
+> [log_append](https://caddyserver.com/docs/caddyfile/directives/log_append).
 
 ### Mapping a request → service
 
@@ -121,10 +149,27 @@ every Caddy reload (we already rebuild routing state there), and matches each
 line. More code, duplicates Caddy's matching semantics (wildcards, longest
 prefix); only worth it if `log_append` becomes unavailable.
 
-Lines with no resolvable service (the management UI, probes, unmatched hosts)
-are recorded with `service_id = NULL` or dropped — we don't surface them per
-service. The management/admin block deliberately gets **no** `log` directive so
-control-panel traffic isn't counted as a "site".
+**We don't do extra work to keep management traffic out of the log.** A `log`
+directive in Caddy is per-site-block, not per-route — and the generator already
+folds wildcard path-prefix _user_ routes into the management host blocks
+(`mgmtRoutes` → [caddy.ts](../../server/src/services/caddy.ts#L578), emitted
+into the `:80` and named-domain blocks at
+[caddy.ts](../../server/src/services/caddy.ts#L593)). Trying to log "only the
+user routes" in that block (via `log_skip` on the admin handlers, conditional
+`log` blocks, etc.) is fiddly and easy to get wrong. So instead:
+
+- Every block — including the management block — gets the same `log` directive.
+- Each route with a known service gets `log_append service_id <id>`; admin
+  handlers don't, so their lines simply have **no** `service_id` (→ `NULL`).
+- The UI **flags** management/control-panel traffic rather than dropping it.
+  That's trivial from the line itself: `service_id IS NULL` _and_ the host is
+  the management domain (and/or the path is `/api/*`). The analytics page can
+  show it labelled "admin panel" or filter it out — a display choice, not a
+  logging one.
+
+So management requests appear in the raw log and in `request` with
+`service_id = NULL`; we never count them _as_ a user service, and we never write
+generator code to suppress them.
 
 ### What we store per request
 
@@ -144,10 +189,13 @@ bandwidth). One real page load fires many requests (HTML + CSS + JS + images +
 XHR), so this counts hits, not human page loads — that's fine for "is this site
 alive / spiking / erroring", which is all we're after.
 
-**Privacy:** we deliberately log **no IP, no user-agent, no cookies** — only
-host, path, status, method, content-type, and response size. There is no
-per-visitor data, so this needs no cookie banner and stores no personal data
-(and, by the same token, no unique-visitor counts — out of scope).
+**Privacy:** we deliberately log **no IP, no user-agent, no cookies, and no
+query string** — only host, path, status, method, content-type, and response
+size. This is enforced by the `format filter` block above, which deletes those
+fields _before_ Caddy writes the line, so even the raw on-disk `access.log` is
+free of them (not just `analytics.db`). There is no per-visitor data, so this
+needs no cookie banner and stores no personal data (and, by the same token, no
+unique-visitor counts — out of scope).
 
 ## 2. Ingestion
 
@@ -155,11 +203,23 @@ A single background worker in sitey-api, started in `main()` alongside the
 initial Caddy reload.
 
 - **Tail.** Open `access.log`, seek to the saved byte offset (from `meta`), read
-  new lines as they arrive. Persist the offset after each successful batch.
-- **Rotation.** On each poll, stat the file; if its size is **smaller** than the
-  saved offset, Caddy rolled it — reset offset to 0 and re-open. (We accept that
-  lines written to the old file between roll and detection are lost — best
-  effort.)
+  new lines as they arrive. Persist the offset **and the file identity** (see
+  below) after each successful batch.
+- **Rotation.** Track the open file by **identity (`dev` + `ino` from `fstat`,
+  device id and inode), not by size.** A size comparison alone is unsafe: on a
+  busy site Caddy can roll the file and the _new_ `access.log` can grow past the
+  old saved offset before the poller wakes, so a "is the file now smaller?"
+  check would miss the roll and blindly seek into the middle of the fresh file —
+  silently skipping every line before that offset. Instead, on each poll:
+  1. Keep reading the **currently open handle** to EOF first (drain the tail of
+     the file we were already on, even after it's been renamed by the roll).
+  2. `stat` the _path_ `access.log`; if its `dev`/`ino` differs from the open
+     handle's, Caddy rolled it — open the new path, reset offset to 0, and read
+     it from the start.
+  3. Persist `{ino, dev, offset}` together in `meta`, and on startup only reuse
+     the saved offset if the on-disk `ino`/`dev` still match (otherwise start at
+     0). (We still accept that lines written to the old file after our last read
+     but before the rename are lost — best effort.)
 - **Parse.** JSON per line; pull `ts`, `request.host`, `request.uri`, `status`,
   `request.method`, `service_id`, the response `Content-Type` (normalized to the
   bare MIME type, params dropped), and the response `size` (bytes).
@@ -270,9 +330,10 @@ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
 This mirrors exactly the tiering described in the request: **a week of detailed
 logs, then a per-service weekly number, plus an all-time sum.** `daily` is the
 middle workhorse — granular enough to spot a spike or a site going dead, small
-enough to keep for 90 days. The detailed `request` tier exists only so we can
-answer "which URL is erroring", "what's most requested", and "what's the common
-500" for the last week — and, later, "show me all the images/JSON/etc."
+enough to keep for 90 days. The detailed `request` tier exists only so the
+analytics page can answer "which URL is erroring" (any status — 404s and 5xx),
+"what's most requested" for the last week — and, later, "show me all the
+images/JSON/etc."
 
 ### Retention & pruning
 
@@ -289,42 +350,76 @@ Run `PRAGMA incremental_vacuum` (DB opened with `auto_vacuum = INCREMENTAL`)
 after the `request` delete so freed pages return to the OS and the file doesn't
 creep upward.
 
-### Disk budget (worst case: a high-traffic service)
+### Disk budget
 
-- A busy service serving, say, ~1M requests/day → ~7M rows for the 7-day window.
-  At ~150 bytes/row ≈ **~1GB** at the high end (a quiet site is a rounding
-  error).
+The expected instance is small. Sizing by realistic load:
+
+- **Typical (~100 req/day):** ~700 `request` rows for the 7-day window —
+  kilobytes. Analytics-page `GROUP BY`s are instant.
+- **Busy (~30K req/day):** ~210K rows for the window at ~150 bytes/row ≈
+  **~30MB**. Direct `GROUP BY` over the `(service_id, ts)` index is still
+  milliseconds; no rollups needed.
+- **Pathological (~1M req/day):** ~7M rows ≈ **~1GB**. This is the only case the
+  7-day `request` tier gets large; the lever is shrinking its retention toward
+  ~2–3 days (§ Retention). Even here the queries stay indexed and the headline
+  counters come from `daily`, so the page doesn't fall over.
 - Rolled raw `access.log` ≈ **up to ~60MB** (capped by `roll_size`×`roll_keep`).
 - `daily`: 90 rows. `weekly`: ~52/year. `total`: 1 row. → **kilobytes**.
 
-Sites scale linearly in the `request` tier only, which is the part we
-aggressively prune. Because that tier logs every hit, it's the one to watch: if
-it proves too heavy, the cheapest lever is shrinking its retention from 7 to
-~2–3 days — the rollups, which power the headline numbers, are unaffected.
+Only the `request` tier scales with traffic, and it's the part we aggressively
+prune. The rollups (`daily`/`weekly`/`total`) that power the headline numbers
+stay tiny regardless.
 
 ## 4. Surfacing it
+
+The detailed views live on their **own analytics page**, not embedded in the hot
+`ServiceDetail.vue`. This is the key simplification: because the breakdowns (top
+paths, top error/404 URLs, bandwidth) are only computed when a user navigates to
+analytics — not on every service-detail open — we can query the `request` table
+**directly** and skip rollup tables and caches entirely.
+
+That's the right call for the expected load. A typical instance serves ~100
+requests/day; even a busy one at ~30K/day is ~210K `request` rows over the 7-day
+window, which a `GROUP BY` over the `(service_id, ts)` index handles in
+milliseconds on a page that's opened occasionally. We deliberately do **not**
+pre-aggregate paths/errors into rollup tables or build a multi-layer cache —
+that machinery would be solving a problem this workload doesn't have, and it
+bakes in choices (e.g. "errors = 5xx only") that block ad-hoc questions like
+"what are my top 404s?".
 
 A new tRPC router `analytics` (read-only, `settledProcedure`) reading
 `analytics.db`:
 
-- `analytics.forService({ serviceId })` →
-  `{ totalRequests, last7dRequests, last7dErrors, last7dBytes, topPaths, topErrors }`
+- `analytics.forService({ serviceId })` — the **headline counters**, cheap
+  enough that `ServiceDetail.vue` _can_ show them inline if we want:
+  `{ totalRequests, last7dRequests, last7dErrors, last7dBytes }`
   - `totalRequests` ← `total.requests`.
   - `last7dRequests`/`last7dErrors`/`last7dBytes` ← sum over `daily` for the
-    last 7 days (cheap, survives `request` pruning). `last7dBytes` is the
-    bandwidth figure.
-  - `topPaths` (most-requested URLs) ← from `request` for the last 7 days:
-    `SELECT path, count(*) c FROM request WHERE service_id=? AND ts>=?  GROUP BY path ORDER BY c DESC LIMIT 5`.
-    This is the "what's busiest" answer.
-  - `topErrors` ← same window, server errors (any content type, so a failing
-    `/api/…` or asset shows up):
-    `SELECT path, status, count(*) c FROM request WHERE service_id=? AND status>=500 AND ts>=?  GROUP BY path, status ORDER BY c DESC LIMIT 5`.
-    This is the "common error at some URL" answer.
+    last 7 days (O(rollup), survives `request` pruning). `last7dBytes` is
+    bandwidth.
 
-`ServiceDetail.vue` shows the headline numbers — **Requests** (total / past
-week), **Bandwidth (7d)** — labelled approximate, a small **"Top paths (7d)"**
-list, and — only when there are errors — a **"Top errors (7d)"** list. No
-charts.
+- `analytics.detail({ serviceId, days = 7, status? })` — the **analytics page**
+  data, queried straight off `request`:
+  - `topPaths` (most-requested URLs):
+    `SELECT path, count(*) c FROM request WHERE service_id=? AND ts>=? GROUP BY path ORDER BY c DESC LIMIT 20`.
+  - `topErrors` — **any status the user asks for**, not just 5xx. Default to
+    `status >= 400` so 404s show up; the optional `status` filter narrows it
+    (e.g. exactly `404`, or `>= 500`):
+    `SELECT path, status, count(*) c FROM request WHERE service_id=? AND status>=400 AND ts>=? GROUP BY path, status ORDER BY c DESC LIMIT 20`.
+  - Management/admin traffic (`service_id IS NULL` on the management host) is
+    shown in a separate "Admin panel" view or filtered out — a display toggle,
+    since it's already labelled by host/path (see Mapping). It is never folded
+    into a user service's numbers.
+
+`ServiceDetail.vue` keeps only the cheap headline numbers (**Requests** total /
+past week, **Bandwidth (7d)**, labelled approximate) and links to the analytics
+page. The analytics page (`web/src/pages/Analytics.vue`) shows **Top paths** and
+**Top status codes / errors** (with the 404-vs-5xx toggle) for the selected
+service. No charts.
+
+If `request` ever does get heavy on an unusually busy instance, the lever is the
+same one already in the design — shrink `request` retention from 7 days toward
+~2–3 (§ Retention); the headline counters come from `daily` and are unaffected.
 
 Detecting **dead** and **spiking** sites is a follow-up that reads `daily` (e.g.
 compare this week vs. the 4-week median); the schema already supports it, but no
@@ -370,17 +465,24 @@ rather than being forced into `request`. Out of scope now; request counts only.
 
 ## Files (implementation sketch)
 
-- `server/src/services/caddy.ts` — emit per-site `log { output file … }` (with
-  `Content-Type` + `size` captured) + per-route `log_append service_id <id>`.
+- `server/src/services/caddy.ts` — emit the **same** per-site
+  `log { output file … }` (using `format filter` to delete IP/headers/query) on
+  every block, management included; add per-route `log_append service_id <id>`
+  where a service is known. No `log_skip`/conditional-log special-casing for the
+  panel.
 - `server/src/lib/analyticsDb.ts` — `better-sqlite3` connection at
   `/data/db/analytics.db`, WAL, schema bootstrap, prepared statements.
-- `server/src/services/analytics/ingest.ts` — tail + parse + batched upsert
-  worker (normalizes `content_type`, sums `bytes`).
-- `server/src/services/analytics/prune.ts` — daily retention job.
-- `server/src/routers/analytics.ts` — `forService` (totals, last-7d, bandwidth,
-  topPaths, topErrors).
-- `web/src/pages/ServiceDetail.vue` — requests + bandwidth + "Top paths" +
-  optional "Top errors".
+- `server/src/services/analytics/ingest.ts` — tail (track `dev`/`ino`, drain
+  before switching on roll) + parse + batched upsert worker (normalizes
+  `content_type`, sums `bytes`, upserts `daily`/`weekly`/`total` in one txn).
+- `server/src/services/analytics/prune.ts` — daily retention job (`request` 7d,
+  `daily` 90d).
+- `server/src/routers/analytics.ts` — `forService` (cheap headline counters from
+  `daily`/`total`) and `detail` (topPaths / topErrors queried directly off
+  `request`, with the status filter).
+- `web/src/pages/Analytics.vue` — top paths + top status codes/errors
+  (404-vs-5xx toggle) for the selected service; `ServiceDetail.vue` shows only
+  the headline numbers and links here.
 - `deploy/docker-compose.yml` — `${DATA_ROOT}/caddy-logs` bind mount (rw on
   caddy, ro on sitey-api). The DB path move lives in
   [data-model.md](data-model.md).
