@@ -27,25 +27,31 @@ rationale.
 
 The data root (`$DATA_ROOT` on the host, `/data` inside containers,
 bind-mounted) is organized by **durability tier**, so "what do I back up?" and
-"what is safe to delete?" are obvious:
+"what is safe to delete?" are obvious. Both SQLite files sit directly at the
+data root — there is no `db/` subdirectory (it wasn't worth a migration to add
+one):
 
 ```
 /data/
-  db/                 # databases — THE backup target
-    sitey.db          #   config            (precious)
-    sitey.db-wal/-shm
-    analytics.db      #   analytics history (secondary, NOT rebuildable)
-    analytics.db-wal/-shm
+  sitey.db            # config DB — PRECIOUS, the primary backup target
+  sitey.db-wal        #   write-ahead log: committed writes not yet folded into sitey.db
+  sitey.db-shm        #   shared-memory index for the WAL (transient, recreated on open)
+  analytics.db        # analytics history — secondary, but NOT rebuildable (back up too)
+  analytics.db-wal    #   write-ahead log for analytics.db
+  analytics.db-shm    #   shared-memory index for the WAL (transient, recreated on open)
   services/           # per-service repos & runtime volumes
-  web/                # built SPA            (rebuildable — re-run sitey-web-builder)
-  caddy-logs/         # Caddy access log     (transient, self-rolling)
+  web/                # built SPA        (rebuildable — re-run sitey-web-builder)
+  caddy-logs/         # Caddy access log (transient, self-rolling)
     access.log
 ```
 
-- **`db/`** is the only directory a backup needs. Copy it (ideally with the DB
-  stopped or via SQLite online backup) and you have the whole system's config —
-  plus the analytics history, which lives here precisely because it can't be
-  rebuilt.
+- **The two `.db` files are the backup target.** Copy `sitey.db` and
+  `analytics.db` — ideally with the API stopped, or via SQLite's online backup —
+  and you have the whole system's config plus the analytics history. Include the
+  `-wal`/`-shm` sidecars if copying a live, running DB (the `-wal` can hold
+  committed-but-not-yet-checkpointed writes); they're irrelevant once the DB is
+  cleanly stopped. `analytics.db` belongs in the backup precisely because it
+  can't be rebuilt once raw logs roll away.
 - **`services/`** holds user code and data; large but reconstructable from Git +
   redeploy, except for any app-written runtime data.
 - **`web/`** and **`caddy-logs/`** are derived/transient and can be regenerated.
@@ -58,24 +64,12 @@ bind-mounted) is organized by **durability tier**, so "what do I back up?" and
   `caddy-logs/` read-write (to write the access log). It does **not** touch the
   databases.
 
-## Migration: flattening `/data` into `/data/db/`
-
-Historically `sitey.db` lived at the data-root (`/data/sitey.db`). New installs
-should use `/data/db/sitey.db`; existing installs are migrated automatically:
-
-- A one-time startup step (before Prisma connects) moves `/data/sitey.db` →
-  `/data/db/sitey.db`, including its `-wal`/`-shm` sidecars, if the old path
-  exists and the new one doesn't.
-- `DATABASE_URL` becomes `file:/data/db/sitey.db` in `docker-compose.yml` and
-  the dev `.env`.
-
-`analytics.db` is new, so it is created at `/data/db/analytics.db` directly.
-
 ## Files
 
 - `server/prisma/schema.prisma` — config DB schema (Prisma).
 - `server/src/lib/db.ts` — config DB client (`better-sqlite3` adapter).
-- `server/src/lib/analyticsDb.ts` — analytics DB connection + schema bootstrap.
-- `server/src/index.ts` (or `bootstrap.ts`) — the `/data/db/` move-on-startup.
-- `deploy/docker-compose.yml` — `DATABASE_URL`, data-root and `caddy-logs`
-  mounts.
+- `server/src/lib/analyticsDb.ts` — analytics DB connection
+  (`/data/analytics.db`)
+  - schema bootstrap.
+- `deploy/docker-compose.yml` — `DATABASE_URL` (`file:/data/sitey.db`),
+  data-root and `caddy-logs` mounts.

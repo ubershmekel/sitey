@@ -139,9 +139,11 @@ already writes the handler), append a constant field:
         log_append service_id 42
 ```
 
-Then ingestion reads `service_id` straight from the JSON line — no re-matching,
-correct even for path-prefix routes that fan multiple services onto one host.
-This is the recommended approach.
+`Service.id` is an `Int` (`@default(autoincrement())`), so the appended value is
+a bare number and lands in the JSON line as a number — ingestion reads
+`service_id` straight off it, no re-matching, correct even for path-prefix
+routes that fan multiple services onto one host. This is the recommended
+approach.
 
 **Fallback — host/path resolution at ingest.** If we ever can't tag, sitey-api
 keeps an in-memory routing table (host + path-prefix → serviceId), rebuilt on
@@ -149,27 +151,32 @@ every Caddy reload (we already rebuild routing state there), and matches each
 line. More code, duplicates Caddy's matching semantics (wildcards, longest
 prefix); only worth it if `log_append` becomes unavailable.
 
-**We don't do extra work to keep management traffic out of the log.** A `log`
-directive in Caddy is per-site-block, not per-route — and the generator already
-folds wildcard path-prefix _user_ routes into the management host blocks
+**The sitey admin panel is just another service: reserved `service_id 0`.** A
+`log` directive in Caddy is per-site-block, not per-route — and the generator
+already folds wildcard path-prefix _user_ routes into the management host blocks
 (`mgmtRoutes` → [caddy.ts](../../server/src/services/caddy.ts#L578), emitted
 into the `:80` and named-domain blocks at
-[caddy.ts](../../server/src/services/caddy.ts#L593)). Trying to log "only the
-user routes" in that block (via `log_skip` on the admin handlers, conditional
-`log` blocks, etc.) is fiddly and easy to get wrong. So instead:
+[caddy.ts](../../server/src/services/caddy.ts#L593)). Rather than special-case
+the panel out of the log (via `log_skip`, conditional `log` blocks, or a
+nullable `service_id` that the ingest path then has to branch on), we give the
+panel a real, reserved id and treat it uniformly:
 
 - Every block — including the management block — gets the same `log` directive.
-- Each route with a known service gets `log_append service_id <id>`; admin
-  handlers don't, so their lines simply have **no** `service_id` (→ `NULL`).
-- The UI **flags** management/control-panel traffic rather than dropping it.
-  That's trivial from the line itself: `service_id IS NULL` _and_ the host is
-  the management domain (and/or the path is `/api/*`). The analytics page can
-  show it labelled "admin panel" or filter it out — a display choice, not a
-  logging one.
+- Each user route gets `log_append service_id <id>`; the **admin handlers get
+  `log_append service_id 0`** (`appendAdminHandlers`). Real services
+  autoincrement from 1, so **0 can never collide with a user service** — it's a
+  synthetic id meaning "the sitey control panel," with no `Service` row behind
+  it.
+- So **every** access-log line carries a numeric `service_id`. There is no NULL
+  case, no branch in the ingest hot path, and no generator code to suppress the
+  panel — it rolls up into `daily`/`weekly`/`total` exactly like any service.
+- The UI knows `0` = "Admin panel" and labels or filters it as a display choice.
+  It never appears in the per-service list (which comes from the config DB's
+  `Service` rows, all ≥ 1); it only surfaces on the analytics page under its
+  reserved label.
 
-So management requests appear in the raw log and in `request` with
-`service_id = NULL`; we never count them _as_ a user service, and we never write
-generator code to suppress them.
+This keeps one uniform code path: tag every route, roll up every line, and let
+the _display_ layer decide whether to show or hide id 0.
 
 ### What we store per request
 
@@ -229,10 +236,14 @@ initial Caddy reload.
 - **Batch.** Buffer in memory; flush every ~2s or every ~500 lines, whichever
   first, inside **one transaction**: insert into `request` and upsert the
   `daily`, `weekly`, and `total` counters in the same txn. Counters are
-  maintained incrementally so pruning `request` later never disturbs them.
-- **Isolation.** All of this runs on the analytics DB connection only. Any error
-  logs and drops the batch — it must never throw into request handling or touch
-  the config DB.
+  maintained incrementally so pruning `request` later never disturbs them. Every
+  line has a `service_id` (admin panel = 0; see Mapping), so the upsert is
+  unconditional — no NULL branch, and id 0 rolls up like any other service.
+- **Isolation.** All of this runs on the analytics DB connection only — a single
+  `better-sqlite3` connection shared with the prune job and the read queries, so
+  writes are serialized and never collide (WAL still lets the UI read
+  concurrently). Any error logs and drops the batch — it must never throw into
+  request handling or touch the config DB.
 
 Because static-site and proxy traffic is served entirely by Caddy, this worker
 adds **zero latency** to page loads — it's pure background I/O.
@@ -261,12 +272,14 @@ Why separate from the main config DB:
 
 ### Where the files live
 
-`analytics.db` lives at `/data/db/analytics.db`, next to the config DB, and the
-access log at `/data/caddy-logs/access.log`. The overall on-disk layout,
-durability tiers, and the `/data/db/` migration are described in
-[data-model.md](data-model.md) — not repeated here. The access log path is
-configurable via `CADDY_ACCESS_LOG` (default `/var/log/caddy/access.log` inside
-the containers).
+`analytics.db` lives at `/data/analytics.db`, next to the config DB
+(`/data/sitey.db`). The access log is written by Caddy to
+`/var/log/caddy/access.log` inside the containers, which is the host's
+`$DATA_ROOT/caddy-logs/access.log` (bind-mounted: read-write on caddy, read-only
+on sitey-api). The overall on-disk layout and durability tiers are described in
+[data-model.md](data-model.md) — not repeated here. The container access-log
+path is configurable via `CADDY_ACCESS_LOG` (default
+`/var/log/caddy/access.log`).
 
 `analytics.db` opens with WAL; the worker no-ops cleanly if the access log path
 doesn't exist yet (fresh install, or dev without Caddy).
@@ -280,7 +293,7 @@ doesn't exist yet (fresh install, or dev without Caddy).
 CREATE TABLE request (
   id           INTEGER PRIMARY KEY,
   ts           INTEGER NOT NULL,       -- unix seconds, UTC
-  service_id   INTEGER,                -- NULL = unmatched / management
+  service_id   INTEGER NOT NULL,       -- 0 = sitey admin panel; >=1 = a user service
   host         TEXT    NOT NULL,
   path         TEXT    NOT NULL,       -- query stripped, truncated to ~128
   status       INTEGER NOT NULL,
@@ -304,6 +317,9 @@ CREATE TABLE daily (
 );
 
 -- Weekly rollup: kept forever (tiny — ~52 rows/service/year).
+-- `week` is the ISO-8601 week number as (ISO-year * 100 + ISO-week); note the
+-- ISO week-numbering year can differ from the calendar year at Dec/Jan
+-- boundaries, so compute it from the date library's ISO helpers, not by hand.
 CREATE TABLE weekly (
   service_id INTEGER NOT NULL,
   week       INTEGER NOT NULL,        -- ISO year-week, e.g. 202623
@@ -334,6 +350,16 @@ enough to keep for 90 days. The detailed `request` tier exists only so the
 analytics page can answer "which URL is erroring" (any status — 404s and 5xx),
 "what's most requested" for the last week — and, later, "show me all the
 images/JSON/etc."
+
+`weekly` has **no reader yet** — it's the long-term granular tier, written now
+(it's tiny and free to keep forever) so a future "traffic over the last year"
+view has per-week history once `daily` has aged out past 90 days. This is the
+same store-now/use-later stance as `content_type` (see
+[Extensibility](#extensibility)); the dead/spiking follow-up at the end of
+[§4](#4-surfacing-it) reads `daily`, not `weekly`. Every tier keys on a
+`service_id` that is always present (admin panel = 0; see Mapping), so there is
+no NULL row to reason about — the panel is just service 0 across all four
+tables.
 
 ### Retention & pruning
 
@@ -397,6 +423,8 @@ A new tRPC router `analytics` (read-only, `settledProcedure`) reading
   - `last7dRequests`/`last7dErrors`/`last7dBytes` ← sum over `daily` for the
     last 7 days (O(rollup), survives `request` pruning). `last7dBytes` is
     bandwidth.
+  - A service with no traffic yet has no `total`/`daily` rows; the query returns
+    **all zeros** (not null/error), so the UI always has numbers to show.
 
 - `analytics.detail({ serviceId, days = 7, status? })` — the **analytics page**
   data, queried straight off `request`:
@@ -406,10 +434,11 @@ A new tRPC router `analytics` (read-only, `settledProcedure`) reading
     `status >= 400` so 404s show up; the optional `status` filter narrows it
     (e.g. exactly `404`, or `>= 500`):
     `SELECT path, status, count(*) c FROM request WHERE service_id=? AND status>=400 AND ts>=? GROUP BY path, status ORDER BY c DESC LIMIT 20`.
-  - Management/admin traffic (`service_id IS NULL` on the management host) is
-    shown in a separate "Admin panel" view or filtered out — a display toggle,
-    since it's already labelled by host/path (see Mapping). It is never folded
-    into a user service's numbers.
+  - Admin-panel traffic is just `service_id = 0` (see Mapping). The same
+    `forService`/`detail` queries work on it unchanged; the analytics page shows
+    it in a separate "Admin panel" view or hides it — a display toggle. Because
+    its id is 0 and real services are ≥ 1, it is never folded into a user
+    service's numbers.
 
 `ServiceDetail.vue` keeps only the cheap headline numbers (**Requests** total /
 past week, **Bandwidth (7d)**, labelled approximate) and links to the analytics
@@ -468,10 +497,11 @@ rather than being forced into `request`. Out of scope now; request counts only.
 - `server/src/services/caddy.ts` — emit the **same** per-site
   `log { output file … }` (using `format filter` to delete IP/headers/query) on
   every block, management included; add per-route `log_append service_id <id>`
-  where a service is known. No `log_skip`/conditional-log special-casing for the
-  panel.
+  for user routes and `log_append service_id 0` in `appendAdminHandlers` for the
+  panel. Every line ends up tagged — no `log_skip`/conditional-log
+  special-casing and no nullable `service_id`.
 - `server/src/lib/analyticsDb.ts` — `better-sqlite3` connection at
-  `/data/db/analytics.db`, WAL, schema bootstrap, prepared statements.
+  `/data/analytics.db`, WAL, schema bootstrap, prepared statements.
 - `server/src/services/analytics/ingest.ts` — tail (track `dev`/`ino`, drain
   before switching on roll) + parse + batched upsert worker (normalizes
   `content_type`, sums `bytes`, upserts `daily`/`weekly`/`total` in one txn).
@@ -484,5 +514,5 @@ rather than being forced into `request`. Out of scope now; request counts only.
   (404-vs-5xx toggle) for the selected service; `ServiceDetail.vue` shows only
   the headline numbers and links here.
 - `deploy/docker-compose.yml` — `${DATA_ROOT}/caddy-logs` bind mount (rw on
-  caddy, ro on sitey-api). The DB path move lives in
-  [data-model.md](data-model.md).
+  caddy, ro on sitey-api). Both DBs sit at the data root (`/data/sitey.db`,
+  `/data/analytics.db`); see [data-model.md](data-model.md).
