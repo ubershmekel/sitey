@@ -123,6 +123,13 @@ A single shared `access.log` (rather than one file per site) keeps the tailer
 simple — one file, one offset. `roll_size`/`roll_keep` bound the raw file to
 ~60MB regardless of traffic; once ingested we don't need the raw lines.
 
+Since this `log` block is identical in every site block, the generator can
+define it once as a Caddyfile snippet — `(requests_log) { log { … } }` at the
+top — and emit a single `import requests_log` per block instead of repeating it.
+That keeps the generated config short and the privacy filter in one auditable
+place; the per-route `log_append service_id` stays inline (it varies per route
+and a block may carry several, so it isn't part of the shared snippet).
+
 > Caddy log-filtering reference:
 > [log directive](https://caddyserver.com/docs/caddyfile/directives/log) ·
 > [log_append](https://caddyserver.com/docs/caddyfile/directives/log_append).
@@ -446,6 +453,14 @@ page. The analytics page (`web/src/pages/Analytics.vue`) shows **Top paths** and
 **Top status codes / errors** (with the 404-vs-5xx toggle) for the selected
 service. No charts.
 
+**Reserved id 0 = the sitey admin panel.** There is no `Service` row for it, so
+the UI can't look up a name from the config DB — it hardcodes the label "Admin
+panel" for `service_id === 0`. Use a single shared constant (e.g.
+`ADMIN_SERVICE_ID = 0`) on both server and web rather than a magic literal. The
+panel is offered as its own selectable entry alongside the real services (or
+hidden via a toggle); since real ids are all ≥ 1, it never appears inside a user
+service's numbers.
+
 If `request` ever does get heavy on an unusually busy instance, the lever is the
 same one already in the design — shrink `request` retention from 7 days toward
 ~2–3 (§ Retention); the headline counters come from `daily` and are unaffected.
@@ -512,7 +527,12 @@ rather than being forced into `request`. Out of scope now; request counts only.
   `request`, with the status filter).
 - `web/src/pages/Analytics.vue` — top paths + top status codes/errors
   (404-vs-5xx toggle) for the selected service; `ServiceDetail.vue` shows only
-  the headline numbers and links here.
+  the headline numbers and links here. Renders `service_id === ADMIN_SERVICE_ID`
+  (0) as "Admin panel" since it has no `Service` row to name it.
+- Shared `ADMIN_SERVICE_ID = 0` constant (server + web) — the reserved id for
+  the control panel; used by `caddy.ts` (the `log_append` value), the
+  ingest/query code, and the web label. Avoids a magic `0` scattered across
+  layers.
 - `deploy/docker-compose.yml` — `${DATA_ROOT}/caddy-logs` bind mount (rw on
   caddy, ro on sitey-api). Both DBs sit at the data root (`/data/sitey.db`,
   `/data/analytics.db`); see [data-model.md](data-model.md).
