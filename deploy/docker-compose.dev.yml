@@ -40,6 +40,7 @@ services:
       JWT_SECRET: dev-insecure-change-me-in-production
       CADDY_ADMIN_URL: http://caddy:2019
       SITEY_WEB_INTERNAL: sitey-web:3000
+      NODE_ENV: development
     volumes:
       - ../server/src:/app/src:ro
       - ../server/prisma:/app/prisma:ro
