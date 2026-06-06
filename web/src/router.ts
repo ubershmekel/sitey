@@ -67,6 +67,11 @@ const routes = [
     meta: { title: "Integrations" },
   },
   {
+    path: "/analytics",
+    component: () => import("./pages/Analytics.vue"),
+    meta: { title: "Analytics" },
+  },
+  {
     path: "/logs/:container?",
     component: () => import("./pages/Logs.vue"),
     meta: { title: "Logs" },

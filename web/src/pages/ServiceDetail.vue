@@ -195,6 +195,37 @@
         </div>
       </div>
 
+      <!-- ── Traffic (analytics headline) ──────────────────────────── -->
+      <div class="section">
+        <div class="traffic-head">
+          <h2>Traffic</h2>
+          <RouterLink :to="`/analytics?service=${serviceId}`" class="logs-link"
+            >View analytics →</RouterLink
+          >
+        </div>
+        <p class="section-hint">Approximate, best-effort request counts.</p>
+        <div class="traffic-stats">
+          <div class="traffic-stat">
+            <span class="traffic-value">{{
+              fmtNum(traffic.totalRequests)
+            }}</span>
+            <span class="traffic-label">Requests (all time)</span>
+          </div>
+          <div class="traffic-stat">
+            <span class="traffic-value">{{
+              fmtNum(traffic.last7dRequests)
+            }}</span>
+            <span class="traffic-label">Requests (7 days)</span>
+          </div>
+          <div class="traffic-stat">
+            <span class="traffic-value">{{
+              fmtBytes(traffic.last7dBytes)
+            }}</span>
+            <span class="traffic-label">Bandwidth (7 days)</span>
+          </div>
+        </div>
+      </div>
+
       <!-- ── Environment Variables ──────────────────────────────────── -->
       <div class="section">
         <h2>Environment Variables</h2>
@@ -609,6 +640,12 @@ const settingsError = ref("");
 const tlsRetrying = ref(false);
 const tlsModal = ref(false);
 const tlsModalHostname = ref("");
+const traffic = ref({
+  totalRequests: 0,
+  last7dRequests: 0,
+  last7dErrors: 0,
+  last7dBytes: 0,
+});
 const LOG_POLL_MS = 3000;
 let logPollTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -1093,8 +1130,34 @@ function relativeTime(ts: string | Date) {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+function fmtNum(n: number): string {
+  return new Intl.NumberFormat().format(n ?? 0);
+}
+
+function fmtBytes(n: number): string {
+  const bytes = n ?? 0;
+  if (bytes < 1024) return `${bytes} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let v = bytes / 1024;
+  let i = 0;
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024;
+    i++;
+  }
+  return `${v.toFixed(v < 10 ? 1 : 0)} ${units[i]}`;
+}
+
+async function fetchTraffic() {
+  try {
+    traffic.value = await trpc.analytics.forService.query({ serviceId });
+  } catch {
+    // Analytics is best-effort; leave zeros on failure.
+  }
+}
+
 onMounted(async () => {
   await fetchService();
+  await fetchTraffic();
 });
 watch(
   shouldAutoRefreshLogs,
@@ -1299,6 +1362,38 @@ h1 {
 .empty-msg {
   font-size: var(--font-tiny);
   margin-bottom: 1rem;
+}
+
+/* ── Traffic ───────────────────────────────────────────────── */
+.traffic-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.traffic-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+}
+
+.traffic-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.traffic-value {
+  font-size: var(--font-large);
+  font-weight: 700;
+}
+
+.traffic-label {
+  font-size: var(--font-tiny);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
 }
 
 /* ── Env vars ──────────────────────────────────────────────── */

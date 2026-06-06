@@ -15,6 +15,7 @@
 import { db } from "../lib/db.ts";
 import { resolvePublicSiteUrl, isLoopbackHost } from "./siteUrl.ts";
 import { docker } from "./docker.ts";
+import { ADMIN_SERVICE_ID } from "../lib/constants.ts";
 import tls from "node:tls";
 
 const CADDY_ADMIN_URL = process.env.CADDY_ADMIN_URL ?? "http://caddy:2019";
@@ -34,6 +35,10 @@ const SITEY_API_INTERNAL =
 // In production /srv/web is a bind-mounted volume; in dev it proxies to Vite.
 const SITEY_WEB_INTERNAL = process.env.SITEY_WEB_INTERNAL ?? "";
 const WILDCARD_STATUS_PROBE_LABEL = "sitey-dns-check";
+// Where Caddy writes its rolled JSON access log (inside the caddy container).
+// The sitey-api ingest worker tails this same path (see analytics/ingest.ts).
+const CADDY_ACCESS_LOG =
+  process.env.CADDY_ACCESS_LOG ?? "/var/log/caddy/access.log";
 
 export type LetsEncryptStatus = "pending" | "active" | "error";
 
@@ -181,11 +186,52 @@ export async function getLetsEncryptStatusesFromCaddy(
   return Object.fromEntries(results);
 }
 
+/**
+ * Reusable access-log snippet, defined once at the top of the Caddyfile and
+ * imported into every served site block via `import requests_log`. Privacy is
+ * enforced at write time: the `format filter` deletes the client IP, port, and
+ * all request headers (User-Agent, Cookie, …) and strips the query string from
+ * the URI BEFORE the line is written, so the raw on-disk log never contains
+ * personal data. Rolling caps the file at ~60MB regardless of traffic.
+ * See docs/design/analytics.md.
+ */
+function appendRequestsLogSnippet(lines: string[]): void {
+  lines.push("(requests_log) {");
+  lines.push("    log {");
+  lines.push(`        output file ${CADDY_ACCESS_LOG} {`);
+  lines.push("            roll_size 20mb");
+  lines.push("            roll_keep 3");
+  lines.push("            roll_keep_for 168h");
+  lines.push("        }");
+  lines.push("        format filter {");
+  lines.push("            wrap json");
+  lines.push("            fields {");
+  lines.push("                request>remote_ip   delete");
+  lines.push("                request>remote_port delete");
+  lines.push("                request>client_ip   delete");
+  lines.push("                request>headers     delete");
+  // Strip the entire query string from the logged URI (regexp avoids the
+  // per-parameter `query` filter, which can't wildcard-delete everything).
+  lines.push('                request>uri         regexp "[?].*" ""');
+  lines.push("            }");
+  lines.push("        }");
+  lines.push("    }");
+  lines.push("}");
+  lines.push("");
+}
+
+/** Tag the current request with its analytics service id (per-route field). */
+function appendLogServiceId(lines: string[], serviceId: number): void {
+  lines.push(`        log_append service_id ${serviceId}`);
+}
+
 function appendAdminHandlers(lines: string[]): void {
   lines.push("    handle /api/* {");
+  appendLogServiceId(lines, adminServiceId);
   lines.push(`        reverse_proxy ${SITEY_API_INTERNAL}`);
   lines.push("    }");
   lines.push("    handle {");
+  appendLogServiceId(lines, adminServiceId);
   if (SITEY_WEB_INTERNAL) {
     lines.push(`        reverse_proxy ${SITEY_WEB_INTERNAL}`);
   } else {
@@ -273,18 +319,27 @@ function appendRouteHandler(lines: string[], route: CaddyServiceRoute): void {
     !!svc.containerName &&
     !!svc.containerRunning;
 
+  // Every route tags its requests with the analytics service id (see Mapping in
+  // docs/design/analytics.md). For path-prefix routes the tag goes inside each
+  // handle/handle_path block; for a bare catch-all it's a block-level directive.
+  const tagInner = `        log_append service_id ${svc.id}`;
+  const tagOuter = `    log_append service_id ${svc.id}`;
+
   if (!staticReady && !serverReady) {
     if (route.pathPrefix) {
       // Redirect exact prefix (no trailing slash) so /app -> /app/
       lines.push(`    handle ${route.pathPrefix} {`);
+      lines.push(tagInner);
       lines.push(`        redir ${route.pathPrefix}/ 308`);
       lines.push("    }");
       lines.push(`    handle_path ${route.pathPrefix}/* {`);
+      lines.push(tagInner);
       lines.push("        root * /srv/web");
       lines.push("        rewrite * /pending.html");
       lines.push("        file_server");
       lines.push("    }");
     } else {
+      lines.push(tagOuter);
       lines.push("    root * /srv/web");
       lines.push("    rewrite * /pending.html");
       lines.push("    file_server");
@@ -298,14 +353,17 @@ function appendRouteHandler(lines: string[], route: CaddyServiceRoute): void {
     if (route.pathPrefix) {
       // Redirect exact prefix (no trailing slash) so /zen → /zen/
       lines.push(`    handle ${route.pathPrefix} {`);
+      lines.push(tagInner);
       lines.push(`        redir ${route.pathPrefix}/ 308`);
       lines.push("    }");
       lines.push(`    handle_path ${route.pathPrefix}/* {`);
+      lines.push(tagInner);
       lines.push(`        root * ${dir}`);
       lines.push("        try_files {path} /index.html");
       lines.push("        file_server");
       lines.push("    }");
     } else {
+      lines.push(tagOuter);
       lines.push(`    root * ${dir}`);
       lines.push("    try_files {path} /index.html");
       lines.push("    file_server");
@@ -316,12 +374,15 @@ function appendRouteHandler(lines: string[], route: CaddyServiceRoute): void {
     if (route.pathPrefix) {
       // Redirect exact prefix (no trailing slash) so /app → /app/
       lines.push(`    handle ${route.pathPrefix} {`);
+      lines.push(tagInner);
       lines.push(`        redir ${route.pathPrefix}/ 308`);
       lines.push("    }");
       lines.push(`    handle_path ${route.pathPrefix}/* {`);
+      lines.push(tagInner);
       lines.push(`        reverse_proxy ${cname}:${port}`);
       lines.push("    }");
     } else {
+      lines.push(tagOuter);
       lines.push(`    reverse_proxy ${cname}:${port}`);
     }
   }
@@ -339,6 +400,7 @@ function appendTlsEmailDirective(lines: string[], email: string): void {
 
 function buildSiteBlockBodyLines(routes: CaddyServiceRoute[]): string[] {
   const lines: string[] = [];
+  lines.push("    import requests_log");
   if (routes.length > 0) {
     for (const route of routes) appendRouteHandler(lines, route);
     // If every route is path-prefix only, nothing handles unmatched paths.
@@ -515,6 +577,14 @@ async function listRunningContainerNames(): Promise<Set<string>> {
   }
 }
 
+// The analytics service id used to tag the sitey control panel's own traffic
+// (the management blocks served by appendAdminHandlers). This is the built-in
+// protected "sitey" service's real id — looked up on every buildCaddyfile()
+// call — so the panel's traffic rolls up under that service rather than a
+// synthetic id. Falls back to ADMIN_SERVICE_ID only if the protected service is
+// somehow missing. See docs/design/analytics.md.
+let adminServiceId: number = ADMIN_SERVICE_ID;
+
 // Populated on every buildCaddyfile() call — the single source of truth for
 // which origin may make credentialed requests to the API.
 // Null until the first Caddy reload (and whenever no named domain is configured).
@@ -524,30 +594,38 @@ export function getManagementOrigin(): string | null {
 }
 
 export async function buildCaddyfile(): Promise<string> {
-  const [domains, siteUrlResolution, runningContainers] = await Promise.all([
-    db.domain.findMany({
-      orderBy: { createdAt: "asc" },
-      include: {
-        routes: {
-          orderBy: { createdAt: "asc" },
-          include: {
-            service: {
-              include: {
-                deployments: {
-                  where: { status: "success" },
-                  orderBy: { createdAt: "desc" },
-                  take: 1,
-                  select: { id: true },
+  const [domains, siteUrlResolution, runningContainers, protectedService] =
+    await Promise.all([
+      db.domain.findMany({
+        orderBy: { createdAt: "asc" },
+        include: {
+          routes: {
+            orderBy: { createdAt: "asc" },
+            include: {
+              service: {
+                include: {
+                  deployments: {
+                    where: { status: "success" },
+                    orderBy: { createdAt: "desc" },
+                    take: 1,
+                    select: { id: true },
+                  },
                 },
               },
             },
           },
         },
-      },
-    }),
-    resolvePublicSiteUrl(),
-    listRunningContainerNames(),
-  ]);
+      }),
+      resolvePublicSiteUrl(),
+      listRunningContainerNames(),
+      db.service.findFirst({
+        where: { protected: true },
+        select: { id: true },
+      }),
+    ]);
+
+  // Tag the panel's own traffic with the built-in sitey service's real id.
+  adminServiceId = protectedService?.id ?? ADMIN_SERVICE_ID;
 
   const lines: string[] = [];
   const siteBlocks: RenderedSiteBlock[] = [];
@@ -557,6 +635,9 @@ export async function buildCaddyfile(): Promise<string> {
   lines.push("    admin 0.0.0.0:2019");
   lines.push("}");
   lines.push("");
+
+  // Shared access-log snippet (privacy filter in one auditable place).
+  appendRequestsLogSnippet(lines);
 
   // Management site (sitey control panel + API).
   // :80 always serves admin — works on first install with no domain configured.
@@ -591,6 +672,7 @@ export async function buildCaddyfile(): Promise<string> {
 
   // Always emit a plain :80 block — works on fresh installs before DNS/TLS is set up.
   lines.push(":80 {");
+  lines.push("    import requests_log");
   for (const route of mgmtRoutes) appendRouteHandler(lines, route);
   appendAdminHandlers(lines);
   lines.push("}");
@@ -600,6 +682,7 @@ export async function buildCaddyfile(): Promise<string> {
   if (siteyNamedDomain) {
     lines.push(`${siteyNamedDomain} {`);
     if (siteyEmail) lines.push(`    tls ${siteyEmail}`);
+    lines.push("    import requests_log");
     for (const route of mgmtRoutes) appendRouteHandler(lines, route);
     appendAdminHandlers(lines);
     lines.push("}");

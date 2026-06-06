@@ -31,6 +31,12 @@
         d="M9.5 6.5a3.5 3.5 0 0 0-4.95 0l-1.5 1.5a3.5 3.5 0 0 0 4.95 4.95l.75-.75"
       />
     </template>
+    <template v-else-if="name === 'analytics'">
+      <line x1="2" y1="14" x2="14" y2="14" />
+      <rect x="2.5" y="9" width="2.5" height="4" rx="0.5" />
+      <rect x="6.75" y="6" width="2.5" height="7" rx="0.5" />
+      <rect x="11" y="3" width="2.5" height="10" rx="0.5" />
+    </template>
     <template v-else-if="name === 'logs'">
       <line x1="2" y1="4" x2="14" y2="4" />
       <line x1="2" y1="8" x2="14" y2="8" />
@@ -47,7 +53,14 @@
 
 <script setup lang="ts">
 defineProps<{
-  name: "home" | "services" | "domains" | "integrations" | "logs" | "settings";
+  name:
+    | "home"
+    | "services"
+    | "domains"
+    | "integrations"
+    | "analytics"
+    | "logs"
+    | "settings";
 }>();
 </script>
 

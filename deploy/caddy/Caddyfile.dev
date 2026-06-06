@@ -1,7 +1,9 @@
 # Dev Caddyfile — used with docker-compose.dev.yml.
 # Supports running API/Web natively on the host (npm run dev) while Caddy runs
 # in Docker, so upstreams resolve via host.docker.internal.
-# sitey-api pushes a full config via POST :2019/load on startup, replacing this.
+# sitey-api pushes a full config via POST :2019/load on startup, replacing this
+# (the pushed config carries the privacy-filtered access log; this bootstrap
+# file deliberately doesn't — see deploy/caddy/Caddyfile).
 {
     admin 0.0.0.0:2019
 }
@@ -14,4 +16,3 @@
         reverse_proxy host.docker.internal:3000
     }
 }
-

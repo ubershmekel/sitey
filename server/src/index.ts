@@ -14,6 +14,7 @@ import { db } from "./lib/db.ts";
 import { enqueueDeployment } from "./services/deployment.ts";
 import { reloadCaddy, getManagementOrigin } from "./services/caddy.ts";
 import { getGithubIntegrationConfig } from "./services/github.ts";
+import { startAnalytics } from "./services/analytics/index.ts";
 import { execSync } from "node:child_process";
 
 const PORT = parseInt(process.env.PORT ?? "3001");
@@ -85,6 +86,10 @@ async function main() {
       err.message,
     ),
   );
+
+  // Start background analytics workers (ingest + prune). Best-effort: no-ops
+  // cleanly when the Caddy access log doesn't exist yet.
+  startAnalytics();
 
   const app = Fastify({
     logger: {

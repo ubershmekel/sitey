@@ -2,6 +2,11 @@
 # sitey-api pushes an updated config via POST caddy:2019/load on startup
 # and whenever domains/deployments change (to add user domain blocks).
 # This file only handles the management UI — it never needs to change.
+#
+# Note: no access-log block here. The real config pushed by sitey-api adds the
+# privacy-filtered access log (tagged with the sitey service's real id, which
+# this static file can't look up). The ~second before that push isn't recorded —
+# acceptable for best-effort analytics. See docs/design/analytics.md.
 {
     admin 0.0.0.0:2019
 }
@@ -16,4 +21,3 @@
         file_server
     }
 }
-

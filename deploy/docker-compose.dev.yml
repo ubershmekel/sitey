@@ -17,6 +17,7 @@ services:
       - ./caddy/Caddyfile.dev:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - ${DATA_ROOT:-./data}/services:/srv/services:ro
+      - ${DATA_ROOT:-./data}/caddy-logs:/var/log/caddy
     ports:
       - "80:80"
       - "443:443"
@@ -44,6 +45,7 @@ services:
       - ../server/prisma:/app/prisma:ro
       - ${DATA_ROOT:-./data}:/data
       - /var/run/docker.sock:/var/run/docker.sock
+      - ${DATA_ROOT:-./data}/caddy-logs:/var/log/caddy:ro
     depends_on:
       caddy:
         condition: service_started

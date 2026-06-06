@@ -43,6 +43,8 @@ services:
       - caddy_data:/data
       - ${DATA_ROOT:-./data}/web:/srv/web:ro
       - ${DATA_ROOT:-./data}/services:/srv/services:ro
+      # Writable access log — sitey-api tails this for analytics (see analytics.md).
+      - ${DATA_ROOT:-./data}/caddy-logs:/var/log/caddy
     networks:
       - sitey-public
     logging:
@@ -95,6 +97,8 @@ services:
     volumes:
       - ${DATA_ROOT:-./data}:/data
       - /var/run/docker.sock:/var/run/docker.sock
+      # Read-only tail of Caddy's access log for analytics ingest.
+      - ${DATA_ROOT:-./data}/caddy-logs:/var/log/caddy:ro
     networks:
       - sitey-public
     logging:
