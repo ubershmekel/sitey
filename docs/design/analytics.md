@@ -98,6 +98,7 @@ see Mapping for why we don't special-case the panel), emit:
                 request>remote_port delete
                 request>client_ip   delete
                 request>headers     delete
+                resp_headers>Set-Cookie delete
                 request>uri         query {
                     delete *
                 }
@@ -118,6 +119,17 @@ The raw file therefore never contains an IP, a user-agent, a cookie, or a query
 string — which is what lets the privacy claim below hold. (Caddy already redacts
 `Cookie`/`Authorization` by default, but we delete the whole `headers` object
 rather than rely on that.)
+
+**Why `resp_headers` is kept (and how it stays safe).** We deliberately do _not_
+delete the `resp_headers` object: ingestion reads the response `Content-Type`
+out of it (the `status` and `size` we also store are top-level log fields, not
+headers). The one response header that could carry a secret is `Set-Cookie` —
+the panel's login response sets the `sitey_session` cookie. Caddy redacts
+`Set-Cookie` by default, but to keep the privacy guarantee from silently
+depending on that default we also `delete` it explicitly in the filter above.
+Nothing else from `resp_headers` is ever persisted: ingest pulls only the bare
+MIME type, so even the kept headers (Etag, Cache-Control, …) live only in the
+short-lived raw log, never in `analytics.db`.
 
 A single shared `access.log` (rather than one file per site) keeps the tailer
 simple — one file, one offset. `roll_size`/`roll_keep` bound the raw file to
@@ -241,13 +253,21 @@ initial Caddy reload.
 - **Normalize the path.** Strip the query string, lowercase the host, and
   **truncate the path** to ~128 chars. This caps `request` row size and path
   cardinality (the long tail of `?cache-bust=…` URLs collapses).
-- **Batch.** Buffer in memory; flush every ~2s or every ~500 lines, whichever
-  first, inside **one transaction**: insert into `request` and upsert the
-  `daily`, `weekly`, and `total` counters in the same txn. Counters are
-  maintained incrementally so pruning `request` later never disturbs them. Every
-  line has a `service_id` (the panel uses its protected service id; see
-  Mapping), so the upsert is unconditional — no NULL branch, and the panel rolls
-  up like any other service.
+- **Batch.** Buffer parsed lines and flush in chunks of ~500, each chunk its
+  **own transaction** (insert into `request` + upsert the `daily`, `weekly`, and
+  `total` counters together so the four tables stay atomic), yielding to the
+  event loop between chunks. The ~500-line cap matters most on a _backlog_ — a
+  cold start over an existing ~20MB rolled log, or catch-up after the API was
+  down while Caddy kept logging — where draining straight to EOF in one
+  transaction would block the event loop for seconds and buffer the whole file
+  in memory. Counters are maintained incrementally so pruning `request` later
+  never disturbs them. The saved tail offset is advanced **per committed chunk**
+  and points at the last _complete, flushed_ line (bytes still in the partial
+  buffer are re-read next poll); because the counters are incremental upserts,
+  this alignment is what stops a crash mid-drain from double-counting a chunk it
+  already committed. Every line has a `service_id` (the panel uses its protected
+  service id; see Mapping), so the upsert is unconditional — no NULL branch, and
+  the panel rolls up like any other service.
 - **Isolation.** All of this runs on the analytics DB connection only — a single
   `better-sqlite3` connection shared with the prune job and the read queries, so
   writes are serialized and never collide (WAL still lets the UI read

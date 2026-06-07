@@ -17,6 +17,10 @@ const ACCESS_LOG_PATH =
   process.env.CADDY_ACCESS_LOG ?? "/var/log/caddy/access.log";
 const POLL_MS = 2000;
 const READ_CHUNK = 64 * 1024;
+// Lines flushed per transaction. A backlog (cold start over an existing log, or
+// catch-up after downtime) is committed in chunks of this size, yielding to the
+// event loop between them, rather than one giant synchronous transaction.
+const BATCH_SIZE = 500;
 const PATH_MAX = 128;
 const TAIL_STATE_KEY = "tail_state";
 
@@ -42,6 +46,9 @@ let offset = 0;
 // string) so a multibyte UTF-8 char split across two reads isn't corrupted.
 let partial: Buffer = Buffer.alloc(0);
 let pollTimer: ReturnType<typeof setInterval> | null = null;
+// Re-entrancy guard: a single poll may run long while draining a backlog, so we
+// must not let the interval start another on top of it (shared DB connection).
+let polling = false;
 
 // ── Parsing ───────────────────────────────────────────────────────────────
 
@@ -82,6 +89,12 @@ export function parseLine(line: string): ParsedRequest | null {
   const status = Number((entry as { status?: unknown }).status) || 0;
   const method = request.method ? String(request.method) : null;
 
+  // Content-Type is the only field we read from the response headers (status and
+  // size are top-level). `resp_headers` is therefore intentionally KEPT in the
+  // Caddy access log (see appendRequestsLogSnippet in caddy.ts) — but only the
+  // bare MIME type is ever stored; no other response header is persisted, and
+  // Caddy redacts Set-Cookie/Authorization by default (we also delete Set-Cookie
+  // explicitly in the log filter as defense-in-depth).
   let contentType: string | null = null;
   const respHeaders = (entry as { resp_headers?: Record<string, unknown> })
     .resp_headers;
@@ -173,9 +186,20 @@ function persistTailState(): void {
   const state: TailState = {
     dev: openIdentity.dev,
     ino: openIdentity.ino,
-    offset,
+    // Save only up to the last COMPLETE line parsed — which, at every point we
+    // call this, is also the last line we've FLUSHED. Bytes still in `partial`
+    // are an incomplete trailing fragment that gets re-read next poll. Keeping
+    // the saved offset aligned with committed data means a crash or restart
+    // mid-drain never double-counts a batch we already committed (counters are
+    // incremental upserts) nor skips one we hadn't.
+    offset: offset - partial.length,
   };
   writeMeta(getAnalyticsDb(), TAIL_STATE_KEY, JSON.stringify(state));
+}
+
+/** Yield control to the event loop so a long backlog drain stays responsive. */
+function yieldToLoop(): Promise<void> {
+  return new Promise((resolve) => setImmediate(resolve));
 }
 
 // ── Tailing ───────────────────────────────────────────────────────────────
@@ -204,11 +228,16 @@ function openPath(startOffset: number): void {
 }
 
 /**
- * Read from the open fd starting at `offset` up to current EOF, splitting into
- * complete lines and appending parsed rows to `out`. Leaves any trailing
- * partial line in the module-level `partial` buffer.
+ * Read from the open fd starting at `offset` up to current EOF, parsing complete
+ * lines and flushing them in bounded batches (`BATCH_SIZE`) — each its own
+ * transaction, yielding to the event loop between them. This keeps a large
+ * backlog (cold start over a ~20MB rolled log, or catch-up after downtime) from
+ * blocking the event loop in one giant synchronous transaction or buffering the
+ * whole file in memory. The saved offset is advanced per committed batch (see
+ * persistTailState), so a crash mid-drain neither loses a batch nor re-ingests
+ * one already committed. Any trailing partial line stays in `partial`.
  */
-function drainOpenFd(out: ParsedRequest[]): void {
+async function drainOpenFd(): Promise<void> {
   if (openFd === null) return;
   let size: number;
   try {
@@ -221,6 +250,7 @@ function drainOpenFd(out: ParsedRequest[]): void {
     offset = 0;
     partial = Buffer.alloc(0);
   }
+  let batch: ParsedRequest[] = [];
   while (offset < size) {
     const want = Math.min(READ_CHUNK, size - offset);
     const chunk = Buffer.allocUnsafe(want);
@@ -242,17 +272,27 @@ function drainOpenFd(out: ParsedRequest[]): void {
       const line = partial.subarray(0, nl).toString("utf8");
       partial = partial.subarray(nl + 1);
       const parsed = parseLine(line);
-      if (parsed) out.push(parsed);
+      if (parsed) batch.push(parsed);
+      if (batch.length >= BATCH_SIZE) {
+        getStatements().flush(batch);
+        batch = [];
+        // Commit point: the last flushed line ends exactly at
+        // `offset - partial.length`, so persisting here is crash-safe.
+        persistTailState();
+        await yieldToLoop();
+      }
     }
+  }
+  if (batch.length > 0) {
+    getStatements().flush(batch);
+    persistTailState();
   }
 }
 
-function poll(): void {
-  const rows: ParsedRequest[] = [];
-
+async function poll(): Promise<void> {
   // 1. Drain whatever we already had open (the tail of a file that may have
-  //    just been rolled out from under us).
-  drainOpenFd(rows);
+  //    just been rolled out from under us). Flushes in batches internally.
+  await drainOpenFd();
 
   // 2. Detect a roll (or first open) by comparing the path's identity to the
   //    open handle's.
@@ -270,14 +310,12 @@ function poll(): void {
       pathStat.dev !== openIdentity.dev;
     if (rolled) {
       openPath(0);
-      drainOpenFd(rows);
+      await drainOpenFd();
     }
   }
 
-  if (rows.length > 0) {
-    getStatements().flush(rows);
-  }
-  // Persist offset even with no rows so a restart doesn't re-scan the file.
+  // Persist the trailing offset even when nothing flushed this tick, so a
+  // restart resumes at the last committed line rather than re-scanning.
   if (openIdentity) persistTailState();
 }
 
@@ -328,12 +366,18 @@ export function startAnalyticsIngest(): void {
   }
 
   pollTimer = setInterval(() => {
-    try {
-      poll();
-    } catch (err) {
-      // Never let ingest throw into the process; drop the batch and continue.
-      console.error("[analytics] Ingest poll failed:", err);
-    }
+    // Skip if the previous poll is still draining a backlog — never overlap
+    // polls on the shared connection.
+    if (polling) return;
+    polling = true;
+    poll()
+      .catch((err) => {
+        // Never let ingest throw into the process; drop the batch and continue.
+        console.error("[analytics] Ingest poll failed:", err);
+      })
+      .finally(() => {
+        polling = false;
+      });
   }, POLL_MS);
   // Don't keep the event loop alive solely for analytics.
   pollTimer.unref?.();
@@ -359,6 +403,7 @@ export function stopAnalyticsIngest(): void {
     clearInterval(pollTimer);
     pollTimer = null;
   }
+  polling = false;
   closeOpenFd();
   offset = 0;
   partial = Buffer.alloc(0);

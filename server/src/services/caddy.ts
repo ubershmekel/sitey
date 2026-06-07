@@ -193,6 +193,13 @@ export async function getLetsEncryptStatusesFromCaddy(
  * all request headers (User-Agent, Cookie, …) and strips the query string from
  * the URI BEFORE the line is written, so the raw on-disk log never contains
  * personal data. Rolling caps the file at ~60MB regardless of traffic.
+ *
+ * `resp_headers` is intentionally NOT deleted — the ingest worker needs the
+ * response `Content-Type` from it (status and size are top-level fields). The
+ * one response header that could carry a secret is `Set-Cookie` (the panel's
+ * login response sets the session cookie); Caddy already redacts it by default,
+ * and we delete it here explicitly so the guarantee doesn't silently depend on
+ * that default. Ingest stores only the bare MIME type, never any other header.
  * See docs/design/analytics.md.
  */
 function appendRequestsLogSnippet(lines: string[]): void {
@@ -210,6 +217,11 @@ function appendRequestsLogSnippet(lines: string[]): void {
   lines.push("                request>remote_port delete");
   lines.push("                request>client_ip   delete");
   lines.push("                request>headers     delete");
+  // Defense-in-depth: drop Set-Cookie from the kept response headers so the
+  // session cookie can never land in the raw log (Caddy redacts it by default,
+  // but we don't want to rely on that). Other resp_headers stay so ingest can
+  // read Content-Type.
+  lines.push("                resp_headers>Set-Cookie delete");
   // Strip the entire query string from the logged URI (regexp avoids the
   // per-parameter `query` filter, which can't wildcard-delete everything).
   lines.push('                request>uri         regexp "[?].*" ""');
