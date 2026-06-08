@@ -84,6 +84,41 @@ test("ingest folds lines into request + rollup counters", () => {
   cleanup();
 });
 
+test("untagged lines are bucketed, never dropped", () => {
+  const db = getAnalyticsDb();
+
+  // A line with no service_id at all, and one with a non-numeric service_id —
+  // both must be ingested (not dropped) and roll up under UNKNOWN_SERVICE_ID (0).
+  const noId = JSON.stringify({
+    ts: Math.floor(Date.now() / 1000),
+    status: 404,
+    size: 0,
+    request: { host: "u.test", method: "GET", uri: "/js/x.js" },
+  });
+  const badId = JSON.stringify({
+    ts: Math.floor(Date.now() / 1000),
+    service_id: "not-a-number",
+    status: 404,
+    size: 0,
+    request: { host: "u.test", method: "GET", uri: "/js/y.js" },
+  });
+
+  const n = ingestLinesForTest([noId, badId]);
+  assert.equal(n, 2); // both parsed, neither dropped
+
+  // Both landed under service_id 0 (the "unknown" bucket). Assert on this test's
+  // own paths — the singleton DB connection persists across tests, so a raw
+  // count on service_id 0 would also include test 1's admin line.
+  const unknown = db
+    .prepare(
+      "SELECT count(*) c FROM request WHERE service_id = 0 AND path IN ('/js/x.js', '/js/y.js')",
+    )
+    .get() as { c: number };
+  assert.equal(unknown.c, 2);
+
+  cleanup();
+});
+
 test("prune drops old request rows but keeps rollups", () => {
   const db = getAnalyticsDb();
   const old = Math.floor(Date.now() / 1000) - 30 * 86400; // 30 days ago

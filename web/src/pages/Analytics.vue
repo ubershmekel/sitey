@@ -58,7 +58,10 @@
         </thead>
         <tbody>
           <tr v-for="(row, i) in detail.topPaths" :key="i">
-            <td class="mono path">{{ row.path || "/" }}</td>
+            <td class="mono path">
+              <span class="host">{{ row.host }}</span
+              >{{ row.path || "/" }}
+            </td>
             <td class="num">{{ fmtNum(row.count) }}</td>
           </tr>
         </tbody>
@@ -108,7 +111,10 @@
                 row.status
               }}</span>
             </td>
-            <td class="mono path">{{ row.path || "/" }}</td>
+            <td class="mono path">
+              <span class="host">{{ row.host }}</span
+              >{{ row.path || "/" }}
+            </td>
             <td class="num">{{ fmtNum(row.count) }}</td>
           </tr>
         </tbody>
@@ -150,6 +156,12 @@ async function loadServices() {
     // traffic is tagged with its real id (see caddy.ts), so it appears here
     // like any other service. No separate synthetic "Admin panel" entry.
     const opts = services.map((s) => ({ id: s.id, label: s.name }));
+    // Synthetic "Unknown" bucket (service id 0): traffic not attributable to any
+    // user service — fallthrough 404s on unmatched paths, plus any line that
+    // reached ingest untagged. Kept last so it never becomes the default
+    // selection. id 0 never collides with a real service (they autoincrement
+    // from 1); see UNKNOWN_SERVICE_ID in server constants / docs/design/analytics.md.
+    opts.push({ id: 0, label: "Requests without service ID" });
     serviceOptions.value = opts;
 
     const fromQuery = Number(route.query.service);
@@ -396,6 +408,10 @@ h1 {
   max-width: 0;
   white-space: nowrap;
   word-break: break-all;
+}
+
+.host {
+  color: var(--text-muted);
 }
 
 .code-badge {

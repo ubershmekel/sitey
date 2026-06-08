@@ -11,6 +11,7 @@
 
 import fs from "node:fs";
 import { getAnalyticsDb, readMeta, writeMeta } from "../../lib/analyticsDb.ts";
+import { UNKNOWN_SERVICE_ID } from "../../lib/constants.ts";
 import { utcDayNumber, isoYearWeek } from "./time.ts";
 
 const ACCESS_LOG_PATH =
@@ -53,9 +54,15 @@ let polling = false;
 // ── Parsing ───────────────────────────────────────────────────────────────
 
 /**
- * Parse one Caddy access-log line into a ParsedRequest, or null if it should be
- * skipped (malformed JSON, missing/invalid `service_id`, or no timestamp).
- * Exported for testing.
+ * Parse one Caddy access-log line into a ParsedRequest. Returns null ONLY when
+ * the line carries no request to count — an empty line or non-JSON corruption
+ * (a complete line that won't parse; partial trailing lines never reach here,
+ * they wait in the `partial` buffer). We never drop a real request line for a
+ * missing/unattributable field: an absent or non-numeric `service_id` falls back
+ * to the "Requests without service ID" bucket (UNKNOWN_SERVICE_ID = 0, surfaced as
+ * "Unknown" in the UI) and a missing `ts` to ingest time, so "don't-lose-data"
+ * holds even if some future Caddy block emits an untagged line. Exported for
+ * testing.
  */
 export function parseLine(line: string): ParsedRequest | null {
   const trimmed = line.trim();
@@ -69,11 +76,13 @@ export function parseLine(line: string): ParsedRequest | null {
   }
   if (!entry || typeof entry !== "object") return null;
 
-  const serviceId = Number((entry as { service_id?: unknown }).service_id);
-  if (!Number.isFinite(serviceId)) return null;
+  const serviceIdRaw = Number((entry as { service_id?: unknown }).service_id);
+  const serviceId = Number.isFinite(serviceIdRaw)
+    ? serviceIdRaw
+    : UNKNOWN_SERVICE_ID;
 
-  const ts = Math.floor(Number((entry as { ts?: unknown }).ts));
-  if (!Number.isFinite(ts)) return null;
+  const tsRaw = Math.floor(Number((entry as { ts?: unknown }).ts));
+  const ts = Number.isFinite(tsRaw) ? tsRaw : Math.floor(Date.now() / 1000);
 
   const request = (entry.request ?? {}) as Record<string, unknown>;
 

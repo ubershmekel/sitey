@@ -15,7 +15,7 @@
 import { db } from "../lib/db.ts";
 import { resolvePublicSiteUrl, isLoopbackHost } from "./siteUrl.ts";
 import { docker } from "./docker.ts";
-import { ADMIN_SERVICE_ID } from "../lib/constants.ts";
+import { UNKNOWN_SERVICE_ID } from "../lib/constants.ts";
 import tls from "node:tls";
 
 const CADDY_ADMIN_URL = process.env.CADDY_ADMIN_URL ?? "http://caddy:2019";
@@ -419,10 +419,19 @@ function buildSiteBlockBodyLines(routes: CaddyServiceRoute[]): string[] {
     // Add a fallback so they get a 404 instead of a blank 200.
     const hasCatchAll = routes.some((r) => !r.pathPrefix);
     if (!hasCatchAll) {
+      // Tag the fallthrough 404 so it still lands in analytics. The request
+      // matched no app route and serves no panel content, so it isn't
+      // attributable to any user service (nor would blaming the host's "first
+      // service" make sense when several share a host via different prefixes):
+      // tag it with the "Requests without service ID" bucket, UNKNOWN_SERVICE_ID (0),
+      // surfaced as "Unknown" in the analytics UI. Tag both blocks: `error`
+      // raises into `handle_errors`, which runs last and sets the final value.
       lines.push("    handle {");
+      appendLogServiceId(lines, UNKNOWN_SERVICE_ID);
       lines.push("        error 404");
       lines.push("    }");
       lines.push("    handle_errors {");
+      appendLogServiceId(lines, UNKNOWN_SERVICE_ID);
       lines.push("        root * /srv/web");
       lines.push("        rewrite * /404.html");
       lines.push("        templates");
@@ -593,9 +602,9 @@ async function listRunningContainerNames(): Promise<Set<string>> {
 // (the management blocks served by appendAdminHandlers). This is the built-in
 // protected "sitey" service's real id — looked up on every buildCaddyfile()
 // call — so the panel's traffic rolls up under that service rather than a
-// synthetic id. Falls back to ADMIN_SERVICE_ID only if the protected service is
+// synthetic id. Falls back to UNKNOWN_SERVICE_ID only if the protected service is
 // somehow missing. See docs/design/analytics.md.
-let adminServiceId: number = ADMIN_SERVICE_ID;
+let adminServiceId: number = UNKNOWN_SERVICE_ID;
 
 // Populated on every buildCaddyfile() call — the single source of truth for
 // which origin may make credentialed requests to the API.
@@ -637,7 +646,7 @@ export async function buildCaddyfile(): Promise<string> {
     ]);
 
   // Tag the panel's own traffic with the built-in sitey service's real id.
-  adminServiceId = protectedService?.id ?? ADMIN_SERVICE_ID;
+  adminServiceId = protectedService?.id ?? UNKNOWN_SERVICE_ID;
 
   const lines: string[] = [];
   const siteBlocks: RenderedSiteBlock[] = [];

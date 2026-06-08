@@ -65,40 +65,51 @@ export const analyticsRouter = router({
       const db = getAnalyticsDb();
       const since = Math.floor(Date.now() / 1000) - input.days * 86400;
 
+      // Group by host + path: a service can be reached on several domains, and
+      // collapsing them would hide which domain the traffic hit.
       const topPaths = db
         .prepare(
-          `SELECT path, count(*) AS count
+          `SELECT host, path, count(*) AS count
              FROM request
             WHERE service_id = ? AND ts >= ?
-            GROUP BY path
+            GROUP BY host, path
             ORDER BY count DESC
             LIMIT 20`,
         )
-        .all(input.serviceId, since) as Array<{ path: string; count: number }>;
+        .all(input.serviceId, since) as Array<{
+        host: string;
+        path: string;
+        count: number;
+      }>;
 
       const topErrors = (
         input.status !== undefined
           ? db
               .prepare(
-                `SELECT path, status, count(*) AS count
+                `SELECT host, path, status, count(*) AS count
                    FROM request
                   WHERE service_id = ? AND status = ? AND ts >= ?
-                  GROUP BY path, status
+                  GROUP BY host, path, status
                   ORDER BY count DESC
                   LIMIT 20`,
               )
               .all(input.serviceId, input.status, since)
           : db
               .prepare(
-                `SELECT path, status, count(*) AS count
+                `SELECT host, path, status, count(*) AS count
                    FROM request
                   WHERE service_id = ? AND status >= 400 AND ts >= ?
-                  GROUP BY path, status
+                  GROUP BY host, path, status
                   ORDER BY count DESC
                   LIMIT 20`,
               )
               .all(input.serviceId, since)
-      ) as Array<{ path: string; status: number; count: number }>;
+      ) as Array<{
+        host: string;
+        path: string;
+        status: number;
+        count: number;
+      }>;
 
       return { topPaths, topErrors };
     }),

@@ -188,12 +188,32 @@ and treat it uniformly:
   `buildCaddyfile()` on every reload. So the panel's traffic rolls up under the
   same service that represents it in the config DB — no synthetic id, and no
   duplicate entry in the analytics UI.
-- So **every** access-log line carries a numeric `service_id`. There is no NULL
-  case, no branch in the ingest hot path, and no generator code to suppress the
-  panel — it rolls up into `daily`/`weekly`/`total` exactly like any service.
-- `ADMIN_SERVICE_ID = 0` remains only as a **defensive fallback** for the
-  impossible case where no protected service exists. Real services autoincrement
-  from 1, so 0 can never collide with one.
+- **The fallthrough 404 goes to the "Unknown" bucket.** When a host has only
+  path-prefix routes (no catch-all), the generator adds a synthetic
+  `handle { error 404 }` / `handle_errors` pair for unmatched paths. That block
+  isn't a route and serves no panel content, so it's attributable to no user
+  service — and blaming the host's "first service" would be arbitrary when
+  several share a host via different prefixes. The generator tags it with
+  `UNKNOWN_SERVICE_ID` (`0`), the **"Requests without service ID" bucket**,
+  which the analytics UI surfaces as an "Unknown" entry. (This is distinct from
+  the panel's _real_ id used by `appendAdminHandlers` for the `:80`/named
+  management blocks — those serve actual panel content and stay under the panel
+  service.) `log_append` is non-terminal and the access line is written after
+  `handle_errors` runs, so the tag lands on the final log entry.
+- **Ingest never drops a real request line.** Every generated line is tagged,
+  but as a belt-and-suspenders guard the ingest parser does **not** discard a
+  line for a missing/unattributable field: an absent or non-numeric `service_id`
+  falls back to the same `UNKNOWN_SERVICE_ID` "unknown" bucket, and a missing
+  `ts` to ingest time. (Only an empty line or non-JSON corruption — which
+  carries no request to count — is skipped.) So if a future block ever forgets
+  to tag, the traffic shows up under "Unknown" as a visible signal rather than
+  silently vanishing or polluting a real service's counts. Probe-only blocks
+  emit `respond 204` without `import requests_log`, so they produce no access
+  lines at all — nothing untagged escapes in the first place.
+- `UNKNOWN_SERVICE_ID = 0` is the **"Requests without service ID" bucket** (the
+  two cases above) and doubles as the defensive fallback for the impossible case
+  where no protected service exists. Real services autoincrement from 1, so 0
+  can never collide with one.
 
 This keeps one uniform code path: tag every route (the panel included) with a
 real service id, and roll up every line the same way.
@@ -457,12 +477,16 @@ A new tRPC router `analytics` (read-only, `settledProcedure`) reading
 
 - `analytics.detail({ serviceId, days = 7, status? })` — the **analytics page**
   data, queried straight off `request`:
-  - `topPaths` (most-requested URLs):
-    `SELECT path, count(*) c FROM request WHERE service_id=? AND ts>=? GROUP BY path ORDER BY c DESC LIMIT 20`.
+  - `topPaths` (most-requested URLs). Grouped by **`host` + `path`**, not `path`
+    alone: a service can be reachable on several domains, and collapsing them
+    would hide which domain the traffic hit. The UI shows the host inline so
+    each row reads like a URL (`host/path`):
+    `SELECT host, path, count(*) c FROM request WHERE service_id=? AND ts>=? GROUP BY host, path ORDER BY c DESC LIMIT 20`.
   - `topErrors` — **any status the user asks for**, not just 5xx. Default to
     `status >= 400` so 404s show up; the optional `status` filter narrows it
-    (e.g. exactly `404`, or `>= 500`):
-    `SELECT path, status, count(*) c FROM request WHERE service_id=? AND status>=400 AND ts>=? GROUP BY path, status ORDER BY c DESC LIMIT 20`.
+    (e.g. exactly `404`, or `>= 500`). Also grouped by `host` so the domain is
+    visible:
+    `SELECT host, path, status, count(*) c FROM request WHERE service_id=? AND status>=400 AND ts>=? GROUP BY host, path, status ORDER BY c DESC LIMIT 20`.
   - Admin-panel traffic is just the protected sitey service's `service_id` (see
     Mapping). The same `forService`/`detail` queries work on it unchanged, and
     it appears in the service list like any other service — no special-casing.
@@ -477,8 +501,10 @@ service. No charts.
 tagged with that service's real id (see Mapping), so the UI looks up its name
 from the config DB like any other service and shows it in the same selectable
 list — no synthetic id, no hardcoded label, no duplicate "Admin panel" entry.
-`ADMIN_SERVICE_ID = 0` survives only as a server-side defensive fallback for the
-impossible case where the protected service is missing.
+Separately, `UNKNOWN_SERVICE_ID = 0` backs a synthetic **"Requests without
+service ID"** entry in the service dropdown that collects unrouted/untagged
+traffic (see Mapping), and also serves as the defensive fallback if the
+protected service is ever missing.
 
 If `request` ever does get heavy on an unusually busy instance, the lever is the
 same one already in the design — shrink `request` retention from 7 days toward
@@ -551,8 +577,9 @@ rather than being forced into `request`. Out of scope now; request counts only.
   headline numbers and links here. The sitey panel appears in the service list
   like any other service (named from the config DB), since its traffic is tagged
   with its real service id.
-- `server/src/lib/constants.ts` — `ADMIN_SERVICE_ID = 0`, the defensive fallback
-  id used by `caddy.ts` only if the protected sitey service can't be found.
+- `server/src/lib/constants.ts` — `UNKNOWN_SERVICE_ID = 0`, the "Requests
+  without service ID" bucket and defensive fallback id used by `caddy.ts` only
+  if the protected sitey service can't be found.
 - `deploy/docker-compose.yml` — `${DATA_ROOT}/caddy-logs` bind mount (rw on
   caddy, ro on sitey-api). Both DBs sit at the data root (`/data/sitey.db`,
   `/data/analytics.db`); see [data-model.md](data-model.md).
