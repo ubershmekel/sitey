@@ -1,4 +1,5 @@
-FROM node:24-bookworm-slim AS base
+# Pinned (not node:24-bookworm-slim): floating tags silently pulled Node 24.21, whose native-addon regression (24.19+) broke us.
+FROM node:24.18.1-bookworm-slim AS base
 WORKDIR /app
 
 # git + CA roots needed for HTTPS clone/pull; openssl/python/build tools for native deps

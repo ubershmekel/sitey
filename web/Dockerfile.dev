@@ -1,4 +1,5 @@
-FROM node:24-bookworm-slim
+# Pinned (not node:24-bookworm-slim): floating tags silently pulled Node 24.21, whose native-addon regression (24.19+) broke us.
+FROM node:24.18.1-bookworm-slim
 WORKDIR /app
 
 COPY package*.json ./
