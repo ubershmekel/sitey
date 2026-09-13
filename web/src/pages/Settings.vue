@@ -396,12 +396,13 @@
       <p v-if="versionDisplay" class="hint">{{ versionDisplay }}</p>
       <p v-if="installedAt" class="hint">Installed {{ installedAt }}</p>
       <p class="hint">
-        Locked out? To generate an override password, run on the host (probably
-        at /opt/sitey/deploy):
+        Locked out? To generate an override password, run on the host:
       </p>
-      <code class="block-code"
-        >docker compose exec sitey-api npm run bootstrap:generate-password</code
-      >
+      <code class="block-code">sitey generate-password</code>
+      <p class="hint">
+        No <code>sitey</code> command yet? Install it with
+        <code>sh /opt/sitey/deploy/sitey install-cli</code>
+      </p>
     </section>
   </Layout>
 </template>

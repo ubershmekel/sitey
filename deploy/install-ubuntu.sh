@@ -53,6 +53,9 @@ fi
 ${SUDO} mkdir -p "${INSTALL_DIR}/deploy/data"
 ${SUDO} chown -R "${RUN_AS_USER}:${RUN_AS_USER}" "${INSTALL_DIR}"
 
+echo "==> Installing the sitey CLI"
+sh "${INSTALL_DIR}/deploy/sitey" install-cli
+
 cd "${INSTALL_DIR}/deploy"
 
 PUBLIC_IP="$(curl -4fsSL https://api.ipify.org || true)"
@@ -107,8 +110,7 @@ if [[ "${API_READY}" -ne 1 ]]; then
   docker_cmd compose logs --tail=80 sitey-api || true
   echo
   echo "You can retry manually with:"
-  echo "  cd /opt/sitey/deploy"
-  echo "  docker compose exec --interactive=false -T sitey-api npm run bootstrap:generate-password"
+  echo "  sitey generate-password"
   exit 1
 fi
 
@@ -124,8 +126,7 @@ done
 if [[ -z "${PASS_OUTPUT}" ]]; then
   echo "Failed to generate admin password automatically."
   echo "Run this command manually:"
-  echo "  cd /opt/sitey/deploy"
-  echo "  docker compose exec --interactive=false -T sitey-api npm run bootstrap:generate-password"
+  echo "  sitey generate-password"
   exit 1
 fi
 
@@ -145,3 +146,5 @@ echo "Next steps:"
 echo "1) Open ${SITEY_URL} in your browser, sign in with the admin password, and follow the setup instructions there."
 echo "2) ..."
 echo "3) Profit!"
+echo
+echo "Run 'sitey help' on this server for CLI commands."

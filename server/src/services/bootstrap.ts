@@ -5,8 +5,6 @@
  *  3. Print the server's local IP addresses so the user knows where to connect.
  */
 
-import { execSync } from "node:child_process";
-import { fileURLToPath } from "node:url";
 import os from "node:os";
 import { db } from "../lib/db.ts";
 
@@ -157,37 +155,4 @@ export async function generateOverridePassword() {
       "Save this; it will not be shown again.",
     ]),
   );
-
-  await db.$disconnect();
-}
-
-function printUsage() {
-  console.error("Usage: node bootstrap.ts <generate-password>");
-}
-
-const isMain = process.argv[1] === fileURLToPath(import.meta.url);
-
-if (isMain) {
-  // Run migrations first. The main server does this in index.ts, but when
-  // bootstrap.ts is invoked directly as a CLI the tables may not exist yet.
-  if (process.env.NODE_ENV === "production") {
-    console.log("[bootstrap] Running database migrations...");
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    execSync("npm run db:migrate", {
-      stdio: "inherit",
-      cwd: process.cwd(),
-      shell: true,
-      env: process.env,
-    } as any);
-    console.log("[bootstrap] Migrations complete.");
-  }
-
-  await db.$connect();
-  const cmd = process.argv[2];
-  if (cmd === "generate-password") {
-    await generateOverridePassword();
-  } else {
-    printUsage();
-    process.exit(1);
-  }
 }

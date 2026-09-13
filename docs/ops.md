@@ -123,21 +123,37 @@ never need to rebuild the updater image just to change the update logic.
 
 ---
 
-## CLI account commands
+## The `sitey` CLI
 
-The CLI exposes one recovery command:
+`install-ubuntu.sh` installs a `sitey` command on the host. It runs
+`node src/cli.ts` inside the `sitey-api` container, so it works over SSH too
+(`ssh my-vps sitey export`).
 
-| Command                       | When to use                                                                   |
-| ----------------------------- | ----------------------------------------------------------------------------- |
-| `bootstrap:generate-password` | Generate a one-time override password usable on any account at the login page |
+| Command             | When to use                                                                   |
+| ------------------- | ----------------------------------------------------------------------------- |
+| `generate-password` | Generate a one-time override password usable on any account at the login page |
+| `export`            | Print domains, repos, services and routes as YAML (preview of config-as-code) |
+| `install-cli`       | (host only) Install or reinstall `/usr/local/bin/sitey`                       |
+| `help`              | List commands                                                                 |
+
+Installs from before the CLI existed: update Sitey, then run once on the host:
 
 ```bash
-# Initial setup (before setup wizard is completed)
-docker compose exec sitey-api npm run bootstrap:generate-password
+sh /opt/sitey/deploy/sitey install-cli
 ```
 
-These scripts auto-detect whether the container has built JS (`dist/`) or source
-TS (`src/`) and run the right entrypoint.
+`install-cli` is handled by the host-side script
+[`deploy/sitey`](../deploy/sitey) rather than the container, because the
+container can't write to the host's `/usr/local/bin`. The installed command is a
+two-line wrapper around that script, so CLI changes arrive with `git pull`.
+
+Without the CLI installed, the same commands run via compose:
+
+```bash
+cd /opt/sitey/deploy
+docker compose exec sitey-api npm run cli -- export
+docker compose exec sitey-api npm run bootstrap:generate-password
+```
 
 ---
 
@@ -146,8 +162,7 @@ TS (`src/`) and run the right entrypoint.
 If you've forgotten your password or the account is in a bad state:
 
 ```bash
-cd /opt/sitey/deploy
-docker compose exec sitey-api npm run bootstrap:generate-password
+sitey generate-password
 ```
 
 This generates an override password and prints it to stdout. Use it with your

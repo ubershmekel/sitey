@@ -1,0 +1,33 @@
+#!/bin/sh
+# Host-side `sitey` command. Runs the CLI inside the sitey-api container:
+#   sitey <command>  →  docker compose exec sitey-api node src/cli.ts <command>
+#
+# `install-cli` is handled here, on the host, because the container can't write
+# to the host's /usr/local/bin. First time on an existing install:
+#   sh /opt/sitey/deploy/sitey install-cli
+#
+# The installed /usr/local/bin/sitey is a two-line wrapper that calls this file,
+# so updates to this script arrive with `git pull` (and need no exec bit).
+set -e
+
+SELF="$(readlink -f "$0")"
+DEPLOY_DIR="$(dirname "$SELF")"
+BIN="/usr/local/bin/sitey"
+
+if [ "$1" = "install-cli" ]; then
+  SUDO=""
+  if [ "$(id -u)" -ne 0 ]; then SUDO="sudo"; fi
+  printf '#!/bin/sh\nexec sh "%s" "$@"\n' "$SELF" | $SUDO tee "$BIN" >/dev/null
+  $SUDO chmod 755 "$BIN"
+  echo "Installed $BIN -> $SELF"
+  exit 0
+fi
+
+DOCKER="docker"
+if ! docker info >/dev/null 2>&1; then DOCKER="sudo docker"; fi
+
+# Without a TTY (piped output, `ssh host sitey ...`), `exec` must not allocate one.
+TTY_FLAG=""
+if [ ! -t 0 ] || [ ! -t 1 ]; then TTY_FLAG="-T"; fi
+
+exec $DOCKER compose -f "$DEPLOY_DIR/docker-compose.yml" exec $TTY_FLAG sitey-api node src/cli.ts "$@"
