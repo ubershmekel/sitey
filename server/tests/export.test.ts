@@ -96,6 +96,31 @@ test("envVarNames keeps names, drops values and comments", () => {
   ]);
 });
 
+test("envVarNames skips lines without '=' (e.g. multi-line secret bodies)", () => {
+  assert.deepEqual(
+    envVarNames(
+      "KEY=-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0\n-----END PRIVATE KEY-----\nghp_tokenOnItsOwnLine\nB=2",
+    ),
+    ["KEY", "B"],
+  );
+});
+
+test("suffixed duplicate repo names never collide with a real repo name", () => {
+  const repo = { repoOwner: "", repoName: "", githubMode: "webhook" };
+  const doc = buildExportDoc({
+    domains: [],
+    services: [],
+    repos: [
+      { ...repo, id: 3, name: "site" },
+      { ...repo, id: 7, name: "site" },
+      { ...repo, id: 9, name: "site-3" },
+    ],
+  });
+  const names = doc.repos.map((r) => r.name);
+  assert.equal(new Set(names).size, 3);
+  assert.ok(names.includes("site-3"));
+});
+
 test("buildExportDoc references domains and repos by name, omits defaults", () => {
   const doc = buildExportDoc(input);
 

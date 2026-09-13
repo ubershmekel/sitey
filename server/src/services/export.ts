@@ -91,16 +91,20 @@ function withoutDefaults(
   );
 }
 
-/** Env var names only — values are secrets and stay out of the export. */
+/**
+ * Env var names only — values are secrets and stay out of the export. Lines
+ * without "=" are skipped (as parseEnvString does): they may be continuation
+ * lines of a multi-line secret, not names.
+ */
 export function envVarNames(envVars: string): string[] {
   return envVars
     .split(/\r?\n/)
     .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("#"))
+    .filter((line) => line && !line.startsWith("#") && line.includes("="))
     .map((line) =>
       line
+        .slice(0, line.indexOf("="))
         .replace(/^export\s+/, "")
-        .split("=")[0]
         .trim(),
     )
     .filter(Boolean);
@@ -117,12 +121,21 @@ function repoKeys(repos: RepoRow[]): Map<number, string> {
     `repo-${r.id}`;
   const counts = new Map<string, number>();
   for (const r of repos) counts.set(base(r), (counts.get(base(r)) ?? 0) + 1);
-  return new Map(
-    repos.map((r) => [
-      r.id,
-      counts.get(base(r))! > 1 ? `${base(r)}-${r.id}` : base(r),
-    ]),
-  );
+  // Unique names claim themselves first so a suffixed duplicate can't steal
+  // one (e.g. two "site" repos vs. a repo actually named "site-3").
+  const taken = new Set([...counts].filter(([, n]) => n === 1).map(([k]) => k));
+  const keys = new Map<number, string>();
+  for (const r of [...repos].sort((a, b) => a.id - b.id)) {
+    if (counts.get(base(r)) === 1) {
+      keys.set(r.id, base(r));
+      continue;
+    }
+    let key = `${base(r)}-${r.id}`;
+    while (taken.has(key)) key += `-${r.id}`;
+    taken.add(key);
+    keys.set(r.id, key);
+  }
+  return keys;
 }
 
 export function buildExportDoc(input: ExportInput) {
