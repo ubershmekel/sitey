@@ -440,6 +440,52 @@ echo "$PASS_OUTPUT"`,
   );
 }
 
+const API_CONTAINER = "sitey-sitey-api-1";
+
+/**
+ * Docker's restart policy hides sitey-api crashes: the container comes back and
+ * the only symptom is a Playwright timeout. Throws if it restarted, after
+ * printing the logs from before the (latest) restart.
+ */
+async function assertApiNeverRestarted(ip: string): Promise<void> {
+  let restartCount: number;
+  let startedAt: string;
+  try {
+    [restartCount, startedAt] = await sshCmd(
+      ip,
+      `docker inspect -f '{{.RestartCount}} {{.State.StartedAt}}' ${API_CONTAINER}`,
+    ).then((out) => {
+      const [count, started] = out.trim().split(/\s+/);
+      return [parseInt(count, 10), started] as [number, string];
+    });
+  } catch (err) {
+    log(`WARNING: could not check ${API_CONTAINER} restart count: ${err}`);
+    return;
+  }
+  if (!(restartCount > 0)) return;
+
+  console.error("");
+  console.error("[full-loop] " + "!".repeat(60));
+  console.error(
+    `[full-loop] ERROR: ${API_CONTAINER} crashed and was restarted ${restartCount} time(s) during the run.`,
+  );
+  console.error(
+    `[full-loop] Last 80 log lines before the latest restart (${startedAt}):`,
+  );
+  console.error("[full-loop] " + "!".repeat(60));
+  try {
+    await sshCmd(
+      ip,
+      `docker logs --until '${startedAt}' --tail 80 ${API_CONTAINER} 2>&1`,
+    );
+  } catch (err) {
+    log(`WARNING: could not fetch ${API_CONTAINER} logs: ${err}`);
+  }
+  throw new Error(
+    `${API_CONTAINER} restarted ${restartCount} time(s) during the run (crash)`,
+  );
+}
+
 function sleep(ms: number) {
   return new Promise<void>((r) => setTimeout(r, ms));
 }
@@ -535,8 +581,17 @@ try {
 
   stepStart = Date.now();
   log("Running Playwright tests...");
-  await runPlaywright(server.ip, password);
-  log(`All tests passed. (${since(stepStart)})`);
+  let playwrightError: unknown = null;
+  try {
+    await runPlaywright(server.ip, password);
+    log(`All tests passed. (${since(stepStart)})`);
+  } catch (err) {
+    playwrightError = err;
+  }
+
+  // Check for API crashes whether or not the tests passed; a crash fails the run.
+  await assertApiNeverRestarted(server.ip);
+  if (playwrightError) throw playwrightError;
 } finally {
   if (LEAVE_UP && resourcesProvisioned) {
     const siteyUrl = wildDomainToSiteyUrl(wildcardDomainRun);
