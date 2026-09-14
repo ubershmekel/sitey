@@ -1,536 +1,730 @@
 # Config as code (YAML + remote CLI)
 
-Sitey's configuration — domains, services, routes, DNS — can be pulled as a YAML
-file, edited by a human or an agent, committed to git, and pushed back to a
-Sitey server from any machine with a CLI. The UI keeps working; the file is a
-second way in, not a replacement.
+Sitey's configuration can be pulled as YAML, edited by a human or an agent,
+committed to git, and pushed back over HTTPS. The DB stays authoritative and the
+web UI remains available. This document specifies proposed behavior; the current
+export is a preview and the remote CLI/apply system is not implemented yet.
 
-The motivating use case: an agent on my home machine sets up landing pages for
-several ideas on a new VPS (`sitey.andluck.com`), including DNS on Namecheap,
-without SSH access, without clicking through the UI, and with every change
-reviewable in git.
+The motivating use case is an agent launching landing pages from the private
+`ubershmekel/myswe` repository on `sitey.andluck.com`, including Namecheap DNS,
+deployment, and verification. Installation and account consent remain human
+bootstrap tasks; everyday work should not require SSH.
 
-## Goals
+## Goals and scope
 
-- **An agent can launch a landing page end to end**: page content, route, DNS
-  record, TLS, deploy, and verification that it is live.
-- **Config is reviewable and versioned.** Every change the agent makes is a diff
-  in a git repo I control, and I can see what's live vs. what's committed.
-- **No SSH for day-to-day work.** SSH is for install and recovery only.
-- **Multiple VPSes from one machine.** `sitey --server andluck ...`,
-  `sitey --server redditp ...`.
-- **The one-line install and the web UI stay as they are.** Nobody should need
-  GitHub or a config repo just to start using Sitey.
-- **DNS is part of the config.** Adding a domain or a subdomain doesn't require
-  opening the Namecheap dashboard.
+- Review actual configuration changes with deterministic exports.
+- Keep UI/CLI edits compatible and detect stale files or plans.
+- Preserve service identity, data, deployment history, and analytics on rename.
+- Allocate domains and wildcards independently of routes.
+- Manage independent VPS profiles with `sitey --server <name>`.
+- Recover interrupted DNS, Caddy, and deployment work after restarts.
+- Keep the installer and website usable without a config repository.
 
-## Non-goals (for now)
+Initially excluded: buying domains, managing the VPS OS, moving data between
+VPSes, team GitOps, prebuilt registry-image deployments, and secrets in YAML.
+Environment values may remain website-managed in the core release; a small env
+CLI follows later.
 
-- **Team mode / GitOps** (Sitey pulling config from a repo on push). Designed
-  for below so nothing here blocks it, but not built.
-- **Managing the VPS itself** (cron, OS packages, backups, hardening). Sitey
-  hosts sites; the VPS is where they run.
-- **Buying domains.** A human does that.
-- **Secrets in the file.** Env var _names_ only; values are set separately.
-- **Multi-server orchestration** (moving a site between VPSes as one command).
-  Each server has its own file; the CLI just knows about several servers.
+## Background and alternatives
 
-## Background: why this exists
+All configuration currently lives in SQLite. A remote CLI adds inventory,
+reviewable changes, and repeatable setup without requiring host-level SSH for
+every deployment. YAML is a snapshot, not a backup of application data.
 
-Sitey started as a UI for a human wiring GitHub repos, domains, and HTTPS
-together on one VPS. All config lives in SQLite ("infra-as-db"). That was the
-right call for a human with a dashboard, but it has costs:
-
-- An agent has to drive a UI or poke at the DB.
-- There's no history of what changed or who changed it.
-- Copying a setup to a new VPS means clicking it all in again.
-- A `sitey export` of a real instance showed the DB shape isn't how people think
-  about sites: 16 domain rows where only 3 wildcards carried information,
-  orphaned domains and repos nobody knew about, and the panel's hostnames not
-  visible at all (they're derived from env vars and per-domain flags).
-
-Alternatives considered:
-
-| Option                                      | Why not                                                                                                                                                                      |
-| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Let the agent SSH in and do whatever        | Works for the first site, rots after. No inventory, every session rediscovers state, hand-edited Caddy config breaks Sitey's invariants, and the agent gets root on the box. |
-| A separate tiny landing-page deployer       | A worse copy of the parts of Sitey worth keeping (Caddy generation, TLS, analytics). Two systems doing one job.                                                              |
-| Dokku-style `git push` to the server        | Needs host-level SSH users and hooks outside Docker; ties config to deploy mechanics.                                                                                        |
-| Terraform provider                          | Terraform needs its own state file (another DB to back up), is push-only, needs a Go provider _plus_ the server, and is poor at "track a branch and redeploy".               |
-| YAML file on the VPS, edited over SSH       | No history, needs SSH, lost with the VPS.                                                                                                                                    |
-| Sitey pulls config from a git repo (GitOps) | Good for teams; for one person it's extra setup (a repo webhook per VPS) with little benefit over push/pull. Kept as **team mode**, below.                                   |
+| Alternative                     | Reason for this design instead                                       |
+| ------------------------------- | -------------------------------------------------------------------- |
+| Arbitrary SSH commands          | Hard to review or reproduce; bypasses Sitey's invariants.            |
+| Separate landing-page deployer  | Duplicates routing, TLS, deployment, and analytics.                  |
+| Git push directly to the VPS    | Adds host-level SSH users/hooks outside the current architecture.    |
+| Terraform provider              | Adds another state-management workflow and provider implementation.  |
+| YAML edited on the VPS          | Does not provide the home-machine workflow or git history by itself. |
+| Server pulls config from GitHub | Useful later for teams; more setup than personal push/pull requires. |
 
 ## Principles
 
-1. **The DB stays the source of truth.** The server is authoritative; a YAML
-   file is a snapshot. Pull, edit, push — like editing a remote document.
-2. **One format, one parser, on the server.** The CLI is thin. Validation,
-   diffing, and applying all happen server-side so every client (CLI, future UI
-   import, future team mode) behaves the same.
-3. **Dry-run first.** Every push shows the diff before anything changes.
-4. **Never destroy data implicitly.** Removing a service from the file removes
-   the service, but never its data directory or volumes, and never DNS records.
-5. **Idempotent.** Pushing the same file twice is a no-op. `apply(export())`
-   reports no changes.
-6. **Explicit over derived.** If the file says it, it's true; nothing important
-   is implied by a flag somewhere else.
-
-## Modes
-
-### Personal mode (build this)
-
-```
- home machine                                   VPS (sitey.andluck.com)
- ─────────────                                  ───────────────────────
- myswe/ (private git repo)
- ├── landings/idea-a/        git push ──▶ GitHub ──clone (GitHub App)──▶ sitey-api
- ├── landings/idea-b/                                                      │
- └── sitey/andluck.yaml                                                    │
-        │                                                                  │
-   sitey CLI ── pull ◀──── HTTPS + bearer token ────▶ config.export        │
-             ── push ─────────────────────────────▶ config.apply ─────────┤
-                                                                           ├─▶ SQLite (truth)
-                                                                           ├─▶ Caddy reload
-                                                                           ├─▶ deploy queue
-                                                                           └─▶ Namecheap API
-```
-
-- The YAML lives in whatever repo I like. For now: the private `myswe` repo, at
-  `sitey/andluck.yaml`, next to the landing page folders it deploys.
-- The CLI runs on my machine and talks to Sitey over HTTPS with an API token.
-- The UI can still edit anything. The next `pull` shows those edits.
-
-### Team mode (later, not built)
-
-Same format and same `apply` code, different trigger:
-
-- A config repo (e.g. `acme/sitey-config`) holds one file per server,
-  `servers/<name>.yaml`.
-- Each Sitey instance is pointed at its file once
-  (`sitey config-source acme/sitey-config servers/prod.yaml`) and has the GitHub
-  App installed on that repo.
-- On push: pull, validate, apply. A bad file never half-applies; Sitey keeps the
-  last good config and reports the error.
-- Sitey posts a GitHub commit status (✓ applied / ✗ error) so whoever pushed
-  sees the result with `gh`.
-- File-managed config becomes read-only in the UI, with a link to the file.
-- `config.apply` with `dryRun` stays useful for CI checks on pull requests.
-
-Nothing in personal mode should assume the file is only ever pushed by a CLI.
+1. **The DB is authoritative.** Clients share server-side parsing, validation,
+   planning, and apply logic.
+2. **Review the actual change.** Apply requires a plan bound to the destination
+   instance and current configuration revision.
+3. **Names are editable; identity is stable.** Rename never creates a new data
+   directory or analytics identity.
+4. **No implicit destruction.** Omission cannot silently remove resources.
+   Explicit pruning archives services; it never purges data.
+5. **Configuration and delivery are separate.** DNS, Docker, and Caddy cannot
+   share a DB transaction. Persist and retry their work.
+6. **Round-trip existing intent.** Preserve unused allocations, environment
+   declarations, aliases, and nondefault settings.
+7. **Idempotent desired state.** Unchanged configuration produces no new changes
+   or duplicate jobs, but unfinished delivery still resumes.
 
 ## The file format
 
-YAML 1.2 (the `yaml` npm package's default, which avoids the YAML 1.1 traps like
-`no` → `false`). Validated by a zod schema shared by export and apply. Unknown
-keys are errors, so agent typos fail loudly.
+Use YAML 1.2, the `yaml` package, and a strict zod schema. Reject unknown keys,
+duplicate mapping keys, unsupported tags, multiple documents, and excessive
+input size or alias expansion. YAML is data, never executable configuration.
+Emit JSON Schema for editor assistance.
 
 ```yaml
 version: 1
-
-# The hostname the Sitey panel is served on.
 panel: sitey.andluck.com
+panelAliases: []
 
-domains:
+# Zone policy alone allocates neither its apex nor its wildcard.
+dns:
   andluck.com:
-    dns: namecheap # Sitey writes DNS records via the Namecheap API
-    wildcard: false # default: one A record per host used in routes
+    provider: namecheap
   redditp.com:
-    dns: manual # you manage DNS; Sitey checks it and tells you what's missing
-    wildcard: true # `*` points here too
+    provider: manual
+
+# Explicit allocations survive without service routes.
+# Quote a leading asterisk: unquoted '*' is YAML alias syntax.
+domains:
+  andluck.com: {}
+  "*.redditp.com": {}
 
 services:
-  idea-a:
+  idea-a: # stable configKey; change name below to rename
+    name: idea-a
     repo: ubershmekel/myswe
     branch: main
     deployMode: static
+    buildImage: node:24-bookworm-slim
     buildCommand: cd landings/idea-a && npm ci && npm run build
     outputDir: landings/idea-a/dist
     routes: [idea-a.andluck.com]
 
   andluck-home:
+    name: andluck-home
     repo: ubershmekel/myswe
     deployMode: static
     outputDir: landings/home
     routes: [andluck.com, www.andluck.com]
 
   idea-b-api:
+    name: idea-b-api
     repo: ubershmekel/myswe
     deployMode: server
+    buildMode: auto
+    buildImage: node:24-bookworm-slim
     buildCommand: cd services/idea-b-api && npm ci && npm run build
     serverRunCommand: cd services/idea-b-api && npm start
     containerPort: 3000
-    env: [DATABASE_URL, STRIPE_KEY] # names only; values set with `sitey env set`
+    env: [DATABASE_URL, STRIPE_KEY] # declarations, never values
     routes: [idea-b.andluck.com/api]
 ```
 
-### Top level
+### Top level and omission rules
 
-| Key        | Required | Meaning                                                                                                    |
-| ---------- | -------- | ---------------------------------------------------------------------------------------------------------- |
-| `version`  | yes      | Format version. Currently `1`.                                                                             |
-| `panel`    | no       | Hostname serving the Sitey panel. Maps to the Public Sitey URL setting. See [The panel](#the-panel).       |
-| `domains`  | no       | Domains that need settings (DNS provider, wildcard). Hosts under unlisted domains are treated as `manual`. |
-| `services` | no       | Map of service name → service. The key is the service's identity.                                          |
+| Key            | Required | Meaning                                                             |
+| -------------- | -------- | ------------------------------------------------------------------- |
+| `version`      | yes      | Format version, initially `1`.                                      |
+| `panel`        | no       | Canonical panel URL; a hostname means HTTPS. Omission preserves it. |
+| `panelAliases` | no       | Additional panel hostnames. Omission preserves; `[]` removes.       |
+| `dns`          | yes      | Map of DNS zone to provider policy; use `{}` for none.              |
+| `domains`      | yes      | Map of explicit hostname/wildcard allocations; use `{}` for none.   |
+| `services`     | yes      | Map of stable configuration key to complete service definition.     |
 
-### Domains
+This is an instance-wide snapshot, not a patch format. All collection keys are
+required so a file cut off before `services` cannot mean an empty server. If
+live entries are absent from a collection, planning rejects the file unless
+`--prune` was supplied, listing the omissions. `--yes` only skips interactive
+confirmation; it does not enable pruning.
 
-Keyed by the registrable domain (`andluck.com`), not by host.
+With `--prune`, omitted services are archived, omitted explicit allocations are
+released, and omitted DNS policies become manual. Show every effect in the plan.
+DNS records are never automatically deleted. Within included services, omitted
+fields use documented defaults, including `routes: []`; show those changes too.
+To pause a service, prefer `active: false`.
 
-| Key        | Default  | Meaning                                                                                                                                                      |
-| ---------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `dns`      | `manual` | `namecheap`: Sitey ensures the needed records exist. `manual`: Sitey only checks resolution and reports the records you need to create.                      |
-| `wildcard` | `false`  | `false`: records exactly for the hosts in `routes`. `true`: also `*`, so any subdomain resolves here before it's configured, and Sitey claims the namespace. |
+Export includes all collections, canonical panel when set, and `panelAliases`
+even when empty. Normalize set-like arrays and ordering. Defaults belong to the
+format version, not whatever Prisma defaults exist after an upgrade. Repeated
+export must produce the same YAML.
 
-With `dns: namecheap`, exact records cost nothing extra — adding a route adds
-its record on the next push — so `wildcard: false` is the default. It also means
-other subdomains of the same domain can point elsewhere. `wildcard: true` earns
-its place mainly with `dns: manual`, where you want to set DNS once.
+### Service identity: how the string maps to the existing ID
 
-### Services
+Add a unique, persistent **`Service.configKey` string**. Keep the existing
+numeric **`Service.id` unchanged**. The YAML map key is looked up in this new DB
+column; it is not converted to a number and is not a hash of the name.
 
-Field names mirror `schema.prisma` so the file, the UI, and the code share one
-vocabulary. Omitted fields take the schema default, and `export` omits fields
-equal to their default.
+For example, the DB contains:
 
-| Key                | Default | Notes                                                                    |
-| ------------------ | ------- | ------------------------------------------------------------------------ |
-| `repo`             | —       | `owner/name` on GitHub. Required.                                        |
-| `branch`           | `main`  |                                                                          |
-| `deployMode`       | —       | `static` or `server`. Required.                                          |
-| `buildMode`        | `auto`  | `auto` or `dockerfile`.                                                  |
-| `buildCommand`     | `""`    | Multi-line allowed.                                                      |
-| `buildImage`       | `""`    |                                                                          |
-| `outputDir`        | `""`    | Static only. Relative to repo root.                                      |
-| `dockerfilePath`   | `""`    |                                                                          |
-| `serverRunCommand` | `""`    |                                                                          |
-| `containerPort`    | `3000`  | Server only.                                                             |
-| `env`              | `[]`    | Env var **names**. Values never appear in the file.                      |
-| `active`           | `true`  | `false` stops the container and removes routes from Caddy, keeping data. |
-| `routes`           | `[]`    | Route strings, below.                                                    |
+| id  | configKey | name   |
+| --- | --------- | ------ |
+| 42  | idea-a    | idea-a |
 
-Renaming a service key is a delete plus a create (new id, new data directory).
-The diff must say so plainly.
+In the service portion of the same file, the user changes only `name` (the
+top-level fields and other services remain present):
+
+```yaml
+services:
+  idea-a:
+    name: better-name
+    repo: ubershmekel/myswe
+    branch: main
+    deployMode: static
+    buildImage: node:24-bookworm-slim
+    buildCommand: cd landings/idea-a && npm ci && npm run build
+    outputDir: landings/idea-a/dist
+    routes: [idea-a.andluck.com]
+```
+
+Apply finds `Service.configKey == "idea-a"` and updates row **42**:
+
+| id  | configKey | name        |
+| --- | --------- | ----------- |
+| 42  | idea-a    | better-name |
+
+`/data/services/42/`, container identity, deployment foreign keys, and analytics
+`service_id = 42` remain attached to the same service. No data moves. UI
+renaming also changes only `name`.
+
+- Require `name` explicitly; it is never a lookup key. Keep current name
+  validation; names need not become globally unique.
+- Keys use lowercase letters, digits, and hyphens, with bounded length. Enforce
+  uniqueness in SQLite, including archived services.
+- Backfill once during migration. Prefer unique valid names; resolve empty or
+  duplicate names deterministically with ID suffixes and collision checks. Store
+  the result; never regenerate on export or rename.
+- UI-created services receive a key once using the same allocator. Show/copy it
+  in the UI for CLI use.
+- A new key creates a row with a new numeric ID. An existing key updates its
+  row. Numeric DB IDs are not accepted in version 1 YAML.
+- Editing a key means a different identity. Without `--prune`, omission of the
+  old key blocks planning. With it, show archive-old/create-new and warn that
+  data is not transferred. A future explicit key-rename operation can preserve
+  the ID; normal renaming uses `name`.
+- Archived keys remain reserved. Reintroducing one requires explicit restore;
+  never attach an unrelated app to archived data silently.
+- Keys are instance-local. On an empty second VPS, `idea-a` might receive ID 7.
+  That copies configuration, not data or analytics. On a populated target,
+  matching keys are explicit updates in the import plan, never inferred matches
+  by display name.
+
+### Services and images
+
+| Key                | Default | Notes                                                           |
+| ------------------ | ------- | --------------------------------------------------------------- |
+| `name`             | none    | Required editable name, separate from the key.                  |
+| `repo`             | none    | Required GitHub `owner/name`.                                   |
+| `branch`           | `main`  | Planning resolves intended deployment commits.                  |
+| `deployMode`       | none    | Required: `static` or `server`.                                 |
+| `buildMode`        | `auto`  | `auto` or `dockerfile`; Dockerfile mode is for servers.         |
+| `buildCommand`     | `""`    | Build command; multiline allowed.                               |
+| `buildImage`       | `""`    | Static build container or auto-built server base image.         |
+| `outputDir`        | `""`    | Static output relative to repo root; empty means repo root.     |
+| `dockerfilePath`   | `""`    | Relative path; empty uses existing default resolution.          |
+| `serverRunCommand` | `""`    | Command for the generated server image.                         |
+| `containerPort`    | `3000`  | Server port, integer 1–65535.                                   |
+| `env`              | `[]`    | Declared names, never values.                                   |
+| `active`           | `true`  | False stops serving/container while retaining service and data. |
+| `routes`           | `[]`    | Concrete route strings.                                         |
+
+Today `buildImage` has two uses. For static sites, nonempty runs the build in
+that image; empty retains the API-container build behavior. For an auto-built
+server, it supplies Dockerfile `FROM`; empty currently selects
+`node:24-bookworm-slim`. The examples make both environments explicit. Correct
+the static-only Prisma comment during implementation.
+
+In Dockerfile mode, the repository Dockerfile controls base image and run
+command. Warn on retained unused auto-build fields rather than pretending they
+override it or rejecting an otherwise valid existing export.
+
+The final service image, currently tagged by service ID and commit, is build
+output and is not exported. Prebuilt-image deployment needs a future `image`
+source mutually exclusive with `repo`/build fields, plus registry authentication
+and deployment semantics. It is not another meaning of `buildImage`.
+
+### DNS zones and domain allocations
+
+Separate provider policy from allocation:
+
+```yaml
+dns:
+  andluck.com: { provider: namecheap }
+domains:
+  "*.s.andluck.com": {}
+```
+
+This allocates `*.s.andluck.com` within zone `andluck.com`; the provider record
+name is `*.s`, not `*`. No service route is needed.
+
+- Policies use `provider: manual | namecheap`, initially one account per
+  provider. Named credential profiles can follow later.
+- Match the longest configured zone on label boundaries; unlisted zones are
+  manual. Validate managed zones/delegation with the provider. Do not guess a
+  zone from the last two labels (`example.co.uk` is a counterexample).
+- Allocation keys are exact hosts or leading `*.` wildcards, including nested
+  wildcards. Canonicalize names and reject duplicate equivalents.
+- Allocations may include `letsEncryptEmail`, default `""`, preserving existing
+  settings. Reject conflicting effective email settings for the same concrete
+  TLS host. Allocation alone does not trigger wildcard certificate issuance.
+- Persist explicit allocation ownership. UI-created domains are explicit; hosts
+  created solely for routes/panel references are derived. Migration treats every
+  existing domain as explicit because historical intent cannot safely be
+  inferred.
+- Explicit allocations survive without routes and always export. Release
+  requires removal with `--prune` or an explicit UI action. If a route still
+  needs the host, retain a derived row. Derived rows may disappear after their
+  last reference.
+
+An apex allocation requests/checks its apex record. A wildcard requests/checks
+that wildcard, not its apex. Zone policy alone allocates neither. For concrete
+route hosts, use an allocated wildcard when it actually resolves correctly;
+create exact records when needed and show the choice in the plan. Existing
+records or delegations can take precedence; check actual resolution, including
+stale AAAA.
+
+Wildcard DNS does not mean wildcard routing or certificates. Version 1 serves
+concrete configured hosts and gets certificates for those hosts. Unknown hosts
+must not select an arbitrary service. True wildcard certificates require
+separate DNS-based ACME integration; HTTP-01 cannot issue them. See the
+[YAML specification](https://yaml.org/spec/1.2.2/) for quoted strings and
+[Let's Encrypt challenge documentation](https://letsencrypt.org/docs/challenge-types/).
 
 ### Routes
 
-A route is a string: `[http://]host[/pathPrefix]`.
+A route is `[http://|https://]host[/pathPrefix]`, default HTTPS:
 
-- `idea-a.andluck.com` — HTTPS, whole host.
-- `idea-b.andluck.com/api` — path prefix.
-- `http://127.0.0.1/red` — plain HTTP only (the DB's `httpOnly`).
+- `idea-a.andluck.com`: whole host.
+- `idea-b.andluck.com/api`: prefix route.
+- `http://127.0.0.1/red`: plain HTTP for an IP host.
 
-Hostnames are lowercased. A host may appear on several services only with
-distinct path prefixes; duplicates are a validation error.
+Normalize host case, default scheme, and equivalent root/trailing-slash forms.
+Reject credentials, queries, fragments, unsupported ports, wildcard route hosts,
+malformed hosts, and unsafe Caddy prefixes. Validate repo-relative paths against
+escaping their intended root too.
 
-`apply` derives the DB rows:
+Host/path pairs must be unique across services regardless of exact/wildcard DB
+representation. Most specific prefix wins, with whole-host fallback. `/api`
+redirects to `/api/`; `/api/*` strips `/api` before forwarding/serving, matching
+existing `handle_path` behavior. It must not match `/apiculture`.
 
-- Host under a domain with `wildcard: true` → route on the `*.<domain>` Domain
-  row with `subdomain` set. The apex → its own exact Domain row.
-- Any other host → an exact Domain row for that host.
-- Domain rows no longer referenced by any route or `domains` entry are removed.
+Routes on the same host must agree on HTTP-only versus HTTPS. Reserve panel root
+and management API paths from service overrides, including panel aliases. Prefer
+an existing exact Domain row, then the most specific allocated wildcard with
+`subdomain`, otherwise a derived exact row. Preserve equivalent existing
+bindings on no-op apply. Validate effective hosts, not just DB tuples.
 
-### The panel
+### Panel and existing integrations
 
-Today the panel's hostnames come from three places: `SITEY_DOMAIN`, the Public
-Sitey URL setting, and `siteySubdomainsEnabled` on every wildcard domain (which
-is how one instance ended up serving its panel on three hostnames). In the file
-there is one: `panel`.
+`panel` is the canonical public URL. A hostname means HTTPS; export retains full
+URLs for existing HTTP/IP settings. `panelAliases` lists other concrete HTTPS
+panel hosts. Include all in DNS planning/reference accounting even though the
+protected service is not exported.
 
-`apply` sets the Public Sitey URL to `https://<panel>` and turns
-`siteySubdomainsEnabled` off on wildcard domains. If `SITEY_DOMAIN` is set in
-the environment and differs, `apply` reports a warning, because the env var
-wins. The built-in protected `sitey` service does not appear under `services`
-and can't be created, changed, or removed from a file.
+The public URL resolver currently prefers the DB setting, then wildcard-derived
+URL, then `SITEY_URL`. Separately, Caddy prioritizes `SITEY_DOMAIN`. Reject
+requested panel changes conflicting with `SITEY_DOMAIN`, with local recovery
+instructions. Unchanged overridden config remains a no-op with a warning; a
+warning must not imply an overridden requested hostname was activated.
 
-### What's not in the file
+Migration captures effective existing aliases before replacing per-domain
+`siteySubdomainsEnabled` behavior. Export aliases; never disable all flags on
+apply. Alias removal is explicit. Make a new origin authoritative only after
+Caddy accepts it; retain the previous working route until the new endpoint
+passes verification, then retire it through recorded work. Report GitHub
+callback/webhook settings needing manual updates after a move.
 
-- Runtime state: status, container ids, TLS status, deployments.
-- Users, sessions, API tokens.
-- Secrets: env var values, webhook secrets, GitHub App credentials, DNS provider
-  credentials.
-- `letsEncryptEmail`: empty on every real domain so far. Left out; new domains
-  get `""`. (Open question: a top-level `acmeEmail` if it's ever needed.)
-- `githubMode`: set per repo from whether the GitHub App is configured, not per
-  file.
+Protected `sitey` services/routes cannot be changed, archived, or purged by
+YAML. Preserve existing repo `githubMode`, rows, and hooks; never infer a
+replacement mode from global App credentials. New repos need a usable
+integration and access checks before deployment. Keep existing bindings when
+source is unchanged; report ambiguous new bindings to duplicate repo rows rather
+than guessing. Do not delete orphan repos.
 
-## Why YAML
+## Persistence required for round trips
 
-- **Humans and agents both write it well**, and it allows comments, so the
-  committed file can explain itself.
-- **It's a schema, not a language.** No new DSL to learn, document, or parse.
-- **No executable config.** A TypeScript config would be nicer to compose but
-  the server would have to run code it was sent. It parses data instead.
-- **Validation for free.** The zod schema can emit JSON Schema for editor
-  autocomplete.
-- **JSON is for machine output**, not the file: `sitey status --json`, API
-  responses. One canonical form, `jq`-friendly, and a truncated JSON document
-  fails to parse where truncated YAML can still look valid.
+This feature needs a migration, not only a serializer:
 
-## Authentication: API tokens
+- Unique `Service.configKey`, backfilled without changing numeric IDs.
+- Archive metadata and saved service/route configuration. Keep IDs, env values,
+  deployments, files, and analytics. Release live route bindings on archive so
+  they can be deliberately reused; validate conflicts on restore.
+- Declared names separate from `Service.envVars`. Backfill from existing values
+  once; subsequent export reads declarations, not an implicit union with values.
+  Names without values must survive export.
+- Zone/provider policies, allocation ownership, panel aliases; credentials stay
+  separate from these exportable records.
+- Instance UUID, monotonic config revision, plans, operation status, and durable
+  pending DNS/Caddy/deployment work.
 
-The `Token` model already has `type: "session" | "apikey"` and a `name`;
-`context.ts` only reads the `sitey_session` cookie.
+All UI/CLI writes affecting planned behavior increment revision transactionally,
+including env-value changes without exporting values. Read export/revision from
+a consistent DB snapshot. Runtime status, credentials, sessions, timestamps, and
+deployment results are excluded from the normalized YAML hash.
 
-- Accept `Authorization: Bearer <token>`, looked up by `tokenHash` exactly like
-  sessions. API keys have no expiry by default and update `lastUsedAt`.
-- The cross-origin guard in `index.ts` already allows requests with no `Origin`
-  (what a CLI sends), and bearer tokens aren't sent automatically by browsers,
-  so this adds no CSRF exposure.
-- **Bootstrap without a UI**: `ssh vps sitey token create home-pc` (the existing
-  in-container CLI) prints the token once. Also `token list` and
-  `token revoke <name>`. A UI list with revoke buttons can come later.
-- A token is **effectively root on the VPS** — Sitey controls the Docker socket.
-  Document it that way; the CLI stores it with `chmod 600`.
+A semantic no-op does not increment the configuration revision. Job progress and
+probe refreshes likewise do not invalidate a reviewed configuration plan.
 
-## API
+Preserve settings outside the format instead of resetting them on update.
+Migration retains unused domains, emails, aliases, and integration choices. YAML
+recreates supported config; it is not a backup of secrets, hook identities,
+data, or analytics.
 
-Two tRPC procedures on `settledProcedure`:
+## API tokens and transports
+
+Add bearer auth alongside session cookies. Look up token hashes; enforce type,
+expiry, revocation, and user/setup authorization. Update `lastUsedAt`. Preserve
+browser origin checks.
+
+`sitey-admin token create <name>` prints once; provide list/revoke. Tokens are
+root-equivalent because Sitey controls Docker. Require verified HTTPS, except
+explicitly configured loopback HTTP through an SSH tunnel for bootstrap. Never
+send tokens over public HTTP or across cross-origin redirects.
+
+Profiles use the OS user config directory: `~/.config/sitey` on Unix and
+per-user application data on Windows. Enforce mode 600 or Windows ACLs limited
+to the user. Tokens never appear in exports, plans, or logs.
+
+## Planning, applying, and recovery
+
+Separate plan and commit procedures on `settledProcedure`:
 
 ```ts
-config.export(): { yaml: string; hash: string }
-
-config.apply(input: {
+config.export(): {
   yaml: string;
-  baseHash?: string;   // hash from the pull this file was based on
-  dryRun: boolean;
-  force?: boolean;     // ignore baseHash mismatch
-}): {
-  hash: string;              // hash of the live config after (or, for dry runs, before)
-  changes: Change[];         // structured diff: create/update/delete per service, route, domain, DNS record, panel
-  warnings: string[];        // e.g. env var named in file has no value; SITEY_DOMAIN overrides panel
-  applied: boolean;
+  instanceId: string;
+  revision: number;
+  hash: string;
 }
+
+config.plan(input: {
+  yaml: string;
+  base?: { instanceId: string; revision: number; hash: string };
+  prune?: boolean;
+  force?: boolean;
+}): {
+  planId: string;
+  instanceId: string;
+  baseRevision: number;
+  desiredHash: string;
+  changes: Change[];
+  warnings: string[];
+  expiresAt: string;
+}
+
+config.apply(input: { planId: string }): {
+  operationId: string;
+  revision: number;
+  hash: string;
+  accepted: boolean;
+  delivery: "pending" | "ready" | "error";
+  warnings: string[];
+}
+
+config.operation(input: { operationId: string }): OperationStatus
 ```
 
-- **The hash** is SHA-256 of the canonical JSON of the _normalized_ document
-  (defaults applied, keys sorted), not of the YAML text. Comments and formatting
-  don't change it.
-- **Conflict check**: if `baseHash` is given, doesn't match the live hash, and
-  the file differs from live, reject with a conflict error unless `force`. This
-  catches "pulled, then someone edited in the UI, then pushed a stale file".
-- **Validation errors** return line/column from the YAML parser where possible.
-- `export` must be deterministic: no timestamps, stable ordering, so `pull` →
-  commit → `pull` produces no git diff.
+These specify new APIs. Hash canonical JSON with SHA-256, versioned defaults,
+sorted keys/set-like lists. Comments do not affect it. Revision detects
+intervening edits even when values change back. Operations record actor,
+revision, expected commits, and redacted step results.
 
-## Apply semantics
+Planning:
 
-In order:
+1. Validate identities, omissions, fields, routes, protection, and repository
+   access. Return line/column information where possible.
+2. Validate pull metadata. A different instance requires explicit import.
+   `--force` permits a fresh plan from stale metadata against current state, not
+   retargeting or bypassing safety checks.
+3. Compute changes including archive/release effects. Gather full DNS snapshots
+   and resolve intended deployment commits as explicit preflight, not ordinary
+   DB-first reads. Report missing environment values.
+4. Persist an expiring plan bound to instance, revision, desired document, prune
+   choice, DNS snapshots, and commits. If DB state changed during preflight,
+   return conflict instead of storing a stale plan.
 
-1. **Parse and validate** (schema, duplicate hosts, route grammar, unknown keys,
-   repos the GitHub App can't see).
-2. **Diff** normalized file vs. normalized live export. If `dryRun`, return
-   here.
-3. **Check `baseHash`.**
-4. **Write the DB** in one transaction: services, repos, domains, routes, panel
-   setting.
-5. **DNS**: for each `dns: namecheap` domain, ensure records (see below). Errors
-   are reported per domain and don't roll back the DB.
-6. **Reload Caddy.**
-7. **Queue deploys** for created services and services whose build/run fields,
-   repo, or branch changed. Route-only changes need no redeploy.
-8. **Return** the change list and warnings. `apply` doesn't wait for DNS
-   propagation, certificates, or builds; `status` reports those.
+Applying:
 
-Safety rules:
+1. Verify validity and base revision atomically with the DB write. A fresh file
+   without pull metadata still gets this protection through its plan.
+2. Save desired config and durable operation/work records in one transaction.
+   Keep enough information to stop archived containers after removing live
+   routes. Never make external calls inside the transaction.
+3. Workers perform DNS, Caddy projection, and deployments, recording results.
+   Serialize conflicting work and guard against superseded revisions so old work
+   cannot restore obsolete routes or restart archived apps.
+4. Deploy new active services, reactivation, or changes to build/run fields,
+   source, or branch, using resolved commits. Name/route-only changes need no
+   rebuild. Inactive new services stay stopped.
+5. Return acceptance separately from delivery. Provider/Caddy/build failures are
+   persisted; they do not mean the DB transaction rolled back.
 
-- Deleting a service stops and removes its container and routes, never
-  `/data/services/<id>/`. (Cleanup can be a separate explicit command.)
-- The protected `sitey` service is untouchable.
-- Repos no longer referenced are removed only with their services gone; their
-  hook endpoints go with them, and the diff says so.
-- DNS records are only ever created or updated, never deleted by `apply`.
+The in-memory queue may wake workers but cannot be the only work record. Recover
+pending/interrupted tasks on startup. Use stable task IDs and reconcile Docker
+state before retrying build/start/stop. Do not promise exactly-once external
+effects. Applying an already consumed plan returns its original operation rather
+than new work, even when later revisions exist.
 
-## Env var values
+Zero-config-diff pushes still report/resume unfinished reconciliation. Transient
+failures retry with bounded backoff; external conflicts/permanent failures need
+correction or a fresh plan. Allow explicit retry when the operation revision is
+still current. Persist failure details and superseded status.
 
-The file lists names; values are set per service and stored where they are today
-(`Service.envVars`).
+### Archive, restore, and purge
 
-- `sitey env set <service> <NAME>` reads the value from stdin (never argv, so it
-  doesn't land in shell history). `sitey env unset`, `sitey env list <service>`
-  (names only).
-- A name in the file with no value → warning. A value in the DB whose name isn't
-  in the file → warning (not deleted).
-- Setting a value restarts or redeploys the service as the UI does today.
+Pruning stops/removes containers, removes live routes, suppresses webhooks, and
+retains the service row/ID, saved config, env values, deployment history, files,
+and analytics. Restore explicitly reuses the ID and validates routes, initially
+inactive; activation/deployment is explicit afterward.
 
-## DNS: Namecheap provider
+Current `services.delete` removes files and DB deletion cascades to deployments.
+Never reuse it for archive. Align normal UI removal with archive when this
+ships. Purge is a separate explicit destructive operation outside config apply,
+with its data/history scope presented to the user; it may remain deferred.
 
-Runs on the server, not the client:
+## Environment values
 
-- Namecheap only accepts API calls from **whitelisted IPs**. The VPS has a
-  static IP (whitelist it once in the Namecheap dashboard); home machines don't.
-- Credentials never leave the server. Set once with
-  `sitey dns-provider set namecheap --user <user>` (key read from stdin), stored
-  in `SystemConfig` like the GitHub App credentials.
-- `ClientIp` is the server's public IP (`SystemConfig.server_ip`).
-- Namecheap requires API access to be enabled on the account (it has spending or
-  domain-count eligibility rules).
+The website suffices initially. Later provide:
 
-Record logic for a domain with `dns: namecheap`:
+```sh
+sitey env import idea-a --file .env.production
+sitey env set idea-a DATABASE_URL --stdin
+sitey env unset idea-a DATABASE_URL
+sitey env list idea-a
+```
 
-- Needed names: the label of each routed host (`@` for the apex), plus `*` if
-  `wildcard: true`. Target: the server IP.
-- `getHosts` first. If the domain isn't on Namecheap's nameservers
-  (`IsUsingOurDNS="false"`), report an error for that domain and write nothing.
-- If every needed record already exists with the right address, write nothing.
-- Otherwise `setHosts` with **all existing records preserved** plus the added or
-  updated ones. `setHosts` replaces the entire record set, so preserving is
-  mandatory. An existing A or CNAME record on a needed name pointing elsewhere
-  is replaced, and the dry-run diff shows it (`A idea-a 1.2.3.4 → 5.6.7.8`).
+Service arguments are config keys. Parse files as data with a documented dotenv
+grammar shared with deployment/UI. Never source files or execute substitutions.
+Define quoting, multiline/empty values, and duplicate-name errors. Do not
+implicitly read a nearby `.env`.
 
-Start from `e2e/remote/infra/namecheap.ts`, which already does the
-read-merge-write, and fix two bugs before it touches a real domain:
+Import merges supplied values, preserving unspecified ones. Unset is explicit;
+show changed names only. Value writes do not modify declarations implicitly.
+Missing declared values warn and block the affected deployment, while config
+acceptance and unrelated services can proceed. Undeclared values warn without
+deletion.
 
-1. **`EmailType` isn't passed back** to `setHosts`. Omitting it can reset the
-   domain's email forwarding / MX configuration. Read it from the `getHosts`
-   response and send it back.
-2. **XML entities aren't decoded.** `getHosts` returns attribute values escaped
-   (`&quot;`, `&amp;`), and they're sent back still escaped, which corrupts TXT
-   records (SPF, verification strings). Decode on read.
+Saving values does not deploy automatically, matching today's UI. Offer
+`--deploy` for one deployment after a batch or use `sitey deploy`. Blocked
+deployments need explicit deploy/retry after values are supplied rather than
+silently running an obsolete operation. Static builds can use env too; values
+embedded in output may become public.
 
-Also preserve every attribute that round-trips (`MXPref`, `TTL`, record types
-like `URL`/`URL301`/`FRAME`/`TXT`/`MX`/`CNAME`).
+## DNS providers and Namecheap
 
-A read-only `sitey dns check <domain>` (current records, needed records, planned
-change) ships before DNS is wired into `apply`.
+Use a common command family with typed provider fields:
 
-For `dns: manual` domains, `status` checks resolution and lists the records to
-create.
+```sh
+sitey dns-provider configure namecheap --user ubershmekel
+```
+
+Prompt for the key or use `--key-stdin`. List/status reports credential presence
+only. Keep provider credentials separate from app env; `set-env namecheap-user`
+obscures scope and validation. `sitey-admin` provides the same setup for
+recovery. Credentials travel securely to the server during setup and never
+return through read/export APIs.
+
+Namecheap calls run on the VPS. A human enables API access and allowlists its
+actual egress IPv4; verify it rather than assuming the inbound IP is also
+egress. Check account eligibility and DNS delegation.
+
+For each managed zone:
+
+1. Plan allocation records, hosts needing exact records, and panel/alias hosts.
+   Convert names relative to the zone (`@`, `*.s`, etc.).
+2. Fetch `getHosts`; reject unsupported hosting/delegation. Snapshot the entire
+   record set and email mode, not just records Sitey changes.
+3. Skip writes when correct; otherwise show every addition/replacement,
+   including conflicting A/CNAME records. Surface stale AAAA pointing elsewhere;
+   require correction rather than silently deleting it or declaring readiness.
+4. Serialize Sitey writes per zone and re-read before writing. If the snapshot
+   differs from the reviewed plan, record conflict and require a new plan.
+5. Send `setHosts` preserving unrelated records/attributes, then read back and
+   verify. Fail closed if anything cannot safely round-trip.
+
+Namecheap replaces the entire set without atomic revision checks. Locking and
+re-reading cannot eliminate an external writer racing between read and write.
+Document the limitation; avoid concurrent dashboard/other automation edits
+during apply. See
+[Namecheap setHosts documentation](https://www.namecheap.com/support/api/methods/domains-dns/set-hosts/).
+
+Start from `e2e/remote/infra/namecheap.ts`, fixing round-trip gaps before
+production: XML decoding, `EmailType`, `MXPref`, `TTL`, and supported
+types/attributes. Reject unsupported data. Test escaped TXT/SPF and
+forwarding/MX settings. Replacing an explicitly reviewed conflicting record is
+allowed; garbage-collecting DNS is not.
+
+Ship read-only `sitey dns check <zone>` first. Explicit diagnostics schedule
+checks and report results; ordinary list/get/status stays DB-first. Manual zones
+report required records and resolution without provider writes.
 
 ## The CLIs
 
-There are two, deliberately:
+Use **`sitey`** for remote everyday work and **`sitey-admin`** for local
+bootstrap/ recovery. Never install different executables named `sitey` whose
+behavior depends on PATH.
 
-**In-container CLI** (exists: `server/src/cli.ts`, run on the VPS via the
-`sitey` host shim). For install, bootstrap, and recovery — works when the API is
-broken or no token exists:
+The current in-container CLI/host shim becomes `sitey-admin`: password recovery,
+export, CLI installation, tokens, provider configuration, and local panel setup
+through shared services, without the HTTP API. Give legacy local commands a
+compatibility/deprecation path; retire their alias before installing remote
+`sitey` at that path. Never overwrite an unrelated binary. A future
+`sitey admin` namespace is possible; no automatic local/remote transport
+guessing.
 
-- `generate-password`, `export` (exists)
-- `token create <name>`, `token list`, `token revoke <name>` (new)
-- `dns-provider set namecheap` (new; also exposed via API so the remote CLI can
-  do it)
+The new `cli/` workspace uses `AppRouter` types. Add `npm run sitey -- ...` for
+checkout use; npm publication can follow later.
 
-**Remote CLI** (new workspace, `cli/`). Runs on any machine, talks tRPC over
-HTTPS with a bearer token. Uses the server's `AppRouter` type from the monorepo.
-Run from a Sitey checkout (`npm run sitey -- ...`) or `npm link`; publishing to
-npm can come later.
-
+```text
+sitey login <name> <url>
+sitey servers
+sitey pull [-o file]
+sitey push <file> [--prune] [--yes] [--force] [--json] [--wait] [--timeout 300]
+sitey import <file> --server <name> [--yes] [--json]
+sitey status [--operation <id>] [--wait] [--timeout 300] [--json]
+sitey retry <operation-id>
+sitey deploy <service-key> [--wait] [--timeout 300]
+sitey service restore <service-key>
+sitey env import|set|unset|list <service-key> ...
+sitey dns-provider configure <provider> ...
+sitey dns check <zone>
 ```
-sitey login <name> <url>          # prompts for token; saves profile
-sitey servers                      # list profiles
-sitey pull   [--server <name>] [-o file]
-sitey push   [--server <name>] <file> [--yes] [--force] [--json]
-sitey status [--server <name>] [--json]
-sitey deploy [--server <name>] <service>
-sitey env set|unset|list [--server <name>] <service> [NAME]
-sitey dns check [--server <name>] <domain>
-```
 
-- Profiles live in `~/.config/sitey/servers.json`, mode `600`. A single profile
-  is the default; `SITEY_SERVER` env var overrides.
-- `pull` writes `.sitey-base` metadata (server + hash) next to the file, or a
-  comment header the CLI reads back, so `push` can send `baseHash` without the
-  user thinking about it. (Pick one during implementation; the header comment is
-  simpler and survives being committed.)
-- `push` always does a dry run first and prints the diff. Interactive: asks to
-  confirm. `--yes`: applies without asking (for agents). `--json`: prints the
-  structured result.
-- `status` reports per service: last deploy result, and per route host: DNS
-  resolves here, certificate valid, HTTP status. This is how an agent verifies a
-  launch.
-- Exit codes: 0 success, 1 error, 2 validation error, 3 conflict. Agents branch
-  on these.
+All accept `--server`, overriding `SITEY_SERVER`, then default profile. Require
+selection when ambiguous. Profiles remember instance UUIDs.
 
-## Content: where pages come from
+Pull writes instance UUID/revision/hash in a machine-readable YAML comment
+header, without tokens/timestamps. Push refreshes it after acceptance. Missing
+metadata is allowed for new files; plan binding/omission checks remain. Import
+explicitly drops source binding and plans against the named target, including
+matching-key updates. It transfers no data/secrets and does not enable prune. To
+replace target resources, pull from that target afterward and explicitly review
+pruning.
 
-- **The `myswe` repo is private** on GitHub, with landing pages in folders
-  (`landings/idea-a/`, …). The folder name matches the subdomain by convention.
-- The new Sitey instance has the **GitHub App installed on `myswe`** — a
-  one-time step per VPS. That also gives push-to-deploy via the App's webhook.
-- Each service clones the repo separately into `/data/services/<id>/repo`. Fine
-  for a handful of pages; revisit if it becomes dozens.
-- **Push content before config.** Sitey clones from GitHub, so a service whose
-  folder isn't pushed yet fails its first deploy.
+Push displays destination, diff, warnings, and effects. Interactive use
+confirms; `--yes` applies that exact plan. Conflict returns an error, never a
+silently replanned apply. `--force` bypasses neither plan revision checks nor
+`--prune` requirements.
 
-Future convenience, not now: one service entry that expands each folder under
-`landings/` into `<folder>.andluck.com`. Wait until the double edit (folder +
-service block) actually hurts.
+JSON goes to stdout; diagnostics to stderr. Noninteractive apply requires
+`--yes`. Exit codes: 0 accepted (ready when waiting), 1 operational failure, 2
+validation, 3 DB/external conflict, 4 timeout. Async results include operation
+ID/delivery state; acceptance is not proof of launch.
 
-## Flows
+## Status and launch verification
+
+Status reads cached DB state with freshness timestamps and deduplicated
+background probes, never synchronous external calls in ordinary reads. Wait
+polls with backoff and finite timeout, requesting refreshes as needed.
+
+Report revision, intended commit, actual deployment, step errors, DNS (including
+IPv6 conflicts), TLS validity/expiry for HTTPS, and HTTP probe status/time for
+the configured route path. HTTP-only routes mark TLS not applicable.
+
+Ready requires intended deployment, active routing, appropriate DNS/TLS, and an
+acceptable HTTP result. Version 1 landing-page verification expects a 2xx result
+after at most five redirects within the configured host, permitting
+HTTP-to-HTTPS upgrades but never HTTPS downgrades. Other redirects are reported
+for inspection. HTTP 200 alone is insufficient: today's pending page can
+return 200. An unrelated site returning 200 is not success. For apps whose
+normal response is 401 or another non-2xx status, report deployment success and
+the raw HTTP result separately; do not report landing-page readiness or invent
+an application health contract. Custom health-check policies can follow later.
+Probing cannot prove correctness.
+
+## Human prerequisites and flows
 
 ### New VPS (once)
 
-1. Create the VPS; run the one-line install.
-2. Log in at `http://<ip>`, connect the GitHub App, install it on `myswe`.
-3. `ssh vps sitey token create home-pc`; on the home machine
-   `sitey login andluck https://sitey.andluck.com` (after DNS below).
-4. Whitelist the VPS IP in Namecheap API settings;
-   `sitey dns-provider set namecheap --user ubershmekel`.
-5. Write `sitey/andluck.yaml` with `panel: sitey.andluck.com` and
-   `domains: andluck.com: { dns: namecheap }`, push it. Sitey creates the
-   `sitey` A record and serves the panel over HTTPS.
+1. A human provisions the VPS and runs the installer.
+2. Establish the final panel hostname before remote authentication. Initially,
+   create DNS manually and use new local
+   `sitey-admin panel set https://sitey.andluck.com`. When provider automation
+   ships, a local flow can configure credentials/zone over SSH, review DNS, and
+   provision the host without an API token or working HTTPS.
+3. Verify HTTPS and resolve `SITEY_DOMAIN` conflicts locally. Earlier browser
+   setup uses an SSH loopback tunnel to HTTP, not public HTTP for credentials.
+4. A human logs in, creates/connects the GitHub App, completes consent, installs
+   it on the owning account, and grants access to `ubershmekel/myswe`.
+   Installation and OAuth authorization are distinct. Use the final URL for
+   callbacks/webhooks. Config apply cannot complete these account/browser steps.
+   See
+   [GitHub installation documentation](https://docs.github.com/en/enterprise-cloud%40latest/apps/using-github-apps/installing-a-github-app-from-a-third-party).
+5. `ssh vps sitey-admin token create home-pc`, then
+   `sitey login andluck https://sitey.andluck.com`, entering the token locally.
+6. For Namecheap, enable API access/allowlist egress IP manually, then
+   `sitey dns-provider configure namecheap --user ubershmekel` if needed. Verify
+   repository access/provider readiness and report missing prerequisites.
+7. Pull the complete initial config, edit policies/allocations/services, plan,
+   and push. Never start with an incomplete file against a populated VPS.
 
-(Step 3 briefly needs the IP URL; the CLI accepts `http://<ip>` for first login,
-with a warning.)
+### New landing page
 
-### New landing page (the common case)
+The private repo holds `landings/idea-a/`, `landings/idea-b/`, and
+`sitey/andluck.yaml`. Each service clones to `/data/services/<numeric-id>/repo`,
+fine for a handful of pages.
 
 ```sh
-# in myswe
-mkdir landings/idea-b && ...                      # agent builds the page
-sitey pull -o sitey/andluck.yaml                  # refresh from live
-# agent adds a service block: routes: [idea-b.andluck.com]
-git add -A && git commit -m "idea-b landing" && git push
-sitey push sitey/andluck.yaml --yes --json        # diff → DB → DNS record → Caddy → deploy
-sitey status --json                               # poll until DNS ✓, cert ✓, HTTP 200
+# Build and push page content to GitHub before planning deployment.
+sitey pull -o sitey/andluck.yaml
+# Add a complete service with a new key and concrete route; commit/push config.
+sitey push sitey/andluck.yaml --yes --json --wait --timeout 300
 ```
 
-### New domain I already bought
+Planning resolves the commit. Webhooks may already deploy content updates;
+deduplicate equivalent work and serialize per service. Newer work superseding
+the target is reported as superseded, not ready for a different commit. After
+timeout, inspect with `sitey status --operation <id> --wait`.
 
-Add `newdomain.com: { dns: namecheap }` under `domains`, add routes using it,
-push. No Namecheap dashboard.
+### Allocate, rename, or retire
 
-### Moving the redditp panel (one-off, manual)
+Add `"*.redditp.com": {}` under `domains` to reserve without routes. Allocate
+apex separately if wanted. Add its zone under `dns` for automation; policy alone
+creates no apex A record.
 
-The existing instance serves its panel at `sitey.s.andluck.com`. Set its Public
-Sitey URL to `sitey.redditp.com` first and confirm it loads. Then point
-`andluck.com` records at the new VPS. `*.s.andluck.com` keeps resolving to the
-old box meanwhile, because DNS prefers the more specific wildcard.
+Change `services.idea-a.name` to rename without changing ID/data/analytics.
+Pause with `active: false`. Archive by removing the entry and using `--prune`.
+Restore with `sitey service restore idea-a`, initially inactive; pull, review
+routes, then explicitly activate/deploy.
 
-## Build order
+### Move a panel hostname
 
-Each phase is shippable and testable on its own.
+Provision/verify the new host before removing the old alias. Check environment,
+GitHub callback/webhook URLs, and CLI profiles before repointing other DNS. When
+retaining `*.s.andluck.com` on the old VPS while moving `*.andluck.com`,
+preserve and verify nested/exact records and delegations; a wildcard alone does
+not prove all descendants resolve as intended.
 
-1. **Format, schema, deterministic export.** zod schema for the format above;
-   rewrite `server/src/services/export.ts` to emit it (routes as strings,
-   `repo: owner/name`, services keyed by name, `panel`, `domains` only where
-   needed, no timestamp); normalized-document hash. Unit tests with fixtures,
-   including the orphan and duplicate cases.
-2. **API tokens.** Bearer auth in `context.ts`; `sitey token create|list|revoke`
-   in the in-container CLI. Tests for expired/revoked/unknown tokens.
-3. **`config.export` and `config.apply` with dry run.** Parser, validation
-   errors with positions, structured diff. Key test: `apply(export())` on
-   fixtures reports zero changes.
-4. **Remote CLI**: `login`, `servers`, `pull`, `push` (dry run only at this
-   stage), `status` (deploy state only).
-5. **Apply for real.** DB transaction, `baseHash` conflict check, safety rules,
-   Caddy reload, deploy queueing, panel handling. `push` confirms and applies;
-   `deploy` command.
-6. **Env values.** `sitey env set|unset|list`; warnings in apply.
-7. **Namecheap.** Move the provider into the server with the `EmailType` and
-   entity fixes; `dns-provider set`; read-only `dns check`; then wire into
-   `apply`. `status` gains DNS/TLS/HTTP checks per host.
-8. **Agent guide.** A short doc (or a skill file in `myswe`) covering: add a
-   page, add a domain, verify, what needs a human.
+## Team mode (later)
 
-First real use after phase 5 on the new VPS with `dns: manual`; switch
-`andluck.com` to `dns: namecheap` after phase 7.
+A config repo can trigger the same plan/apply and durable worker. Bind each
+instance to its file and repository installation. Validation errors leave DB
+unchanged; external failures remain partial/pending. Post status for the
+intended config/commit and make file-managed UI fields read-only. Define prune
+policy before webhook-triggered archives. Never promise atomic DNS/build
+rollback.
 
-## Open questions
+## Build order and acceptance tests
 
-- Pull metadata: header comment vs. sidecar file for `baseHash`.
-- Whether the in-container CLI and remote CLI should eventually merge (remote
-  CLI with a `--local` transport).
-- `acmeEmail` at the top level, if Let's Encrypt notifications turn out to
-  matter.
-- Whether to show a "last applied from CLI by token X" marker in the UI, so UI
-  edits over a committed file are less surprising.
+1. **Persistence/export.** Backfill keys, declarations, allocations, policies,
+   aliases, instance/revision metadata; update schema/migration SQL. Test
+   duplicate names, unused/nested wildcards, emails, aliases, repo bindings,
+   missing env values, and semantic export/apply no-op fixtures.
+2. **Auth/local CLI.** Tokens, `sitey-admin`, compatibility, secure bootstrap.
+   Test expiry/revocation/type/unknown tokens, HTTPS/loopback rules, instance
+   binding, and Windows profile permissions.
+3. **Schema/plans.** Test truncated YAML, duplicate keys, omission/prune,
+   protection, routes/schemes, stale metadata, import, hashes, and edits during
+   preflight.
+4. **Remote reads/plans.** Login, profiles, pull, dry-run push, cached status.
+   Test JSON/exit codes and comment metadata round-trips.
+5. **Apply/recovery.** Durable work, archive/restore, revision-bound apply,
+   deployment reconciliation, panel transitions, waits. Test rename preserves
+   ID/files/history/ analytics; prune never calls destructive delete; restore
+   preserves ID; duplicate apply; crashes after commit/during external steps;
+   no-diff retry; concurrent UI edits; inactive/superseded work.
+6. **Optional env CLI.** Merge import, stdin, explicit unset/deploy, shared
+   grammar. Test multiline/quoted/empty values, duplicates, unspecified-value
+   retention, secret redaction, missing-value blocking.
+7. **Namecheap.** Diagnostics and round-trip fixtures before writes. Test
+   record/ email/TXT preservation, unknown attributes, external conflicts,
+   nested zones/ wildcards, panel DNS, IPv6 conflicts, verification, recovery.
+8. **Verification/agent guide.** Test pending-page 200 is not readiness,
+   intended commits, freshness, TLS failures, HTTP-only routes, timeout/resume,
+   and human prerequisites. Document common workflows.
+
+Use manual DNS after phase 5; env values may stay in the website. Enable
+Namecheap writes only after preservation/conflict tests pass. This document
+change does not implement the proposed commands or schema.
