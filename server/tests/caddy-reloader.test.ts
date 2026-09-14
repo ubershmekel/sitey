@@ -78,6 +78,29 @@ test("push error: propagates to caller and releases lock", async () => {
   assert.equal(reloader.lastPushedCaddyfile, "cfg");
 });
 
+test("afterPush runs only after Caddy accepts the config", async () => {
+  const events: string[] = [];
+  let shouldFail = true;
+  const reloader = new CaddyReloader({
+    build: async () => {
+      events.push("build");
+      return "cfg";
+    },
+    push: async () => {
+      events.push("push");
+      if (shouldFail) throw new Error("push failed");
+    },
+    afterPush: () => events.push("afterPush"),
+  });
+
+  await assert.rejects(() => reloader.reload(), /push failed/);
+  assert.deepEqual(events, ["build", "push"]);
+
+  shouldFail = false;
+  await reloader.reload();
+  assert.deepEqual(events, ["build", "push", "build", "push", "afterPush"]);
+});
+
 test("build error: propagates to caller and releases lock", async () => {
   let callCount = 0;
   const reloader = new CaddyReloader({

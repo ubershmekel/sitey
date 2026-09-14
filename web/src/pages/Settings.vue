@@ -451,8 +451,14 @@ async function savePublicSiteUrl() {
   publicSiteUrlSuccess.value = false;
   publicSiteUrl.saving = true;
   try {
-    await trpc.system.setPublicSiteUrl.mutate({ url: publicSiteUrl.value });
-    publicSiteUrlSuccess.value = true;
+    const result = await trpc.system.setPublicSiteUrl.mutate({
+      url: publicSiteUrl.value,
+    });
+    if (result.warning) {
+      publicSiteUrlError.value = `The URL was saved, but Caddy could not be refreshed. ${result.warning}`;
+    } else {
+      publicSiteUrlSuccess.value = true;
+    }
     await loadPublicSiteUrl();
   } catch (e: unknown) {
     publicSiteUrlError.value =
@@ -467,7 +473,10 @@ async function clearPublicSiteUrl() {
   publicSiteUrlSuccess.value = false;
   publicSiteUrl.saving = true;
   try {
-    await trpc.system.clearPublicSiteUrl.mutate();
+    const result = await trpc.system.clearPublicSiteUrl.mutate();
+    if (result.warning) {
+      publicSiteUrlError.value = `The override was cleared, but Caddy could not be refreshed. ${result.warning}`;
+    }
     await loadPublicSiteUrl();
   } catch (e: unknown) {
     publicSiteUrlError.value =

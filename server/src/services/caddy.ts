@@ -606,15 +606,21 @@ async function listRunningContainerNames(): Promise<Set<string>> {
 // somehow missing. See docs/design/analytics.md.
 let adminServiceId: number = UNKNOWN_SERVICE_ID;
 
-// Populated on every buildCaddyfile() call — the single source of truth for
-// which origin may make credentialed requests to the API.
-// Null until the first Caddy reload (and whenever no named domain is configured).
+// Updated after a successful Caddy push — the single source of truth for
+// which origin may make credentialed requests to the API. The value is committed
+// only after Caddy accepts the generated config, so a failed push keeps the
+// still-active origin authorized.
 let _lastManagementOrigin: string | null = null;
 export function getManagementOrigin(): string | null {
   return _lastManagementOrigin;
 }
 
-export async function buildCaddyfile(): Promise<string> {
+type BuiltCaddyConfig = {
+  caddyfile: string;
+  managementOrigin: string | null;
+};
+
+async function buildCaddyConfig(): Promise<BuiltCaddyConfig> {
   const [domains, siteUrlResolution, runningContainers, protectedService] =
     await Promise.all([
       db.domain.findMany({
@@ -673,7 +679,9 @@ export async function buildCaddyfile(): Promise<string> {
     siteyDomain && !isIpAddress(siteyDomain)
       ? sanitizeDnsName(siteyDomain)
       : null;
-  _lastManagementOrigin = siteyNamedDomain
+  // Do not make the new origin authoritative until Caddy has accepted the
+  // config. Otherwise a failed push can reject the still-active old hostname.
+  const managementOrigin = siteyNamedDomain
     ? `https://${siteyNamedDomain}`
     : null;
 
@@ -790,7 +798,11 @@ export async function buildCaddyfile(): Promise<string> {
     appendRenderedSiteBlock(lines, block);
   }
 
-  return lines.join("\n");
+  return { caddyfile: lines.join("\n"), managementOrigin };
+}
+
+export async function buildCaddyfile(): Promise<string> {
+  return (await buildCaddyConfig()).caddyfile;
 }
 
 // ---------------------------------------------------------------------------
@@ -916,16 +928,20 @@ export class CaddyReloader {
   private reloadQueued = false;
   private readonly buildFn: () => Promise<string>;
   private readonly pushFn: (caddyfile: string) => Promise<void>;
+  private readonly afterPushFn: (() => void) | undefined;
 
   constructor({
     build,
     push,
+    afterPush,
   }: {
     build: () => Promise<string>;
     push: (caddyfile: string) => Promise<void>;
+    afterPush?: () => void;
   }) {
     this.buildFn = build;
     this.pushFn = push;
+    this.afterPushFn = afterPush;
   }
 
   async reload(): Promise<void> {
@@ -940,6 +956,7 @@ export class CaddyReloader {
         this.reloadQueued = false;
         const caddyfile = await this.buildFn();
         await this.pushFn(caddyfile);
+        this.afterPushFn?.();
         this.lastPushedCaddyfile = caddyfile;
         this.lastPushedAt = new Date();
       } while (this.reloadQueued);
@@ -949,9 +966,17 @@ export class CaddyReloader {
   }
 }
 
+let nextManagementOrigin: string | null = null;
 export const caddyReloader = new CaddyReloader({
-  build: buildCaddyfile,
+  build: async () => {
+    const built = await buildCaddyConfig();
+    nextManagementOrigin = built.managementOrigin;
+    return built.caddyfile;
+  },
   push: doPush,
+  afterPush: () => {
+    _lastManagementOrigin = nextManagementOrigin;
+  },
 });
 
 export function reloadCaddy(): Promise<void> {

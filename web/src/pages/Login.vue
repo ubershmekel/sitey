@@ -11,7 +11,17 @@
         <h1>Sign in</h1>
       </template>
 
-      <div v-if="auth.error" class="alert error">{{ auth.error }}</div>
+      <div v-if="auth.error" class="alert error">
+        <span>{{ auth.error }}</span>
+        <a
+          v-if="auth.errorHelpUrl"
+          :href="auth.errorHelpUrl"
+          target="_blank"
+          rel="noopener"
+        >
+          Open the locked-out recovery guide
+        </a>
+      </div>
       <div v-if="setupError" class="alert error">{{ setupError }}</div>
 
       <label>
@@ -170,5 +180,13 @@ label {
   color: var(--status-err-text);
   border-radius: 6px;
   padding: 0.6rem 0.75rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.alert.error a {
+  color: inherit;
+  font-weight: 600;
 }
 </style>

@@ -12,7 +12,11 @@ import {
   setConfiguredPublicSiteUrl,
 } from "../services/siteUrl.ts";
 import { docker, decodeDockerLogPayload } from "../services/docker.ts";
-import { buildCaddyfile, caddyReloader } from "../services/caddy.ts";
+import {
+  buildCaddyfile,
+  caddyReloader,
+  reloadCaddy,
+} from "../services/caddy.ts";
 import { db } from "../lib/db.ts";
 
 // ── Updater state ─────────────────────────────────────────────────────────────
@@ -190,12 +194,20 @@ export const systemRouter = router({
         });
       }
       await setConfiguredPublicSiteUrl(normalized);
-      return { ok: true, url: normalized };
+      const warning = await reloadCaddy().then(
+        () => null,
+        (err) => `Caddy refresh failed: ${String(err)}`,
+      );
+      return { ok: true, url: normalized, warning };
     }),
 
   clearPublicSiteUrl: settledProcedure.mutation(async () => {
     await clearConfiguredPublicSiteUrl();
-    return { ok: true };
+    const warning = await reloadCaddy().then(
+      () => null,
+      (err) => `Caddy refresh failed: ${String(err)}`,
+    );
+    return { ok: true, warning };
   }),
 
   listContainers: settledProcedure.query(async () => {

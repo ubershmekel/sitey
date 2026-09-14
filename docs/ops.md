@@ -159,6 +159,8 @@ docker compose exec sitey-api npm run bootstrap:generate-password
 
 ## Locked out?
 
+### Password reset
+
 If you've forgotten your password or the account is in a bad state:
 
 ```bash
@@ -167,6 +169,26 @@ sitey generate-password
 
 This generates an override password and prints it to stdout. Use it with your
 email on the login page, then set a new password when prompted.
+
+### Public Sitey URL change
+
+If login stopped working immediately after changing **Settings → Public Sitey
+URL**, Caddy and the API may still be using the previous management hostname.
+Current Sitey versions refresh Caddy automatically when this setting changes.
+For an older version, or to recover from a failed refresh, restart the API:
+
+```bash
+cd /opt/sitey/deploy
+docker compose restart sitey-api
+```
+
+The API refreshes Caddy during startup. Then open the newly configured URL and
+sign in again; session cookies do not transfer between hostnames.
+
+If `SITEY_DOMAIN` is set in `deploy/.env`, it takes precedence over the Public
+Sitey URL for the management hostname. Update or remove that variable, then run
+`docker compose up -d sitey-api` so the container receives the changed
+environment.
 
 ---
 
