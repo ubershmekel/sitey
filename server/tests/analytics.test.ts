@@ -65,17 +65,24 @@ test("parseLine truncates very long paths", () => {
   assert.equal(row.path.length, 128);
 });
 
-test("parseLine rejects malformed or untagged lines", () => {
+test("parseLine rejects malformed lines", () => {
   assert.equal(parseLine(""), null);
   assert.equal(parseLine("not json"), null);
-  // missing service_id
-  assert.equal(
-    parseLine(JSON.stringify({ ts: 1, status: 200, request: {} })),
-    null,
+});
+
+test("parseLine preserves untagged lines with safe fallbacks", () => {
+  const missingServiceId = parseLine(
+    JSON.stringify({ ts: 1, status: 200, request: {} }),
   );
-  // missing ts
-  assert.equal(
-    parseLine(JSON.stringify({ service_id: 1, status: 200, request: {} })),
-    null,
+  assert.ok(missingServiceId);
+  assert.equal(missingServiceId.serviceId, 0);
+
+  const before = Math.floor(Date.now() / 1000);
+  const missingTimestamp = parseLine(
+    JSON.stringify({ service_id: 1, status: 200, request: {} }),
   );
+  const after = Math.floor(Date.now() / 1000);
+  assert.ok(missingTimestamp);
+  assert.ok(missingTimestamp.ts >= before);
+  assert.ok(missingTimestamp.ts <= after);
 });
