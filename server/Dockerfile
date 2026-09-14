@@ -1,3 +1,4 @@
+# Build context is the repo root (see deploy/docker-compose.yml) so the workspace package-lock.json is available.
 # Pinned (not node:24-bookworm-slim): floating tags silently pulled Node 24.21, whose native-addon regression (24.19+) broke us.
 FROM node:24.18.1-bookworm-slim AS base
 WORKDIR /app
@@ -6,16 +7,23 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git openssl python3 make g++ && rm -rf /var/lib/apt/lists/*
 
 FROM base AS deps
-COPY package*.json ./
-# BuildKit cache mount keeps npm's package tarball cache across builds (does NOT cache node_modules),
-# and these flags reduce registry/audit chatter to speed up rebuilds when dependencies are unchanged.
+# npm ci validates the lockfile against every workspace manifest, so web/package.json is needed too (web deps aren't installed).
+COPY package.json package-lock.json ./
+COPY server/package.json ./server/
+COPY web/package.json ./web/
+# Root "prepare" runs husky (git hooks), which isn't installed here and isn't wanted in an image.
+# npm ci installs the exact lockfile versions from their recorded tarball URLs, so --prefer-offline can't hit stale
+# registry metadata. The BuildKit cache mount keeps npm's tarball cache across builds (does NOT cache node_modules).
 RUN --mount=type=cache,id=sitey-server-npm,target=/root/.npm,sharing=locked \
-  npm install --prefer-offline --no-audit --progress=false
+  npm pkg delete scripts.prepare && \
+  npm ci -w server --prefer-offline --no-audit --progress=false
+# Dependencies are hoisted to /app/node_modules; Node resolves them from /app/server by walking up.
+WORKDIR /app/server
 
 # Development stage — src is mounted as a volume at runtime
 FROM deps AS dev
-COPY prisma ./prisma/
-COPY prisma.config.ts ./
+COPY server/prisma ./prisma/
+COPY server/prisma.config.ts ./
 RUN npm run db:generate
 ENV NODE_ENV=development
 EXPOSE 3001
@@ -25,9 +33,9 @@ CMD ["node", "--watch", "src/index.ts"]
 
 # Production image
 FROM deps AS runner
-COPY prisma ./prisma/
-COPY prisma.config.ts ./
-COPY src ./src/
+COPY server/prisma ./prisma/
+COPY server/prisma.config.ts ./
+COPY server/src ./src/
 RUN npm run db:generate
 
 ENV NODE_ENV=production

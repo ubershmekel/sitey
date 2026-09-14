@@ -1,0 +1,19 @@
+# Build context for server/Dockerfile and web/Dockerfile is the repo root (for the workspace lockfile).
+**/node_modules
+**/dist
+**/coverage
+**/.turbo
+**/.cache
+.git
+data
+deploy/data
+test-results
+e2e/local/screenshots
+server/src/generated
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/*.log
+**/.env
+**/.env.*
+!**/*.env.example

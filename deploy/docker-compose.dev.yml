@@ -29,8 +29,8 @@ services:
 
   sitey-api:
     build:
-      context: ../server
-      dockerfile: Dockerfile
+      context: ..
+      dockerfile: server/Dockerfile
       target: dev
     environment:
       PORT: 3001
@@ -42,8 +42,8 @@ services:
       SITEY_WEB_INTERNAL: sitey-web:3000
       NODE_ENV: development
     volumes:
-      - ../server/src:/app/src:ro
-      - ../server/prisma:/app/prisma:ro
+      - ../server/src:/app/server/src:ro
+      - ../server/prisma:/app/server/prisma:ro
       - ${DATA_ROOT:-./data}:/data
       - /var/run/docker.sock:/var/run/docker.sock
       - ${DATA_ROOT:-./data}/caddy-logs:/var/log/caddy:ro

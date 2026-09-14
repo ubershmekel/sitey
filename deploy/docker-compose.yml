@@ -72,8 +72,9 @@ services:
   # ── Sitey API ─────────────────────────────────────────────────────────────
   sitey-api:
     build:
-      context: ../server
-      dockerfile: Dockerfile
+      # Repo root, so the workspace package-lock.json is in the build context.
+      context: ..
+      dockerfile: server/Dockerfile
     restart: unless-stopped
     depends_on:
       - caddy
