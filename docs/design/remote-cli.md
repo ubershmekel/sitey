@@ -166,20 +166,45 @@ analytics already use. Names are labels: unique, but always editable.
 
 ### Routes by hostname
 
-`services.addRoute` takes a `domainId` and `subdomain`. The CLI takes a route
-string instead, `[http://]host[/pathPrefix]`, and the server resolves it:
+In the UI, adding a route means picking a Domain row from a dropdown, then
+typing a subdomain (for wildcard domains) and an optional path prefix. The CLI
+takes a single URL-like string instead, `[http://]host[/pathPrefix]`, and the
+server works out which Domain row and subdomain it means.
 
-1. An exact Domain row for `host` → use it.
-2. Otherwise the most specific wildcard row `*.<rest>` where `host` is
-   `<label>.<rest>` and `<label>` is a single DNS label → use it with
-   `subdomain: <label>`.
-3. Otherwise fail with a hint:
-   `No domain covers idea-a.example.com. Add one with siteyctl domain add`.
+Suppose the server has these Domain rows: `andluck.com`, `*.andluck.com`,
+`*.s.andluck.com`, and `localhost`.
 
-Route strings never create domains implicitly. Add an optional `host` input to
-`addRoute` (mutually exclusive with `domainId`/`subdomain`) so the UI and CLI
-share the resolver. Adding a route that already exists on the same service is a
-no-op success, so agents can rerun it.
+| Command                                                | Domain row        | Subdomain | Path prefix | HTTPS |
+| ------------------------------------------------------ | ----------------- | --------- | ----------- | ----- |
+| `siteyctl route add idea-a idea-a.andluck.com`         | `*.andluck.com`   | `idea-a`  |             | yes   |
+| `siteyctl route add home andluck.com`                  | `andluck.com`     |           |             | yes   |
+| `siteyctl route add home www.andluck.com`              | `*.andluck.com`   | `www`     |             | yes   |
+| `siteyctl route add idea-b-api idea-b.andluck.com/api` | `*.andluck.com`   | `idea-b`  | `/api`      | yes   |
+| `siteyctl route add demo demo.s.andluck.com`           | `*.s.andluck.com` | `demo`    |             | yes   |
+| `siteyctl route add red http://localhost/red`          | `localhost`       |           | `/red`      | no    |
+| `siteyctl route add idea-a a.b.andluck.com`            | error             |           |             |       |
+| `siteyctl route add idea-a shop.example.com`           | error             |           |             |       |
+
+The rules, in order:
+
+1. If there's a Domain row for exactly `host`, use it. (If someone later adds a
+   `www.andluck.com` row, new `www` routes go there instead of the wildcard.)
+2. Otherwise, use the most specific wildcard row `*.<rest>` where `host` is
+   `<label>.<rest>` and `<label>` is a single DNS label, with
+   `subdomain: <label>`. That's why `demo.s.andluck.com` lands on
+   `*.s.andluck.com`, and why `a.b.andluck.com` matches nothing: `a.b` isn't one
+   label, and there's no `*.b.andluck.com` row.
+3. Otherwise, fail with a hint:
+   `No domain covers shop.example.com. Add one with siteyctl domain add`.
+
+Route strings never create domains implicitly. `route remove` resolves the
+string the same way to find the route to delete, and `siteyctl service get` and
+the export print routes back in this form.
+
+Add an optional `host` input to `addRoute` (mutually exclusive with
+`domainId`/`subdomain`) so the UI and CLI share the resolver. Adding a route
+that already exists on the same service is a no-op success, so agents can rerun
+it. Adding one that another service already has is a conflict (exit 3).
 
 ### Env vars by name
 
@@ -197,9 +222,10 @@ without matching page content.
 
 ## `siteyctl` commands
 
-A new `cli/` workspace that imports the server's `AppRouter` type. Run from a
-checkout with `npm run siteyctl -- ...`; publishing a `siteyctl` npm package can
-come later.
+A new `siteyctl/` workspace that imports the server's `AppRouter` type. (Not
+`cli/`, which would be confused with the existing VPS-local CLI in
+`server/src/cli.ts`.) Run from a checkout with `npm run siteyctl -- ...`;
+publishing a `siteyctl` npm package can come later.
 
 ```text
 siteyctl login <server-name> <url>            # prompts for token, saves profile
@@ -253,6 +279,25 @@ Conventions:
 - Profiles live in `~/.config/sitey/servers.json` (`%APPDATA%\sitey` on Windows)
   with owner-only permissions. The CLI requires HTTPS, except for `localhost` /
   `127.0.0.1` URLs (an SSH tunnel).
+
+### Help is the agent guide
+
+There's no separate agent guide to keep in sync. An agent learns the tool by
+running `siteyctl --help` and `siteyctl <command> --help`, so the help text is
+written for that reader:
+
+- Top-level help lists the commands, then an **Examples** section with the
+  common workflows: launch a page (create → `status --wait` → export), add a
+  route, set an env var, retire a page, and snapshot the export to git.
+- A **Needs a human** section: DNS records, adding the GitHub App to a repo, and
+  creating tokens (`ssh <vps> sitey token create`).
+- The `<service>` and route string forms, `--json`, and exit codes.
+- Each command's help has at least one concrete example, and errors that have an
+  obvious next step print it (as in the "No domain covers" hint).
+
+Things specific to one project, like "landing pages live in `landings/<name>/`
+and go on `<name>.andluck.com`", belong in that repo's `AGENTS.md`, along with a
+line saying to run `siteyctl --help`.
 
 ### What `status --wait` checks
 
@@ -392,8 +437,11 @@ Each step is usable on its own.
 5. **Deploy and verify.** `X-Sitey-Pending` header, `deploy --wait`,
    `status --wait`. Tests: the pending page is not live; TLS failure and timeout
    report which check failed.
-6. **Agent guide.** A short skill file in `myswe`: launch a page, retire a page,
-   snapshot the export, what needs a human (DNS, GitHub App, tokens).
+6. **Help text.** Examples and "Needs a human" sections as described in
+   [Help is the agent guide](#help-is-the-agent-guide); a few lines in
+   `myswe/AGENTS.md`. Test: every example in the help text parses as a valid
+   command. Try it by giving a fresh agent only `siteyctl --help` and asking it
+   to launch a page.
 
 ## Later
 
@@ -412,8 +460,13 @@ Each step is usable on its own.
 ## Open questions
 
 - Should `siteyctl` offer an auto-export option in its profile, so the snapshot
-  step can't be forgotten?
+  step can't be forgotten? Probably not for now.
 - Should token creation also be possible from the UI, so first setup needs no
-  SSH at all?
+  SSH at all? Yes. We have most of the ui for this in the settings page. Also in
+  theory we could have the agent ssh in to install sitey on a new vps. But no
+  rush to implement these.
 - Is `panel` plus per-domain `siteySubdomains` the right way to show panel
   hostnames in the export, or should the export list the effective hostnames?
+  "panel" is a strange name. Which panel wherre? It should probably be called
+  "Sitey Effective URL" or whatever it's called in the sitey ui, what the agent
+  needs to use in siteyctl as an address and a human logs into.
