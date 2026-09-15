@@ -7,8 +7,10 @@ server's configuration should also be exportable as YAML so it can be committed,
 diffed over time, and used as an inventory.
 
 This document proposes a remote CLI, `siteyctl`, that drives the existing tRPC
-API with an API token, plus a deterministic read-only export. Nothing here is
-implemented yet; today there is only the VPS-local `sitey export` preview.
+API with an API token, plus a deterministic read-only export. It's implemented:
+the client lives in `siteyctl/`, and the server changes are described below.
+[Implementation notes](#implementation-notes) lists where the build differs from
+the original proposal.
 
 The motivating setup: landing pages live in folders of the private
 `ubershmekel/myswe` repo, and are served on subdomains of `andluck.com` by a new
@@ -233,11 +235,11 @@ siteyctl servers                               # list profiles
 
 siteyctl services                              # list: id, name, mode, status, routes
 siteyctl service get <service>
-siteyctl service create <name> --repo owner/name --static|--server
+siteyctl service create <name> --repo owner/name --mode static|server
          [--branch main] [--build-command ...] [--build-image ...]
          [--output-dir ...] [--run-command ...] [--port 3000]
          [--dockerfile [path]] [--route <route>]...
-siteyctl service set <service> --build-command ... [other fields]
+siteyctl service set <service> --build-command ... [other fields] [--no-dockerfile]
 siteyctl service rename <service> <new-name>
 siteyctl service deactivate|activate <service>
 siteyctl service delete <service> --confirm <name>   # deletes files and history
@@ -251,7 +253,7 @@ siteyctl env unset <service> <VAR>
 
 siteyctl deploy <service> [--wait] [--timeout 300]
 siteyctl status [<service>] [--wait] [--timeout 300]
-siteyctl logs <service> [--deployment <id>] [--tail 200]
+siteyctl logs <service> [--deployment <id>] [--tail 200] [--runtime]
 
 siteyctl domains
 siteyctl domain add <hostname> [--email ...]
@@ -326,13 +328,13 @@ output is readable and stable, and serve it to the CLI through
 # Sitey config export. Read-only: nothing reads this file back yet.
 # Excludes runtime state, deployments, users/tokens, and secret values.
 version: 1
-panel: https://sitey.andluck.com
+siteyUrl: https://sitey.andluck.com
 
 domains:
   - andluck.com
   - "*.andluck.com"
   - hostname: "*.s.andluck.com"
-    siteySubdomains: true
+    siteySubdomains: false
 
 services:
   service-42:
@@ -362,7 +364,10 @@ services:
 - Fields equal to their schema default are omitted. Domains with no non-default
   settings are plain strings.
 - No timestamps; sorted keys and lists. Exporting twice gives identical bytes.
-- The protected `sitey` service is omitted; `panel` shows where the panel lives.
+- The protected `sitey` service is omitted. `siteyUrl` is the effective Public
+  Sitey URL (as in Settings): the address `siteyctl login` uses and a human logs
+  into.
+- `githubMode` appears only for `webhook` repos (`app` is the default).
 
 ### History in git
 
@@ -394,7 +399,7 @@ before it grows a declarative engine.
 ```sh
 # in myswe: build landings/idea-c/, commit, and push to GitHub first —
 # Sitey clones from GitHub, so unpushed content fails the first deploy.
-siteyctl service create idea-c --repo ubershmekel/myswe --static \
+siteyctl service create idea-c --repo ubershmekel/myswe --mode static \
   --build-image node:24-bookworm-slim \
   --build-command "cd landings/idea-c && npm ci && npm run build" \
   --output-dir landings/idea-c/dist \
@@ -465,8 +470,42 @@ Each step is usable on its own.
   SSH at all? Yes. We have most of the ui for this in the settings page. Also in
   theory we could have the agent ssh in to install sitey on a new vps. But no
   rush to implement these.
-- Is `panel` plus per-domain `siteySubdomains` the right way to show panel
-  hostnames in the export, or should the export list the effective hostnames?
-  "panel" is a strange name. Which panel wherre? It should probably be called
-  "Sitey Effective URL" or whatever it's called in the sitey ui, what the agent
-  needs to use in siteyctl as an address and a human logs into.
+- ~~Is `panel` the right name?~~ Resolved: the export writes `siteyUrl`, the
+  effective Public Sitey URL from Settings.
+
+## Implementation notes
+
+Where the build differs from, or adds to, the proposal above:
+
+- **`--mode static|server`** replaces `--static|--server`, which collided with
+  the global `--server <name>` option.
+- **Route preflight.** `services.checkRoute({ route })` resolves a route string
+  without writing anything, so `service create` validates every `--route`
+  (domain coverage, conflicts) before creating the service.
+- **Repo preflight.** `github.checkRepoAccess({ owner, name })` asks GitHub live
+  whether the App can see the repo, rather than trusting the repo cache, which
+  lags new installations.
+- **CLI views.** `services.resolve({ ref })`, `services.summaries`, and
+  `services.describe({ id })` return route strings and env var names only, so
+  env values never reach the client. `services.create` also returns the queued
+  `deploymentId`, and `services.delete` accepts `confirmName`, so a rename
+  between resolving and deleting can't delete the wrong service.
+- **Tokens.** API keys are prefixed `sitey_` so leaked ones are easy to spot.
+  Bearer auth accepts only `apikey` tokens and the cookie accepts only `session`
+  tokens. An invalid bearer header never falls back to the cookie.
+- **Renames at migration time.** Id-like names become `svc-<id>`. Duplicates
+  keep the name on the lowest id, and the rest get `-<id>` (truncated to fit 40
+  characters). Each rename is logged once by bootstrap.
+- **`status --wait` details.** Routes aren't probed until the deploy succeeds.
+  TLS and connection failures, 502/503/504, and the placeholder page count as
+  "not yet". Any other non-2xx counts as a failure only after three polls in a
+  row, which absorbs Caddy reload lag. Without a service, `status` checks every
+  active service once.
+- **`logs --runtime`** prints a server app's container logs, not build logs.
+- **Fixed along the way:** path-prefix routes emitted `redir /app/ 308`, which
+  Caddy parses as matcher `/app/` plus target `308`. `GET /app` answered an
+  empty 200 instead of redirecting (and would have looked "live"). They now emit
+  `redir * /app/ 308`. Also, `services.activate` now reloads Caddy, so a
+  reactivated static site serves again without waiting for another change.
+- **Not done here:** the `myswe/AGENTS.md` lines (that repo isn't this one), and
+  the "fresh agent with only `--help`" trial.

@@ -470,6 +470,44 @@ export const githubRouter = router({
     return { ok: true };
   }),
 
+  /**
+   * Live check that the GitHub App can see a repo. A preflight for siteyctl's
+   * `service create` (not a page-load read), so it calls GitHub directly rather
+   * than trusting the repo cache, which lags new installations.
+   */
+  checkRepoAccess: settledProcedure
+    .input(z.object({ owner: z.string().min(1), name: z.string().min(1) }))
+    .query(async ({ input }) => {
+      const { appId, privateKey, appSlug } = await getGithubIntegrationConfig();
+      const installUrl = appSlug
+        ? `https://github.com/apps/${appSlug}/installations/new`
+        : null;
+      if (!appId || !privateKey) {
+        return { configured: false, accessible: false, installUrl };
+      }
+      let appJwt = "";
+      try {
+        appJwt = createAppJwt(appId, privateKey);
+      } catch {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Invalid GitHub App private key.",
+        });
+      }
+      const res = await githubFetch(
+        `/repos/${encodeURIComponent(input.owner)}/${encodeURIComponent(input.name)}/installation`,
+        { headers: { Authorization: `Bearer ${appJwt}` } },
+      );
+      if (res.ok) return { configured: true, accessible: true, installUrl };
+      if (res.status === 404) {
+        return { configured: true, accessible: false, installUrl };
+      }
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `GitHub API error ${res.status}: ${await res.text()}`,
+      });
+    }),
+
   listAppRepos: settledProcedure.query(async () => {
     const { appId, privateKey } = await getGithubIntegrationConfig();
     if (!appId || !privateKey) {

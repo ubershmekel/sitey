@@ -10,6 +10,7 @@ import { db } from "../lib/db.ts";
 
 export async function bootstrap() {
   await db.$connect();
+  await logServiceRenames();
 
   // ── Sitey built-in repo + service + root route ──────────────────────────────
   // The sitey UI is itself a protected service with the catch-all root route
@@ -73,6 +74,25 @@ export async function bootstrap() {
         "Complete the setup wizard to create your account.",
       ]),
     );
+  }
+}
+
+// The unique-service-name migration renames duplicate and id-like names and
+// records each rename in SystemConfig. Log them once, then clear the records.
+async function logServiceRenames() {
+  const rows = await db.systemConfig.findMany({
+    where: { key: { startsWith: "service_rename:" } },
+    orderBy: { key: "asc" },
+  });
+  for (const row of rows) {
+    console.warn(
+      `[bootstrap] Renamed service to keep names unique: ${row.value}`,
+    );
+  }
+  if (rows.length) {
+    await db.systemConfig.deleteMany({
+      where: { key: { in: rows.map((r) => r.key) } },
+    });
   }
 }
 

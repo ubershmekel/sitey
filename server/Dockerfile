@@ -7,10 +7,11 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates git openssl python3 make g++ && rm -rf /var/lib/apt/lists/*
 
 FROM base AS deps
-# npm ci validates the lockfile against every workspace manifest, so web/package.json is needed too (web deps aren't installed).
+# npm ci validates the lockfile against every workspace manifest, so web/ and siteyctl/package.json are needed too (web deps aren't installed).
 COPY package.json package-lock.json ./
 COPY server/package.json ./server/
 COPY web/package.json ./web/
+COPY siteyctl/package.json ./siteyctl/
 # Root "prepare" runs husky (git hooks), which isn't installed here and isn't wanted in an image.
 # npm ci installs the exact lockfile versions from their recorded tarball URLs, so --prefer-offline can't hit stale
 # registry metadata. The BuildKit cache mount keeps npm's tarball cache across builds (does NOT cache node_modules).

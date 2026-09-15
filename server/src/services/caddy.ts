@@ -42,6 +42,9 @@ const CADDY_ACCESS_LOG =
 
 export type LetsEncryptStatus = "pending" | "active" | "error";
 
+/** Response header set wherever a route serves the pending.html placeholder. */
+export const PENDING_HEADER = "X-Sitey-Pending";
+
 function getHostFromUrl(rawUrl: string): string {
   try {
     return new URL(rawUrl).hostname || "caddy";
@@ -254,7 +257,7 @@ function appendAdminHandlers(lines: string[]): void {
   lines.push("    }");
 }
 
-type CaddyServiceRoute = {
+export type CaddyServiceRoute = {
   subdomain: string;
   pathPrefix: string;
   httpOnly: boolean;
@@ -319,7 +322,10 @@ export function scheduleRouteTlsProbe(route: {
   );
 }
 
-function appendRouteHandler(lines: string[], route: CaddyServiceRoute): void {
+export function appendRouteHandler(
+  lines: string[],
+  route: CaddyServiceRoute,
+): void {
   const svc = route.service!;
   const staticReady =
     svc.deployMode === "static" &&
@@ -338,20 +344,24 @@ function appendRouteHandler(lines: string[], route: CaddyServiceRoute): void {
   const tagOuter = `    log_append service_id ${svc.id}`;
 
   if (!staticReady && !serverReady) {
+    // The placeholder page answers 200, so mark it: `siteyctl status` must not
+    // mistake it for a deployed site.
     if (route.pathPrefix) {
       // Redirect exact prefix (no trailing slash) so /app -> /app/
       lines.push(`    handle ${route.pathPrefix} {`);
       lines.push(tagInner);
-      lines.push(`        redir ${route.pathPrefix}/ 308`);
+      lines.push(`        redir * ${route.pathPrefix}/ 308`);
       lines.push("    }");
       lines.push(`    handle_path ${route.pathPrefix}/* {`);
       lines.push(tagInner);
+      lines.push(`        header ${PENDING_HEADER} 1`);
       lines.push("        root * /srv/web");
       lines.push("        rewrite * /pending.html");
       lines.push("        file_server");
       lines.push("    }");
     } else {
       lines.push(tagOuter);
+      lines.push(`    header ${PENDING_HEADER} 1`);
       lines.push("    root * /srv/web");
       lines.push("    rewrite * /pending.html");
       lines.push("    file_server");
@@ -366,7 +376,7 @@ function appendRouteHandler(lines: string[], route: CaddyServiceRoute): void {
       // Redirect exact prefix (no trailing slash) so /zen → /zen/
       lines.push(`    handle ${route.pathPrefix} {`);
       lines.push(tagInner);
-      lines.push(`        redir ${route.pathPrefix}/ 308`);
+      lines.push(`        redir * ${route.pathPrefix}/ 308`);
       lines.push("    }");
       lines.push(`    handle_path ${route.pathPrefix}/* {`);
       lines.push(tagInner);
@@ -387,7 +397,7 @@ function appendRouteHandler(lines: string[], route: CaddyServiceRoute): void {
       // Redirect exact prefix (no trailing slash) so /app → /app/
       lines.push(`    handle ${route.pathPrefix} {`);
       lines.push(tagInner);
-      lines.push(`        redir ${route.pathPrefix}/ 308`);
+      lines.push(`        redir * ${route.pathPrefix}/ 308`);
       lines.push("    }");
       lines.push(`    handle_path ${route.pathPrefix}/* {`);
       lines.push(tagInner);

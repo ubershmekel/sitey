@@ -1,14 +1,22 @@
 /**
- * Export Sitey's config-shaped tables (domains, repos, services, routes) as YAML.
+ * Export Sitey's configuration as YAML: an inventory that can be committed to
+ * git so config changes show up as diffs (`siteyctl export -o sitey/x.yaml`).
  *
- * Preview of infra-as-code: nothing reads this format back yet. Field names
- * mirror schema.prisma so the file and the UI share one vocabulary. Runtime
- * state (status, containerId, tlsStatus, deployments), auth (users, tokens) and
- * secrets (env var values, hook secrets, GitHub App creds) are left out.
+ * Read-only: nothing reads this format back yet. The output is deterministic
+ * (no timestamps; sorted domains, services, routes) so exporting twice gives
+ * identical bytes. Runtime state (status, containers, TLS), deployments, users,
+ * tokens and secret values (env var values, hook secrets, GitHub App creds) are
+ * left out. See docs/design/remote-cli.md.
  */
 
-import { stringify } from "yaml";
+import { Document, isMap, isScalar } from "yaml";
 import { db } from "../lib/db.ts";
+import { envVarNames } from "../lib/envFile.ts";
+import { formatRouteString } from "../lib/routeString.ts";
+import { formatServiceRef } from "../lib/serviceRef.ts";
+import { resolvePublicSiteUrl } from "./siteUrl.ts";
+
+export const EXPORT_VERSION = 1;
 
 type DomainRow = {
   id: number;
@@ -30,7 +38,6 @@ type RouteRow = {
   subdomain: string;
   pathPrefix: string;
   httpOnly: boolean;
-  protected: boolean;
 };
 
 type ServiceRow = {
@@ -53,36 +60,33 @@ type ServiceRow = {
 };
 
 export type ExportInput = {
+  /** The effective Public Sitey URL: where the panel and API live. */
+  siteyUrl: string | null;
   domains: DomainRow[];
   repos: RepoRow[];
   services: ServiceRow[];
 };
 
-// Schema defaults. Fields equal to these (or undefined) are omitted to keep the
-// file readable.
-const SERVICE_DEFAULTS = {
-  branch: "main",
-  buildCommand: "",
-  outputDir: "",
-  buildImage: "",
-  buildMode: "auto",
-  dockerfilePath: "",
-  serverRunCommand: "",
-  containerPort: 3000,
-  protected: false,
-  active: true,
-};
+// Plain code-unit comparison: localeCompare can differ between machines.
+function compare(a: string, b: string): number {
+  return a < b ? -1 : a > b ? 1 : 0;
+}
 
-const ROUTE_DEFAULTS = {
-  subdomain: "",
-  pathPrefix: "",
-  httpOnly: false,
-  protected: false,
-};
+/** Groups hosts by registrable domain: andluck.com, *.andluck.com, x.andluck.com. */
+function compareHostnames(a: string, b: string): number {
+  const la = a.split(".").reverse();
+  const lb = b.split(".").reverse();
+  for (let i = 0; i < Math.min(la.length, lb.length); i++) {
+    const c = compare(la[i], lb[i]);
+    if (c) return c;
+  }
+  return la.length - lb.length;
+}
 
+/** Drops fields that are undefined or equal to their schema default. */
 function withoutDefaults(
   obj: Record<string, unknown>,
-  defaults: Record<string, unknown> = {},
+  defaults: Record<string, unknown>,
 ): Record<string, unknown> {
   return Object.fromEntries(
     Object.entries(obj).filter(
@@ -91,147 +95,125 @@ function withoutDefaults(
   );
 }
 
-/**
- * Env var names only — values are secrets and stay out of the export. Lines
- * without "=" are skipped (as parseEnvString does): they may be continuation
- * lines of a multi-line secret, not names.
- */
-export function envVarNames(envVars: string): string[] {
-  return envVars
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith("#") && line.includes("="))
-    .map((line) =>
-      line
-        .slice(0, line.indexOf("="))
-        .replace(/^export\s+/, "")
-        .trim(),
-    )
-    .filter(Boolean);
-}
-
-/**
- * Repos are referenced from services by name. Names aren't unique in the schema
- * (and may be empty), so fall back to owner/name, then suffix the id.
- */
-function repoKeys(repos: RepoRow[]): Map<number, string> {
-  const base = (r: RepoRow) =>
-    r.name ||
-    (r.repoOwner && r.repoName ? `${r.repoOwner}/${r.repoName}` : "") ||
-    `repo-${r.id}`;
-  const counts = new Map<string, number>();
-  for (const r of repos) counts.set(base(r), (counts.get(base(r)) ?? 0) + 1);
-  // Unique names claim themselves first so a suffixed duplicate can't steal
-  // one (e.g. two "site" repos vs. a repo actually named "site-3").
-  const taken = new Set([...counts].filter(([, n]) => n === 1).map(([k]) => k));
-  const keys = new Map<number, string>();
-  for (const r of [...repos].sort((a, b) => a.id - b.id)) {
-    if (counts.get(base(r)) === 1) {
-      keys.set(r.id, base(r));
-      continue;
-    }
-    let key = `${base(r)}-${r.id}`;
-    while (taken.has(key)) key += `-${r.id}`;
-    taken.add(key);
-    keys.set(r.id, key);
-  }
-  return keys;
-}
+const SERVICE_DEFAULTS = {
+  githubMode: "app",
+  active: true,
+  branch: "main",
+  buildMode: "auto",
+  dockerfilePath: "",
+  buildImage: "",
+  buildCommand: "",
+  outputDir: "",
+  serverRunCommand: "",
+  containerPort: 3000,
+};
 
 export function buildExportDoc(input: ExportInput) {
-  const domainById = new Map(input.domains.map((d) => [d.id, d.hostname]));
-  const repoKey = repoKeys(input.repos);
+  const domainById = new Map(input.domains.map((d) => [d.id, d]));
+  const repoById = new Map(input.repos.map((r) => [r.id, r]));
 
   const domains = [...input.domains]
-    .sort((a, b) => a.hostname.localeCompare(b.hostname))
-    .map((d) =>
-      withoutDefaults({
-        hostname: d.hostname,
-        letsEncryptEmail: d.letsEncryptEmail,
-        // Only meaningful for wildcard domains.
-        siteySubdomainsEnabled: d.hostname.startsWith("*.")
-          ? d.siteySubdomainsEnabled
-          : undefined,
-      }),
-    );
-
-  const repos = [...input.repos]
-    .sort((a, b) => repoKey.get(a.id)!.localeCompare(repoKey.get(b.id)!))
-    .map((r) =>
-      withoutDefaults(
+    .sort((a, b) => compareHostnames(a.hostname, b.hostname))
+    .map((d) => {
+      const settings = withoutDefaults(
         {
-          name: repoKey.get(r.id),
-          repoOwner: r.repoOwner,
-          repoName: r.repoName,
-          githubMode: r.githubMode,
+          letsEncryptEmail: d.letsEncryptEmail.trim(),
+          // Only meaningful for wildcard domains: serve the panel at sitey.<base>.
+          siteySubdomains: d.hostname.startsWith("*.")
+            ? d.siteySubdomainsEnabled
+            : undefined,
         },
-        { repoOwner: "", repoName: "" },
-      ),
-    );
-
-  const services = [...input.services]
-    .sort((a, b) => a.name.localeCompare(b.name) || a.id - b.id)
-    .map((s) => {
-      const routes = s.routes
-        .map((r) =>
-          withoutDefaults(
-            {
-              // No domain = the catch-all route (the built-in sitey panel).
-              domain:
-                r.domainId == null ? undefined : domainById.get(r.domainId),
-              subdomain: r.subdomain,
-              pathPrefix: r.pathPrefix,
-              httpOnly: r.httpOnly,
-              protected: r.protected,
-            },
-            ROUTE_DEFAULTS,
-          ),
-        )
-        .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
-      const env = envVarNames(s.envVars);
-
-      return withoutDefaults(
-        {
-          name: s.name,
-          repo: repoKey.get(s.repoId),
-          branch: s.branch,
-          deployMode: s.deployMode,
-          buildCommand: s.buildCommand,
-          outputDir: s.outputDir,
-          buildImage: s.buildImage,
-          buildMode: s.buildMode,
-          dockerfilePath: s.dockerfilePath,
-          serverRunCommand: s.serverRunCommand,
-          containerPort:
-            s.deployMode === "static" ? undefined : s.containerPort,
-          env: env.length ? env : undefined,
-          protected: s.protected,
-          active: s.active,
-          routes: routes.length ? routes : undefined,
-        },
-        SERVICE_DEFAULTS,
+        { letsEncryptEmail: "", siteySubdomains: true },
       );
+      return Object.keys(settings).length
+        ? { hostname: d.hostname, ...settings }
+        : d.hostname;
     });
 
-  return { domains, repos, services };
+  const services: Record<string, Record<string, unknown>> = {};
+  for (const s of [...input.services].sort((a, b) => a.id - b.id)) {
+    // The built-in sitey panel; `siteyUrl` says where it lives.
+    if (s.protected) continue;
+
+    const repo = repoById.get(s.repoId);
+    const routes = s.routes
+      .map((r) =>
+        formatRouteString({
+          ...r,
+          domain:
+            r.domainId == null ? null : (domainById.get(r.domainId) ?? null),
+        }),
+      )
+      .filter((r) => r !== null)
+      .sort(compare);
+    const env = envVarNames(s.envVars).sort(compare);
+
+    services[formatServiceRef(s.id)] = withoutDefaults(
+      {
+        name: s.name,
+        repo:
+          repo && repo.repoOwner && repo.repoName
+            ? `${repo.repoOwner}/${repo.repoName}`
+            : repo?.name,
+        githubMode: repo?.githubMode,
+        active: s.active,
+        branch: s.branch,
+        deployMode: s.deployMode,
+        buildMode: s.buildMode,
+        dockerfilePath: s.dockerfilePath,
+        buildImage: s.buildImage,
+        buildCommand: s.buildCommand,
+        outputDir: s.outputDir,
+        serverRunCommand: s.serverRunCommand,
+        containerPort: s.deployMode === "static" ? undefined : s.containerPort,
+        env: env.length ? env : undefined,
+        routes: routes.length ? routes : undefined,
+      },
+      SERVICE_DEFAULTS,
+    );
+  }
+
+  return {
+    version: EXPORT_VERSION,
+    siteyUrl: input.siteyUrl,
+    domains,
+    services,
+  };
 }
 
-export function renderExportYaml(input: ExportInput, now = new Date()): string {
-  const header = [
-    `# Sitey config export (${now.toISOString()})`,
-    "# Preview only: nothing reads this file back yet.",
-    "# Omitted: runtime state, deployments, users/tokens, and secrets",
-    "# (env var values, webhook secrets, GitHub App credentials).",
-    "",
-  ].join("\n");
-  return header + stringify(buildExportDoc(input), { lineWidth: 0 });
+const HEADER = [
+  "# Sitey config export. Read-only: nothing reads this file back yet.",
+  "# Excludes runtime state, deployments, users/tokens, and secret values.",
+  "",
+].join("\n");
+
+export function renderExportYaml(input: ExportInput): string {
+  const doc = new Document(buildExportDoc(input));
+  // Blank lines before each top-level section after the header fields, and
+  // between services, so a diff reads block by block.
+  if (isMap(doc.contents)) {
+    for (const pair of doc.contents.items) {
+      const key = isScalar(pair.key) ? pair.key.value : null;
+      if (key === "domains" || key === "services") {
+        (pair.key as { spaceBefore?: boolean }).spaceBefore = true;
+      }
+      if (key === "services" && isMap(pair.value)) {
+        pair.value.items.forEach((service, i) => {
+          if (i > 0)
+            (service.key as { spaceBefore?: boolean }).spaceBefore = true;
+        });
+      }
+    }
+  }
+  return HEADER + doc.toString({ lineWidth: 0 });
 }
 
 export async function loadExportInput(): Promise<ExportInput> {
-  const [domains, repos, services] = await Promise.all([
+  const [domains, repos, services, siteUrl] = await Promise.all([
     db.domain.findMany(),
     db.repo.findMany(),
     db.service.findMany({ include: { routes: true } }),
+    resolvePublicSiteUrl(),
   ]);
-  return { domains, repos, services };
+  return { siteyUrl: siteUrl.effectiveUrl, domains, repos, services };
 }

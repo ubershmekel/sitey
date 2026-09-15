@@ -63,7 +63,8 @@ model Repo {
 
 model Service {
   id     Int    @id @default(autoincrement())
-  name   String
+  // Unique, editable label. The id is the permanent identity (see lib/serviceRef.ts).
+  name   String @unique
 
   repoId Int
   repo   Repo @relation(fields: [repoId], references: [id], onDelete: Cascade)

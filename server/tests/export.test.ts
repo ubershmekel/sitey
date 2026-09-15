@@ -1,9 +1,9 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { parse } from "yaml";
+import { envVarNames } from "../src/lib/envFile.ts";
 import {
   buildExportDoc,
-  envVarNames,
   renderExportYaml,
   type ExportInput,
 } from "../src/services/export.ts";
@@ -13,7 +13,6 @@ const route = {
   subdomain: "",
   pathPrefix: "",
   httpOnly: false,
-  protected: false,
 };
 
 const service = {
@@ -31,65 +30,89 @@ const service = {
   active: true,
 };
 
+const domain = { letsEncryptEmail: "", siteySubdomainsEnabled: true };
+
 const input: ExportInput = {
+  siteyUrl: "https://sitey.andluck.com",
   domains: [
+    { ...domain, id: 1, hostname: "*.andluck.com" },
+    { ...domain, id: 2, hostname: "andluck.com" },
     {
-      id: 1,
-      hostname: "*.example.com",
-      letsEncryptEmail: "a@b.c",
-      siteySubdomainsEnabled: true,
+      ...domain,
+      id: 3,
+      hostname: "*.s.andluck.com",
+      siteySubdomainsEnabled: false,
     },
-    {
-      id: 2,
-      hostname: "landing.dev",
-      letsEncryptEmail: "a@b.c",
-      siteySubdomainsEnabled: true,
-    },
+    { ...domain, id: 4, hostname: "localhost" },
+    { ...domain, id: 5, hostname: "apex.dev", letsEncryptEmail: "me@x.dev" },
   ],
   repos: [
     { id: 1, name: "sitey", repoOwner: "", repoName: "", githubMode: "app" },
     {
       id: 2,
-      name: "site",
-      repoOwner: "me",
-      repoName: "a",
-      githubMode: "webhook",
+      name: "myswe",
+      repoOwner: "ubershmekel",
+      repoName: "myswe",
+      githubMode: "app",
     },
     {
       id: 3,
-      name: "site",
+      name: "legacy",
       repoOwner: "me",
-      repoName: "b",
+      repoName: "legacy",
       githubMode: "webhook",
     },
   ],
   services: [
     {
       ...service,
+      id: 43,
+      name: "idea-b-api",
+      repoId: 2,
+      serverRunCommand: "cd services/idea-b-api && npm start",
+      envVars:
+        "STRIPE_KEY=sk_live_secret\n# comment\nDATABASE_URL=postgres://x",
+      routes: [
+        { ...route, domainId: 1, subdomain: "idea-b", pathPrefix: "/api" },
+      ],
+    },
+    {
+      ...service,
       id: 1,
       name: "sitey",
       repoId: 1,
       protected: true,
-      routes: [{ ...route, protected: true }],
+      routes: [route],
     },
     {
       ...service,
-      id: 2,
-      name: "landing",
-      repoId: 3,
+      id: 42,
+      name: "idea-a",
+      repoId: 2,
       deployMode: "static",
-      outputDir: "dist",
-      envVars: "# comment\nAPI_KEY=secret-value\nexport DB_URL=postgres://x\n",
+      buildImage: "node:24-bookworm-slim",
+      buildCommand: "cd landings/idea-a && npm ci && npm run build",
+      outputDir: "landings/idea-a/dist",
       routes: [
+        { ...route, domainId: 1, subdomain: "idea-a" },
+        { ...route, domainId: 4, pathPrefix: "/red", httpOnly: true },
         { ...route, domainId: 2 },
-        { ...route, domainId: 1, subdomain: "landing", pathPrefix: "/beta" },
       ],
+    },
+    {
+      ...service,
+      id: 9,
+      name: "old",
+      repoId: 3,
+      active: false,
+      containerPort: 8080,
+      routes: [],
     },
   ],
 };
 
-test("envVarNames keeps names, drops values and comments", () => {
-  assert.deepEqual(envVarNames("# c\nA=1\n\nexport B = 2\r\nC="), [
+test("envVarNames keeps names, drops values, comments and repeats", () => {
+  assert.deepEqual(envVarNames("# c\nA=1\n\nexport B = 2\r\nC=\nA=3"), [
     "A",
     "B",
     "C",
@@ -105,69 +128,80 @@ test("envVarNames skips lines without '=' (e.g. multi-line secret bodies)", () =
   );
 });
 
-test("suffixed duplicate repo names never collide with a real repo name", () => {
-  const repo = { repoOwner: "", repoName: "", githubMode: "webhook" };
-  const doc = buildExportDoc({
-    domains: [],
-    services: [],
-    repos: [
-      { ...repo, id: 3, name: "site" },
-      { ...repo, id: 7, name: "site" },
-      { ...repo, id: 9, name: "site-3" },
+test("buildExportDoc keys services by id, writes route strings, omits defaults", () => {
+  assert.deepEqual(buildExportDoc(input), {
+    version: 1,
+    siteyUrl: "https://sitey.andluck.com",
+    domains: [
+      "andluck.com",
+      "*.andluck.com",
+      { hostname: "*.s.andluck.com", siteySubdomains: false },
+      { hostname: "apex.dev", letsEncryptEmail: "me@x.dev" },
+      "localhost",
     ],
+    services: {
+      "service-9": {
+        name: "old",
+        repo: "me/legacy",
+        githubMode: "webhook",
+        active: false,
+        deployMode: "server",
+        containerPort: 8080,
+      },
+      "service-42": {
+        name: "idea-a",
+        repo: "ubershmekel/myswe",
+        deployMode: "static",
+        buildImage: "node:24-bookworm-slim",
+        buildCommand: "cd landings/idea-a && npm ci && npm run build",
+        outputDir: "landings/idea-a/dist",
+        routes: ["andluck.com", "http://localhost/red", "idea-a.andluck.com"],
+      },
+      "service-43": {
+        name: "idea-b-api",
+        repo: "ubershmekel/myswe",
+        deployMode: "server",
+        serverRunCommand: "cd services/idea-b-api && npm start",
+        env: ["DATABASE_URL", "STRIPE_KEY"],
+        routes: ["idea-b.andluck.com/api"],
+      },
+    },
   });
-  const names = doc.repos.map((r) => r.name);
-  assert.equal(new Set(names).size, 3);
-  assert.ok(names.includes("site-3"));
 });
 
-test("buildExportDoc references domains and repos by name, omits defaults", () => {
-  const doc = buildExportDoc(input);
+test("services keep their order by numeric id in the YAML", () => {
+  const out = renderExportYaml(input);
+  assert.ok(out.indexOf("service-9:") < out.indexOf("service-42:"));
+  assert.ok(out.indexOf("service-42:") < out.indexOf("service-43:"));
+});
 
-  assert.deepEqual(doc.domains, [
-    {
-      hostname: "*.example.com",
-      letsEncryptEmail: "a@b.c",
-      siteySubdomainsEnabled: true,
-    },
-    { hostname: "landing.dev", letsEncryptEmail: "a@b.c" },
-  ]);
-
-  // Duplicate repo names get the id appended.
-  assert.deepEqual(
-    doc.repos.map((r) => r.name),
-    ["site-2", "site-3", "sitey"],
-  );
-
-  assert.deepEqual(doc.services, [
-    {
-      name: "landing",
-      repo: "site-3",
-      deployMode: "static",
-      outputDir: "dist",
-      env: ["API_KEY", "DB_URL"],
-      routes: [
-        { domain: "*.example.com", subdomain: "landing", pathPrefix: "/beta" },
-        { domain: "landing.dev" },
-      ],
-    },
-    {
-      name: "sitey",
-      repo: "sitey",
-      deployMode: "server",
-      protected: true,
-      routes: [{ protected: true }],
-    },
-  ]);
+test("renderExportYaml is byte-identical across runs and input order", () => {
+  const shuffled: ExportInput = {
+    ...input,
+    domains: [...input.domains].reverse(),
+    repos: [...input.repos].reverse(),
+    services: [...input.services].reverse().map((s) => ({
+      ...s,
+      routes: [...s.routes].reverse(),
+    })),
+  };
+  const first = renderExportYaml(input);
+  assert.equal(renderExportYaml(input), first);
+  assert.equal(renderExportYaml(shuffled), first);
 });
 
 test("renderExportYaml round-trips and never includes env values", () => {
-  const out = renderExportYaml(input, new Date("2026-01-01T00:00:00Z"));
-  assert.ok(out.startsWith("# Sitey config export (2026-01-01T00:00:00.000Z)"));
-  assert.ok(!out.includes("secret-value"));
+  const out = renderExportYaml(input);
+  assert.ok(out.startsWith("# Sitey config export."));
+  assert.ok(!out.includes("sk_live_secret"));
   assert.ok(!out.includes("postgres://"));
-  assert.deepEqual(
-    parse(out),
-    JSON.parse(JSON.stringify(buildExportDoc(input))),
-  );
+  assert.ok(!/\d{4}-\d{2}-\d{2}T/.test(out), "no timestamps");
+  assert.deepEqual(parse(out), buildExportDoc(input));
+});
+
+test("renderExportYaml separates sections and services with blank lines", () => {
+  const out = renderExportYaml(input);
+  assert.match(out, /\n\ndomains:\n/);
+  assert.match(out, /\n\nservices:\n/);
+  assert.match(out, /\n\n {2}service-42:\n/);
 });

@@ -18,6 +18,7 @@ import {
   reloadCaddy,
 } from "../services/caddy.ts";
 import { db } from "../lib/db.ts";
+import { loadExportInput, renderExportYaml } from "../services/export.ts";
 
 // ── Updater state ─────────────────────────────────────────────────────────────
 // The update script tees output to /data/.update.log so logs survive the
@@ -329,6 +330,11 @@ export const systemRouter = router({
       exitCode: completed ? 0 : log.length > 0 ? 1 : null,
     };
   }),
+
+  /** Deterministic YAML inventory of the server's configuration (siteyctl export). */
+  exportConfig: settledProcedure.query(async () => ({
+    yaml: renderExportYaml(await loadExportInput()),
+  })),
 
   getCaddyfile: settledProcedure.query(() => buildCaddyfile()),
 

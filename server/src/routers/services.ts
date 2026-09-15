@@ -23,6 +23,23 @@ import {
   resolvePublicSiteUrl,
   isLoopbackHost,
 } from "../services/siteUrl.ts";
+import {
+  formatServiceRef,
+  parseServiceRef,
+  serviceNameSchema,
+} from "../lib/serviceRef.ts";
+import {
+  formatRouteString,
+  parseRouteString,
+  resolveRouteHost,
+  RouteStringError,
+} from "../lib/routeString.ts";
+import {
+  EnvFileError,
+  envVarNames,
+  setEnvVar,
+  unsetEnvVar,
+} from "../lib/envFile.ts";
 
 const SUBDOMAIN_LABEL_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
 const randomSubdomainSuffix = customAlphabet(
@@ -128,6 +145,85 @@ async function findOrCreateRepo(
   });
 }
 
+function isUniqueViolation(err: unknown): boolean {
+  return (err as { code?: string }).code === "P2002";
+}
+
+function nameTaken(name: string): TRPCError {
+  return new TRPCError({
+    code: "CONFLICT",
+    message: `A service named "${name}" already exists. Names are unique; pick another or rename the existing service.`,
+  });
+}
+
+async function findServiceOrThrow(id: number) {
+  const service = await db.service.findUnique({ where: { id } });
+  if (!service)
+    throw new TRPCError({ code: "NOT_FOUND", message: "Service not found" });
+  return service;
+}
+
+/** Resolves a route string (`[http://]host[/path]`) to its Domain row. */
+async function resolveRouteInput(route: string) {
+  let parsed;
+  try {
+    parsed = parseRouteString(route);
+  } catch (err) {
+    if (err instanceof RouteStringError)
+      throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
+    throw err;
+  }
+  const domains = await db.domain.findMany({
+    select: { id: true, hostname: true },
+  });
+  const match = resolveRouteHost(parsed.host, domains);
+  if (!match) {
+    const dot = parsed.host.indexOf(".");
+    const wildcardHint =
+      dot === -1 ? "" : ` or '*.${parsed.host.slice(dot + 1)}'`;
+    throw new TRPCError({
+      code: "NOT_FOUND",
+      message: `No domain covers ${parsed.host}. Add one with siteyctl domain add ${parsed.host}${wildcardHint} (and point its DNS at this server).`,
+    });
+  }
+  return {
+    domain: match.domain,
+    subdomain: match.subdomain,
+    pathPrefix: parsed.pathPrefix,
+    httpOnly: parsed.httpOnly,
+    route: formatRouteString({
+      domain: match.domain,
+      subdomain: match.subdomain,
+      pathPrefix: parsed.pathPrefix,
+      httpOnly: parsed.httpOnly,
+    })!,
+  };
+}
+
+type RouteForView = {
+  domain: { hostname: string } | null;
+  subdomain: string;
+  pathPrefix: string;
+  httpOnly: boolean;
+};
+
+/** Routes as the strings siteyctl accepts; the domainless catch-all is "(catch-all)". */
+function routeStrings(routes: RouteForView[]): string[] {
+  return routes
+    .map((r) => formatRouteString(r) ?? "(catch-all)")
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function repoLabel(repo: {
+  repoOwner: string;
+  repoName: string;
+  name: string;
+}) {
+  return repo.repoOwner && repo.repoName
+    ? `${repo.repoOwner}/${repo.repoName}`
+    : repo.name;
+}
+
 export const servicesRouter = router({
   list: settledProcedure.query(() =>
     db.service.findMany({
@@ -177,14 +273,153 @@ export const servicesRouter = router({
       return service;
     }),
 
+  // ── Views for siteyctl ────────────────────────────────────────────────────
+  // Route strings and env var names only: env values never leave through these.
+
+  /** Resolves a `<service>` reference: current name, `service-42`, or `42`. */
+  resolve: settledProcedure
+    .input(z.object({ ref: z.string().min(1) }))
+    .query(async ({ input }) => {
+      const ref = parseServiceRef(input.ref);
+      const service = await db.service.findUnique({
+        where: "id" in ref ? { id: ref.id } : { name: ref.name },
+        select: { id: true, name: true },
+      });
+      if (!service)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `No service ${"id" in ref ? `with id ${ref.id}` : `named "${ref.name}"`}. List services with siteyctl services.`,
+        });
+      return { ...service, ref: formatServiceRef(service.id) };
+    }),
+
+  summaries: settledProcedure.query(async () => {
+    const services = await db.service.findMany({
+      orderBy: { id: "asc" },
+      include: {
+        repo: true,
+        routes: { include: { domain: true } },
+        deployments: { orderBy: { createdAt: "desc" }, take: 1 },
+      },
+    });
+    return services.map((s) => ({
+      id: s.id,
+      ref: formatServiceRef(s.id),
+      name: s.name,
+      repo: repoLabel(s.repo),
+      deployMode: s.deployMode,
+      status: s.status,
+      active: s.active,
+      protected: s.protected,
+      routes: routeStrings(s.routes),
+      latestDeployment: s.deployments[0]
+        ? {
+            id: s.deployments[0].id,
+            status: s.deployments[0].status,
+            createdAt: s.deployments[0].createdAt,
+          }
+        : null,
+    }));
+  }),
+
+  describe: settledProcedure
+    .input(z.object({ id: z.number().int() }))
+    .query(async ({ input }) => {
+      const s = await db.service.findUnique({
+        where: { id: input.id },
+        include: {
+          repo: true,
+          routes: { include: { domain: true } },
+          deployments: { orderBy: { createdAt: "desc" }, take: 5 },
+        },
+      });
+      if (!s)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Service not found",
+        });
+      return {
+        id: s.id,
+        ref: formatServiceRef(s.id),
+        name: s.name,
+        repo: repoLabel(s.repo),
+        githubMode: s.repo.githubMode,
+        branch: s.branch,
+        deployMode: s.deployMode,
+        buildMode: s.buildMode,
+        buildImage: s.buildImage,
+        buildCommand: s.buildCommand,
+        outputDir: s.outputDir,
+        dockerfilePath: s.dockerfilePath,
+        serverRunCommand: s.serverRunCommand,
+        containerPort: s.containerPort,
+        status: s.status,
+        active: s.active,
+        protected: s.protected,
+        env: envVarNames(s.envVars),
+        routes: s.routes
+          .map((r) => ({
+            route: formatRouteString(r) ?? "(catch-all)",
+            httpOnly: r.httpOnly,
+            tlsStatus: r.tlsStatus,
+          }))
+          .sort((a, b) => a.route.localeCompare(b.route)),
+        deployments: s.deployments.map((d) => ({
+          id: d.id,
+          status: d.status,
+          triggeredBy: d.triggeredBy,
+          commitSha: d.commitSha,
+          commitMessage: d.commitMessage,
+          createdAt: d.createdAt,
+          startedAt: d.startedAt,
+          finishedAt: d.finishedAt,
+        })),
+      };
+    }),
+
+  /**
+   * Dry run of addRoute({ host }): which Domain row the route string lands on,
+   * and whether it's free. Lets siteyctl validate --route flags before creating
+   * a service.
+   */
+  checkRoute: settledProcedure
+    .input(
+      z.object({
+        route: z.string().min(1),
+        serviceId: z.number().int().optional(),
+      }),
+    )
+    .query(async ({ input }) => {
+      const resolved = await resolveRouteInput(input.route);
+      const existing = await db.serviceRoute.findFirst({
+        where: {
+          domainId: resolved.domain.id,
+          subdomain: resolved.subdomain,
+          pathPrefix: resolved.pathPrefix,
+        },
+        include: { service: { select: { id: true, name: true } } },
+      });
+      return {
+        route: resolved.route,
+        domain: resolved.domain.hostname,
+        subdomain: resolved.subdomain,
+        pathPrefix: resolved.pathPrefix,
+        httpOnly: resolved.httpOnly,
+        takenBy:
+          existing && existing.serviceId !== input.serviceId
+            ? {
+                id: existing.service.id,
+                name: existing.service.name,
+                ref: formatServiceRef(existing.service.id),
+              }
+            : null,
+      };
+    }),
+
   create: settledProcedure
     .input(
       z.object({
-        name: z
-          .string()
-          .min(1)
-          .max(40)
-          .regex(/^[a-z0-9-]+$/, "Lowercase alphanumeric and hyphens only"),
+        name: serviceNameSchema,
         repoOwner: z.string().min(1),
         repoName: z.string().min(1),
         branch: z.string().default("main"),
@@ -203,6 +438,14 @@ export const servicesRouter = router({
     .mutation(async ({ input }) => {
       const { repoOwner, repoName, githubMode, ...serviceData } = input;
 
+      // Checked up front (the unique index is the real guard) so a retried
+      // create doesn't touch the repo's integration settings first.
+      const nameInUse = await db.service.findUnique({
+        where: { name: input.name },
+        select: { id: true },
+      });
+      if (nameInUse) throw nameTaken(input.name);
+
       // Find or create the Repo
       const repo = await findOrCreateRepo(repoOwner, repoName, githubMode);
 
@@ -212,12 +455,18 @@ export const servicesRouter = router({
         data: { githubMode },
       });
 
-      const service = await db.service.create({
-        data: {
-          ...serviceData,
-          repoId: repo.id,
-        },
-      });
+      let service;
+      try {
+        service = await db.service.create({
+          data: {
+            ...serviceData,
+            repoId: repo.id,
+          },
+        });
+      } catch (err) {
+        if (isUniqueViolation(err)) throw nameTaken(input.name);
+        throw err;
+      }
 
       // Create a HookEndpoint for webhook-mode repos (if one doesn't already exist)
       if (githubMode === "webhook") {
@@ -246,19 +495,16 @@ export const servicesRouter = router({
       });
       enqueueDeployment(service, deployment);
 
-      return service;
+      return { ...service, deploymentId: deployment.id };
     }),
 
   update: settledProcedure
     .input(
       z.object({
         id: z.number().int(),
-        name: z
-          .string()
-          .min(1)
-          .max(40)
-          .regex(/^[a-z0-9-]+$/, "Lowercase alphanumeric and hyphens only")
-          .optional(),
+        // Renames update the row in place: the id, data directory, deployments
+        // and analytics stay attached.
+        name: serviceNameSchema.optional(),
         branch: z.string().optional(),
         deployMode: z.enum(["server", "static"]).optional(),
         buildCommand: z.string().optional(),
@@ -273,25 +519,91 @@ export const servicesRouter = router({
     )
     .mutation(async ({ input }) => {
       const { id, ...rest } = input;
-      return db.service.update({
-        where: { id },
-        data: rest,
-      });
+      await findServiceOrThrow(id);
+      try {
+        return await db.service.update({
+          where: { id },
+          data: rest,
+        });
+      } catch (err) {
+        if (rest.name && isUniqueViolation(err)) throw nameTaken(rest.name);
+        throw err;
+      }
+    }),
+
+  // ── Env vars by name ──────────────────────────────────────────────────────
+  // Edit one entry of the .env string. Values are write-only: responses carry
+  // names, never values. Saving doesn't redeploy (matches the UI).
+
+  setEnvVar: settledProcedure
+    .input(
+      z.object({
+        id: z.number().int(),
+        name: z.string().min(1),
+        value: z.string(),
+      }),
+    )
+    .mutation(async ({ input }) => {
+      const service = await findServiceOrThrow(input.id);
+      let envVars;
+      try {
+        envVars = setEnvVar(service.envVars, input.name, input.value);
+      } catch (err) {
+        if (err instanceof EnvFileError)
+          throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
+        throw err;
+      }
+      await db.service.update({ where: { id: input.id }, data: { envVars } });
+      return { ok: true, name: input.name, env: envVarNames(envVars) };
+    }),
+
+  unsetEnvVar: settledProcedure
+    .input(z.object({ id: z.number().int(), name: z.string().min(1) }))
+    .mutation(async ({ input }) => {
+      const service = await findServiceOrThrow(input.id);
+      let result;
+      try {
+        result = unsetEnvVar(service.envVars, input.name);
+      } catch (err) {
+        if (err instanceof EnvFileError)
+          throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
+        throw err;
+      }
+      if (result.removed) {
+        await db.service.update({
+          where: { id: input.id },
+          data: { envVars: result.envVars },
+        });
+      }
+      return {
+        ok: true,
+        name: input.name,
+        removed: result.removed,
+        env: envVarNames(result.envVars),
+      };
     }),
 
   delete: settledProcedure
-    .input(z.object({ id: z.number().int() }))
+    .input(
+      z.object({
+        id: z.number().int(),
+        // When given, must equal the service's current name. siteyctl always
+        // sends it, so a rename between resolving and deleting can't delete
+        // the wrong thing.
+        confirmName: z.string().optional(),
+      }),
+    )
     .mutation(async ({ input }) => {
-      const service = await db.service.findUnique({ where: { id: input.id } });
-      if (!service)
-        throw new TRPCError({
-          code: "NOT_FOUND",
-          message: "Service not found",
-        });
+      const service = await findServiceOrThrow(input.id);
       if (service.protected)
         throw new TRPCError({
           code: "FORBIDDEN",
           message: "This service cannot be deleted",
+        });
+      if (input.confirmName !== undefined && input.confirmName !== service.name)
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: `Confirmation "${input.confirmName}" doesn't match the service name "${service.name}".`,
         });
 
       // Stop & remove Docker container (best-effort)
@@ -371,6 +683,12 @@ export const servicesRouter = router({
         data: { active: true },
       });
 
+      // Put the routes back in Caddy. Static sites serve again right away;
+      // server apps show the pending page until their next deploy.
+      reloadCaddy().catch((err) =>
+        console.error("[services] Caddy reload failed after activate:", err),
+      );
+
       return { ok: true };
     }),
 
@@ -380,10 +698,14 @@ export const servicesRouter = router({
     .input(
       z.object({
         serviceId: z.number().int(),
+        // Either a route string, `[http://]host[/pathPrefix]`, resolved to a
+        // Domain row by lib/routeString.ts (siteyctl)…
+        host: z.string().min(1).optional(),
+        // …or the explicit tuple (the UI).
         domainId: z.number().int().optional(),
-        pathPrefix: z.string().default(""),
-        subdomain: z.string().default(""),
-        httpOnly: z.boolean().default(false),
+        pathPrefix: z.string().optional(),
+        subdomain: z.string().optional(),
+        httpOnly: z.boolean().optional(),
       }),
     )
     .mutation(async ({ input }) => {
@@ -398,56 +720,105 @@ export const servicesRouter = router({
         });
 
       let domain: { id: number; hostname: string } | null = null;
-      if (input.domainId) {
-        domain = await db.domain.findUnique({
-          where: { id: input.domainId },
-          select: { id: true, hostname: true },
-        });
-        if (!domain)
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: "Domain not found",
-          });
-      }
+      let subdomain: string;
+      let pathPrefix: string;
+      let httpOnly: boolean;
 
-      let subdomain = input.subdomain.trim().toLowerCase();
-      if (domain && isWildcardDomain(domain.hostname)) {
-        if (!subdomain) {
-          subdomain = await generateUniqueSubdomain(domain.id, service.name);
-        } else if (!SUBDOMAIN_LABEL_REGEX.test(subdomain)) {
+      if (input.host !== undefined) {
+        if (
+          input.domainId !== undefined ||
+          input.subdomain ||
+          input.pathPrefix ||
+          input.httpOnly !== undefined
+        ) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message:
-              "Subdomain must be a valid DNS label (lowercase letters, numbers, hyphens).",
+              "host can't be combined with domainId, subdomain, pathPrefix or httpOnly: the route string carries all of them.",
           });
         }
+        const resolved = await resolveRouteInput(input.host);
+        ({ domain, subdomain, pathPrefix, httpOnly } = resolved);
       } else {
-        if (subdomain) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message: "Subdomain can only be set when using a wildcard domain.",
+        pathPrefix = input.pathPrefix ?? "";
+        httpOnly = input.httpOnly ?? false;
+        if (input.domainId) {
+          domain = await db.domain.findUnique({
+            where: { id: input.domainId },
+            select: { id: true, hostname: true },
           });
+          if (!domain)
+            throw new TRPCError({
+              code: "NOT_FOUND",
+              message: "Domain not found",
+            });
         }
-        subdomain = "";
+
+        subdomain = (input.subdomain ?? "").trim().toLowerCase();
+        if (domain && isWildcardDomain(domain.hostname)) {
+          if (!subdomain) {
+            subdomain = await generateUniqueSubdomain(domain.id, service.name);
+          } else if (!SUBDOMAIN_LABEL_REGEX.test(subdomain)) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message:
+                "Subdomain must be a valid DNS label (lowercase letters, numbers, hyphens).",
+            });
+          }
+        } else {
+          if (subdomain) {
+            throw new TRPCError({
+              code: "BAD_REQUEST",
+              message:
+                "Subdomain can only be set when using a wildcard domain.",
+            });
+          }
+          subdomain = "";
+        }
       }
 
-      if (domain && isLoopbackHost(domain.hostname) && !input.httpOnly) {
+      if (domain && isLoopbackHost(domain.hostname) && !httpOnly) {
         throw new TRPCError({
           code: "BAD_REQUEST",
-          message: "localhost routes must be created as HTTP-only.",
+          message:
+            input.host !== undefined
+              ? `localhost routes are HTTP-only. Use http://${domain.hostname}${pathPrefix}`
+              : "localhost routes must be created as HTTP-only.",
         });
       }
 
-      if (input.domainId) {
+      if (domain) {
+        // Adding a route this service already has is a no-op, so reruns are safe.
+        const existing = await db.serviceRoute.findFirst({
+          where: { domainId: domain.id, subdomain, pathPrefix },
+          include: {
+            domain: true,
+            service: { select: { id: true, name: true } },
+          },
+        });
+        if (existing) {
+          const { service: owner, ...existingRoute } = existing;
+          const label = formatRouteString(existingRoute);
+          if (owner.id !== service.id) {
+            throw new TRPCError({
+              code: "CONFLICT",
+              message: `${label} is already routed to service "${owner.name}" (${formatServiceRef(owner.id)}). Remove it there first.`,
+            });
+          }
+          if (existing.httpOnly === httpOnly) {
+            return {
+              ...existingRoute,
+              routeString: label,
+              alreadyExisted: true,
+            };
+          }
+        }
+
         const sameHostRoutes = await db.serviceRoute.findMany({
-          where: { domainId: input.domainId, subdomain },
+          where: { domainId: domain.id, subdomain },
           select: { id: true, httpOnly: true },
         });
-        if (
-          sameHostRoutes.some(
-            (existing) => existing.httpOnly !== input.httpOnly,
-          )
-        ) {
+        if (sameHostRoutes.some((other) => other.httpOnly !== httpOnly)) {
           throw new TRPCError({
             code: "BAD_REQUEST",
             message:
@@ -461,16 +832,15 @@ export const servicesRouter = router({
         route = await db.serviceRoute.create({
           data: {
             serviceId: input.serviceId,
-            domainId: input.domainId,
-            pathPrefix: input.pathPrefix,
+            domainId: domain?.id,
+            pathPrefix,
             subdomain,
-            httpOnly: input.httpOnly,
+            httpOnly,
           },
           include: { domain: true },
         });
       } catch (err) {
-        const code = (err as { code?: string }).code;
-        if (code === "P2002") {
+        if (isUniqueViolation(err)) {
           throw new TRPCError({
             code: "CONFLICT",
             message: "Route already exists for this host/path.",
@@ -495,15 +865,43 @@ export const servicesRouter = router({
         }
       }
 
-      return route;
+      return {
+        ...route,
+        routeString: formatRouteString(route),
+        alreadyExisted: false,
+      };
     }),
 
   removeRoute: settledProcedure
-    .input(z.object({ routeId: z.string() }))
+    .input(
+      z.union([
+        z.object({ routeId: z.string() }),
+        // siteyctl: the route string, resolved the same way as addRoute.
+        z.object({ serviceId: z.number().int(), host: z.string().min(1) }),
+      ]),
+    )
     .mutation(async ({ input }) => {
-      const route = await db.serviceRoute.findUnique({
-        where: { id: input.routeId },
-      });
+      let route;
+      if ("routeId" in input) {
+        route = await db.serviceRoute.findUnique({
+          where: { id: input.routeId },
+        });
+      } else {
+        const resolved = await resolveRouteInput(input.host);
+        route = await db.serviceRoute.findFirst({
+          where: {
+            serviceId: input.serviceId,
+            domainId: resolved.domain.id,
+            subdomain: resolved.subdomain,
+            pathPrefix: resolved.pathPrefix,
+          },
+        });
+        if (!route)
+          throw new TRPCError({
+            code: "NOT_FOUND",
+            message: `This service has no route ${resolved.route}. See its routes with siteyctl service get.`,
+          });
+      }
       if (!route)
         throw new TRPCError({ code: "NOT_FOUND", message: "Route not found" });
       if (route.protected)
@@ -511,7 +909,7 @@ export const servicesRouter = router({
           code: "FORBIDDEN",
           message: "This route cannot be removed",
         });
-      await db.serviceRoute.delete({ where: { id: input.routeId } });
+      await db.serviceRoute.delete({ where: { id: route.id } });
       reloadCaddy().catch((err) =>
         console.error("[services] Caddy reload failed after removeRoute:", err),
       );

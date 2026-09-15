@@ -10,6 +10,7 @@ import type { Deployment, Service, Repo } from "../generated/prisma/client.ts";
 import { PrismaClient } from "../generated/prisma/client.ts";
 import { db } from "../lib/db.ts";
 import { deployQueue } from "../lib/queue.ts";
+import { envLineKey, unquoteEnvValue } from "../lib/envFile.ts";
 import {
   cloneOrPull,
   isTrackedFile,
@@ -165,22 +166,10 @@ function buildManagedDockerfile(service: Service): string {
 export function parseEnvString(raw: string): Record<string, string> {
   const vars: Record<string, string> = {};
   for (const line of raw.split("\n")) {
+    const key = envLineKey(line);
+    if (!key) continue;
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith("#")) continue;
-    const eqIdx = trimmed.indexOf("=");
-    if (eqIdx === -1) continue;
-    const key = trimmed
-      .slice(0, eqIdx)
-      .replace(/^export\s+/, "")
-      .trim();
-    let val = trimmed.slice(eqIdx + 1).trim();
-    if (
-      (val.startsWith('"') && val.endsWith('"')) ||
-      (val.startsWith("'") && val.endsWith("'"))
-    ) {
-      val = val.slice(1, -1);
-    }
-    if (key) vars[key] = val;
+    vars[key] = unquoteEnvValue(trimmed.slice(trimmed.indexOf("=") + 1).trim());
   }
   return vars;
 }

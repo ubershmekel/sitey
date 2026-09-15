@@ -2,10 +2,11 @@
 # Pinned (not node:24-bookworm-slim): floating tags silently pulled Node 24.21, whose native-addon regression (24.19+) broke us.
 FROM node:24.18.1-bookworm-slim AS builder
 WORKDIR /app
-# npm ci validates the lockfile against every workspace manifest, so server/package.json is needed too (server deps aren't installed).
+# npm ci validates the lockfile against every workspace manifest, so server/ and siteyctl/package.json are needed too (server deps aren't installed).
 COPY package.json package-lock.json ./
 COPY web/package.json ./web/
 COPY server/package.json ./server/
+COPY siteyctl/package.json ./siteyctl/
 # Root "prepare" runs husky (git hooks), which isn't installed here and isn't wanted in an image.
 RUN npm pkg delete scripts.prepare && npm ci -w web --no-audit --progress=false
 COPY web/ ./web/

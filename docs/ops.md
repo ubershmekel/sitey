@@ -129,12 +129,32 @@ never need to rebuild the updater image just to change the update logic.
 `node src/cli.ts` inside the `sitey-api` container, so it works over SSH too
 (`ssh my-vps sitey export`).
 
-| Command             | When to use                                                                   |
-| ------------------- | ----------------------------------------------------------------------------- |
-| `generate-password` | Generate a one-time override password usable on any account at the login page |
-| `export`            | Print domains, repos, services and routes as YAML (preview of config-as-code) |
-| `install-cli`       | (host only) Install or reinstall `/usr/local/bin/sitey`                       |
-| `help`              | List commands                                                                 |
+| Command                                | When to use                                                                   |
+| -------------------------------------- | ----------------------------------------------------------------------------- |
+| `generate-password`                    | Generate a one-time override password usable on any account at the login page |
+| `export`                               | Print the server's configuration as deterministic YAML                        |
+| `token create <name> [--user <email>]` | Create an API token for `siteyctl` (printed once, on stdout)                  |
+| `token list`                           | List API tokens and when they were last used                                  |
+| `token revoke <name>`                  | Delete an API token                                                           |
+| `install-cli`                          | (host only) Install or reinstall `/usr/local/bin/sitey`                       |
+| `help`                                 | List commands                                                                 |
+
+API tokens are **root-equivalent on the VPS**: Sitey controls the Docker socket.
+Revoke any token you no longer use.
+
+## `siteyctl`: the remote CLI
+
+`siteyctl` drives a Sitey server from another machine over HTTPS with an API
+token: create services, add routes, set env vars, deploy, check that a site is
+live, and export the config. Design:
+[docs/design/remote-cli.md](design/remote-cli.md). From a checkout:
+
+```bash
+ssh my-vps sitey token create home-pc | npm run siteyctl -- login my-vps https://sitey.example.com
+npm run siteyctl -- --help
+```
+
+`-o` paths are resolved against the directory you ran `npm run` from.
 
 Installs from before the CLI existed: update Sitey, then run once on the host:
 
