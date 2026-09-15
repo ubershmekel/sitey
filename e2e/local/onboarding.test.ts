@@ -33,6 +33,51 @@ async function getMockRequests(
   return res.json();
 }
 
+// The panel's own traffic is tagged with the built-in protected "sitey"
+// service's real id, which is 1 on a freshly bootstrapped DB.
+const ADMIN_SERVICE_ID = 1;
+
+// Global options + the shared access-log snippet that caddy.ts emits once at
+// the top of every Caddyfile (see docs/design/analytics.md).
+const CADDY_PREAMBLE = `{
+    admin 0.0.0.0:2019
+}
+
+(requests_log) {
+    log {
+        output file /var/log/caddy/access.log {
+            roll_size 20mb
+            roll_keep 3
+            roll_keep_for 168h
+        }
+        format filter {
+            wrap json
+            fields {
+                request>remote_ip   delete
+                request>remote_port delete
+                request>client_ip   delete
+                request>headers     delete
+                resp_headers>Set-Cookie delete
+                request>uri         regexp "[?].*" ""
+            }
+        }
+    }
+}`;
+
+// Body of a management site block (panel SPA + API proxy), shared by the :80
+// block and the named-domain HTTPS block.
+const ADMIN_BLOCK_BODY = `    import requests_log
+    handle /api/* {
+        log_append service_id ${ADMIN_SERVICE_ID}
+        reverse_proxy sitey-api:3001
+    }
+    handle {
+        log_append service_id ${ADMIN_SERVICE_ID}
+        root * /srv/web
+        try_files {path} /index.html
+        file_server
+    }`;
+
 // ── Test 1 ────────────────────────────────────────────────────────────────────
 
 test("initial Caddy config push contains HTTP handler and API proxy", async ({
@@ -59,19 +104,10 @@ test("initial Caddy config push contains HTTP handler and API proxy", async ({
   const body = initial!.body;
   const normalized = normalizeCaddyfile(body);
   const expected = normalizeCaddyfile(`
-{
-    admin 0.0.0.0:2019
-}
+${CADDY_PREAMBLE}
 
 :80 {
-    handle /api/* {
-        reverse_proxy sitey-api:3001
-    }
-    handle {
-        root * /srv/web
-        try_files {path} /index.html
-        file_server
-    }
+${ADMIN_BLOCK_BODY}
 }
 `);
   expect(normalized).toBe(expected);
@@ -126,30 +162,14 @@ test("adding a domain through onboarding updates Caddyfile", async ({
   const latest = caddyLoads[caddyLoads.length - 1];
   const body = normalizeCaddyfile(latest.body);
   const expected = normalizeCaddyfile(`
-{
-    admin 0.0.0.0:2019
-}
+${CADDY_PREAMBLE}
 
 :80 {
-    handle /api/* {
-        reverse_proxy sitey-api:3001
-    }
-    handle {
-        root * /srv/web
-        try_files {path} /index.html
-        file_server
-    }
+${ADMIN_BLOCK_BODY}
 }
 
 sitey.example.com {
-    handle /api/* {
-        reverse_proxy sitey-api:3001
-    }
-    handle {
-        root * /srv/web
-        try_files {path} /index.html
-        file_server
-    }
+${ADMIN_BLOCK_BODY}
 }
 
 sitey-dns-check.example.com {
