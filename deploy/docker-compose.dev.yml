@@ -22,7 +22,7 @@ services:
       - "80:80"
       - "443:443"
       # Expose admin API for host-run server mode (npm run dev).
-      - "2019:2019"
+      - "127.0.0.1:2019:2019"
     extra_hosts:
       # Required on Linux so host.docker.internal resolves from containers.
       - "host.docker.internal:host-gateway"
@@ -39,6 +39,7 @@ services:
       LOG_LEVEL: debug
       JWT_SECRET: dev-insecure-change-me-in-production
       CADDY_ADMIN_URL: http://caddy:2019
+      CADDY_ADMIN_SOCKET: ""
       SITEY_WEB_INTERNAL: sitey-web:3000
       NODE_ENV: development
     volumes:

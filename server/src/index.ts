@@ -9,6 +9,7 @@ import {
 import { appRouter, type AppRouter } from "./routers/index.ts";
 import { createContext } from "./context.ts";
 import { bootstrap } from "./services/bootstrap.ts";
+import { removeLegacyPortBindings } from "./services/portPolicy.ts";
 import { verifyWebhookSignature } from "./services/crypto.ts";
 import { db } from "./lib/db.ts";
 import { enqueueDeployment } from "./services/deployment.ts";
@@ -78,6 +79,7 @@ function shouldCaptureRawBody(url: string): boolean {
 async function main() {
   runMigrations();
   await bootstrap();
+  if (IS_PRODUCTION) await removeLegacyPortBindings();
 
   // Push initial Caddy config from DB state (non-fatal — Caddy may not be ready yet)
   reloadCaddy().catch((err) =>

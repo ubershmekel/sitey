@@ -20,6 +20,7 @@ export type Check = {
 };
 
 export type LiveInput = {
+  serviceId?: number;
   active: boolean;
   deployMode: string;
   deployment: { id: string; status: string } | null;
@@ -35,7 +36,7 @@ export type LiveReport = {
 
 export type Probes = {
   tls(host: string): Promise<Check>;
-  http(url: string, deployMode: string): Promise<Check>;
+  http(url: string, deployMode: string, serviceId?: number): Promise<Check>;
 };
 
 export const PENDING_HEADER = "x-sitey-pending";
@@ -99,7 +100,11 @@ export function probeTls(
 export async function probeHttp(
   url: string,
   deployMode: string,
-  { timeoutMs = PROBE_TIMEOUT_MS, fetchImpl = fetch } = {},
+  {
+    timeoutMs = PROBE_TIMEOUT_MS,
+    fetchImpl = fetch,
+    serviceId,
+  }: { timeoutMs?: number; fetchImpl?: typeof fetch; serviceId?: number } = {},
 ): Promise<Check> {
   const check = (state: CheckState, detail: string): Check => ({
     name: "http",
@@ -151,6 +156,15 @@ export async function probeHttp(
       );
     }
     if (res.status >= 200 && res.status < 300) {
+      if (
+        serviceId !== undefined &&
+        res.headers.get("x-sitey-service") !== String(serviceId)
+      ) {
+        return check(
+          "fail",
+          `HTTP ${res.status}, but the response was not served by service-${serviceId}. Check the route, DNS, and Caddy configuration.`,
+        );
+      }
       return check("pass", `HTTP ${res.status}`);
     }
     if (TRANSIENT_HTTP_STATUSES.has(res.status)) {
@@ -170,7 +184,8 @@ export async function probeHttp(
 
 export const networkProbes: Probes = {
   tls: (host) => probeTls(host),
-  http: (url, deployMode) => probeHttp(url, deployMode),
+  http: (url, deployMode, serviceId) =>
+    probeHttp(url, deployMode, { serviceId }),
 };
 
 function deploymentCheck(deployment: LiveInput["deployment"]): Check {
@@ -225,13 +240,24 @@ export async function runChecks(
     return { state: deploy.state, live: false, checks };
   }
 
+  if (!input.routes.length) {
+    checks.push({
+      name: "service",
+      target: "",
+      state: "fail",
+      detail:
+        "Deployment succeeded, but no public route can be verified. Add one with siteyctl route add.",
+    });
+    return { state: "fail", live: false, checks };
+  }
+
   const routeChecks = await Promise.all(
     input.routes.map(async (route) => {
       const url = routeUrl(route);
       const results: Check[] = [];
       if (url.startsWith("https://"))
         results.push(await probes.tls(new URL(url).hostname));
-      results.push(await probes.http(url, input.deployMode));
+      results.push(await probes.http(url, input.deployMode, input.serviceId));
       return results;
     }),
   );

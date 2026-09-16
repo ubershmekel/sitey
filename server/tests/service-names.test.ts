@@ -129,3 +129,34 @@ test("unique-name migration renames duplicates and id-like names, keeps ids and 
 
   assert.throws(() => insertService.run(8, "site"), /UNIQUE/);
 });
+
+test("migration reserves existing suffixes and id-name replacements", () => {
+  const db = dbBeforeMigration();
+  const rows = [
+    [1, "landing"],
+    [2, "landing-3"],
+    [3, "landing"],
+    [4, "42"],
+    [5, "svc-4"],
+    [6, "svc-4-1"],
+    [7, "svc-3-1"],
+    [8, "service-99"],
+    [9, "svc-8"],
+    [10, "landing"],
+  ] as const;
+  for (const row of rows)
+    db.prepare("INSERT INTO Service(id,name) VALUES (?,?)").run(...row);
+  db.exec(migrationSql(UNIQUE_NAME_MIGRATION));
+  const names = db.prepare("SELECT id,name FROM Service ORDER BY id").all() as {
+    id: number;
+    name: string;
+  }[];
+  assert.equal(new Set(names.map((s) => s.name)).size, rows.length);
+  for (const row of names)
+    assert.ok(serviceNameSchema.safeParse(row.name).success);
+  assert.equal(names[0].name, "landing");
+  assert.equal(names[1].name, "landing-3");
+  assert.equal(names[2].name, "svc-3-2");
+  assert.equal(names[3].name, "svc-4-2");
+  db.close();
+});

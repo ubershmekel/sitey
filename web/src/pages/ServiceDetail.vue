@@ -131,10 +131,9 @@
             </button>
           </template>
         </div>
-        <div v-else-if="fallbackUrl" class="hero-url hint">
-          No domain route yet - fallback: <code>{{ fallbackUrl }}</code>
+        <div v-else class="hero-url hint">
+          No route assigned yet. Add a route to make this service public.
         </div>
-        <div v-else class="hero-url hint">No route assigned yet.</div>
 
         <div v-if="deployError" class="alert error" style="margin-top: 0.75rem">
           {{ deployError }}
@@ -668,11 +667,6 @@ const serviceUrl = computed(() => {
   return `${scheme}://${routeHostname(r)}${r.pathPrefix || ""}`;
 });
 
-const fallbackUrl = computed(() => {
-  if (!service.value?.hostPort) return "";
-  return `http://<server-ip>:${service.value.hostPort}`;
-});
-
 const deployTypeLabel = computed(() => {
   if (!service.value) return "";
   if (service.value.deployMode === "static") return "Static site";
@@ -810,7 +804,7 @@ async function saveServiceSettings() {
     const s = editSettings.value;
     const deployMode = s.deployType === "static" ? "static" : "server";
     const buildMode = s.deployType === "dockerfile" ? "dockerfile" : "auto";
-    const updated = await trpc.services.update.mutate({
+    await trpc.services.update.mutate({
       id: serviceId,
       deployMode,
       buildMode,
@@ -821,10 +815,7 @@ async function saveServiceSettings() {
       dockerfilePath: s.dockerfilePath.trim(),
       containerPort: Number(s.containerPort),
     });
-    service.value = {
-      ...service.value,
-      ...updated,
-    };
+    service.value = await trpc.services.get.query({ id: serviceId });
     applyServiceToEditors(service.value);
     settingsSaved.value = true;
     setTimeout(() => (settingsSaved.value = false), 2000);

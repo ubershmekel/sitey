@@ -127,7 +127,17 @@ const appRouter = t.router({
             message: "Names can't be purely numeric",
           });
         }
-        return { id: 44, name: input.name, deploymentId: "dep44" };
+        return {
+          id: 44,
+          name: input.name,
+          deploymentId: "dep44",
+          warning: null,
+          routes: ((input.routes ?? []) as string[]).map((route) => ({
+            route,
+            tlsStatus: "active",
+            alreadyExisted: false,
+          })),
+        };
       }),
     checkRoute: authed
       .input(z.object({ route: z.string() }))
@@ -158,6 +168,14 @@ const appRouter = t.router({
           tlsStatus: "active",
           alreadyExisted,
         };
+      }),
+    envValues: authed.input(z.object({ id: z.number() })).query(() => envVars),
+    getEnvVar: authed
+      .input(z.object({ id: z.number(), name: z.string() }))
+      .query(({ input }) => {
+        if (!(input.name in envVars))
+          throw new TRPCError({ code: "NOT_FOUND" });
+        return { name: input.name, value: envVars[input.name] };
       }),
     setEnvVar: authed
       .input(z.object({ id: z.number(), name: z.string(), value: z.string() }))
@@ -404,6 +422,7 @@ test("service create checks the repo and routes before creating anything", async
     ref: "service-44",
     name: "idea-c",
     deploymentId: "dep44",
+    warning: null,
     routes: [
       {
         route: "idea-c.andluck.com",
@@ -414,7 +433,7 @@ test("service create checks the repo and routes before creating anything", async
   });
   assert.deepEqual(
     calls.map((c) => c.path),
-    ["services.create", "services.addRoute"],
+    ["services.create"],
   );
   assert.deepEqual(calls[0].input, {
     name: "idea-c",
@@ -423,6 +442,7 @@ test("service create checks the repo and routes before creating anything", async
     deployMode: "static",
     githubMode: "app",
     outputDir: "landings/idea-c/dist",
+    routes: ["idea-c.andluck.com"],
   });
 });
 
@@ -543,4 +563,19 @@ test("several profiles need --server or $SITEY_SERVER", async () => {
   } finally {
     delete process.env.SITEY_SERVER;
   }
+});
+
+test("env values are disclosed only by explicit env commands", async () => {
+  writeProfiles();
+  envVars = { TOKEN: "deliberate-secret-read" };
+  const names = await cli(["env", "list", "idea-a", "--json"]);
+  assert.equal(names.code, 0);
+  assert.ok(!names.stdout.includes(envVars.TOKEN));
+  const single = await cli(["env", "get", "idea-a", "TOKEN"]);
+  assert.equal(single.code, 0);
+  assert.equal(single.stdout, "deliberate-secret-read\n");
+  const all = await cli(["env", "list", "idea-a", "--values", "--json"]);
+  assert.deepEqual(JSON.parse(all.stdout).values, envVars);
+  const missing = await cli(["env", "get", "idea-a", "MISSING"]);
+  assert.equal(missing.code, 3);
 });

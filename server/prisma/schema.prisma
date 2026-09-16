@@ -83,7 +83,7 @@ model Service {
   dockerfilePath   String @default("") // path to Dockerfile relative to repo root
   serverRunCommand String @default("") // custom CMD for auto-generated server Dockerfile
   containerPort    Int    @default(3000)
-  hostPort      Int?           // auto-allocated fallback port when the service has no routes
+  hostPort      Int?           // legacy fallback port; cleared on upgrade, never assigned
   envVars       String         @default("") // .env format
 
   // Runtime state

@@ -28,7 +28,6 @@ import {
   createNetworkIfMissing,
   generateDockerfile,
   pruneServiceImages,
-  allocateHostPort,
   runBuildContainer,
 } from "./docker.ts";
 import { reloadCaddy } from "./caddy.ts";
@@ -55,7 +54,6 @@ export type DeployDeps = {
   stopAndRemoveContainer: typeof stopAndRemoveContainer;
   createNetworkIfMissing: () => Promise<void>;
   pruneServiceImages: typeof pruneServiceImages;
-  allocateHostPort: () => Promise<number>;
   inspectContainer: (
     id: string,
   ) => Promise<{ State: { Running: boolean; Status: string } }>;
@@ -108,7 +106,6 @@ export const defaultDeps: DeployDeps = {
   stopAndRemoveContainer,
   createNetworkIfMissing,
   pruneServiceImages,
-  allocateHostPort,
   inspectContainer: (id) => docker.getContainer(id).inspect(),
   reloadCaddy,
   isTrackedFile,
@@ -319,7 +316,6 @@ async function deployStatic(
 type ServerDeployResult = {
   containerId: string;
   cName: string;
-  hostPort: number | null;
 };
 
 async function deployServer(
@@ -345,20 +341,12 @@ async function deployServer(
     onLog,
   });
 
-  // 3. Resolve host port fallback (used when the service has no routable routes)
-  const hasRoutableRoutes = service.routes.some(
-    (r: RouteWithDomain) => r.domain || r.pathPrefix,
-  );
-  let hostPort = service.hostPort;
-  if (!hasRoutableRoutes && hostPort === null) {
-    hostPort = await deps.allocateHostPort();
+  // Clear obsolete fallback-port metadata. Runtime containers never publish ports.
+  if (service.hostPort !== null) {
     await deps.db.service.update({
       where: { id: service.id },
-      data: { hostPort },
+      data: { hostPort: null },
     });
-    onLog(
-      `[deploy] No routes configured — assigned fallback host port ${hostPort}`,
-    );
   }
 
   // 4. Run container (clean up legacy names first)
@@ -376,7 +364,6 @@ async function deployServer(
     imageTag: tag,
     containerName: cName,
     envVars,
-    hostPort,
     onLog,
   });
 
@@ -396,11 +383,7 @@ async function deployServer(
   onLog(
     `[deploy] Deployment successful! Container: ${cName} (${containerId.slice(0, 12)})`,
   );
-  if (hostPort && !hasRoutableRoutes) {
-    onLog(`[deploy] Accessible at: http://<server-ip>:${hostPort}`);
-  }
-
-  return { containerId, cName, hostPort };
+  return { containerId, cName };
 }
 
 // ── Core deployment flow ──────────────────────────────────────────────────────

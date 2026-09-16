@@ -25,8 +25,8 @@ export function envLineKey(line: string): string | null {
 }
 
 /**
- * Variable names only, in file order, without repeats. Values are secrets and
- * never leave the server through the CLI or the export.
+ * Variable names only, in file order, without repeats. Values are omitted from routine CLI output and exports.
+ * Administrators can explicitly read them through the env value procedures.
  */
 export function envVarNames(raw: string): string[] {
   const names = raw

@@ -1,5 +1,5 @@
 # Bootstrap config — loaded when Caddy starts.
-# sitey-api pushes an updated config via POST caddy:2019/load on startup
+# sitey-api pushes an updated config via POST /load over the admin Unix socket on startup
 # and whenever domains/deployments change (to add user domain blocks).
 # This file only handles the management UI — it never needs to change.
 #
@@ -8,7 +8,7 @@
 # this static file can't look up). The ~second before that push isn't recorded —
 # acceptable for best-effort analytics. See docs/design/analytics.md.
 {
-    admin 0.0.0.0:2019
+    admin unix//run/caddy-admin/admin.sock
 }
 
 :80 {

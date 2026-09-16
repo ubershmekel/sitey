@@ -94,7 +94,6 @@ function makeDeps(overrides: Partial<DeployDeps> = {}): DeployDeps {
     stopAndRemoveContainer: async () => {},
     createNetworkIfMissing: async () => {},
     pruneServiceImages: async () => {},
-    allocateHostPort: async () => 8080,
     inspectContainer: async () => ({
       State: { Running: true, Status: "running" },
     }),

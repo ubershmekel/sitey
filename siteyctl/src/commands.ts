@@ -178,6 +178,7 @@ function liveInput(
   deployment: LiveInput["deployment"],
 ): LiveInput {
   return {
+    serviceId: view.id,
     active: view.active,
     deployMode: view.deployMode,
     deployment,
@@ -457,6 +458,7 @@ const handlers: Record<string, Handler> = {
       repoName,
       deployMode,
       githubMode,
+      routes,
       ...withoutUndefined(settings),
     });
     const ref = `service-${created.id}`;
@@ -464,31 +466,9 @@ const handlers: Record<string, Handler> = {
       `Created ${name} (${ref}). First deploy queued (deployment ${created.deploymentId}).`,
     );
 
-    const added: {
-      route: string;
-      tlsStatus: string;
-      alreadyExisted: boolean;
-    }[] = [];
-    for (const route of routes) {
-      try {
-        const r = await api.services.addRoute.mutate({
-          serviceId: created.id,
-          host: route,
-        });
-        added.push({
-          route: r.routeString ?? route,
-          tlsStatus: r.tlsStatus,
-          alreadyExisted: r.alreadyExisted,
-        });
-        ctx.log(`Route added: ${r.routeString}`);
-      } catch (err) {
-        const report = describeError(err);
-        throw new CliError(
-          `${name} (${ref}) was created, but adding route ${route} failed: ${report.message}\nFix it, then: siteyctl route add ${name} ${route}`,
-          report.exitCode,
-        );
-      }
-    }
+    const added = created.routes;
+    if (created.warning) ctx.log(`Warning: ${created.warning}`);
+    for (const route of added) ctx.log(`Route added: ${route.route}`);
 
     const next = [`Next: siteyctl status ${name} --wait`];
     if (githubMode === "webhook") {
@@ -503,6 +483,7 @@ const handlers: Record<string, Handler> = {
         name,
         deploymentId: created.deploymentId,
         routes: added,
+        warning: created.warning,
       },
       text: [`${name} (${ref})`, ...next].join("\n"),
     };
@@ -551,22 +532,27 @@ const handlers: Record<string, Handler> = {
 
   async "service deactivate"(ctx) {
     const service = await resolveService(ctx);
-    await ctx.api().services.deactivate.mutate({ id: service.id });
+    const result = await ctx
+      .api()
+      .services.deactivate.mutate({ id: service.id });
+    if (result.warning) ctx.log(`Warning: ${result.warning}`);
     return {
       json: {
         id: service.id,
         ref: service.ref,
         name: service.name,
         active: false,
+        warning: result.warning,
       },
-      text: `Deactivated ${label(service)}: no longer served; data kept.\nUndo: siteyctl service activate ${service.name}`,
+      text: `Deactivated ${label(service)}: routing removal requested; data kept.\nUndo: siteyctl service activate ${service.name}`,
     };
   },
 
   async "service activate"(ctx) {
     const service = await resolveService(ctx);
     const api = ctx.api();
-    await api.services.activate.mutate({ id: service.id });
+    const result = await api.services.activate.mutate({ id: service.id });
+    if (result.warning) ctx.log(`Warning: ${result.warning}`);
     const view = await api.services.describe.query({ id: service.id });
     const hint =
       view.deployMode === "server"
@@ -578,6 +564,7 @@ const handlers: Record<string, Handler> = {
         ref: service.ref,
         name: service.name,
         active: true,
+        warning: result.warning,
       },
       text: `Activated ${label(service)}.\n${hint}`,
     };
@@ -600,15 +587,17 @@ const handlers: Record<string, Handler> = {
         ctx.inv.command,
       );
     }
-    await ctx
+    const result = await ctx
       .api()
       .services.delete.mutate({ id: service.id, confirmName: confirm });
+    if (result.warning) ctx.log(`Warning: ${result.warning}`);
     return {
       json: {
         id: service.id,
         ref: service.ref,
         name: service.name,
         deleted: true,
+        warning: result.warning,
       },
       text: `Deleted ${label(service)}.`,
     };
@@ -620,6 +609,7 @@ const handlers: Record<string, Handler> = {
       serviceId: service.id,
       host: arg(ctx, "route"),
     });
+    if (r.warning) ctx.log(`Warning: ${r.warning}`);
     const tls = r.httpOnly ? "" : ` (tls ${r.tlsStatus})`;
     return {
       json: {
@@ -628,6 +618,7 @@ const handlers: Record<string, Handler> = {
         httpOnly: r.httpOnly,
         tlsStatus: r.tlsStatus,
         alreadyExisted: r.alreadyExisted,
+        warning: r.warning,
       },
       text: r.alreadyExisted
         ? `${label(service)} already has route ${r.routeString}; nothing changed.`
@@ -638,17 +629,32 @@ const handlers: Record<string, Handler> = {
   async "route remove"(ctx) {
     const service = await resolveService(ctx);
     const route = arg(ctx, "route");
-    await ctx
+    const result = await ctx
       .api()
       .services.removeRoute.mutate({ serviceId: service.id, host: route });
+    if (result.warning) ctx.log(`Warning: ${result.warning}`);
+    const absent = "alreadyAbsent" in result && result.alreadyAbsent;
     return {
-      json: { service, route, removed: true },
-      text: `Removed route ${route} from ${label(service)}.`,
+      json: { service, route, removed: !absent, warning: result.warning },
+      text: absent
+        ? `${label(service)} has no route ${route}; nothing changed.`
+        : `Removed route ${route} from ${label(service)}.`,
     };
   },
 
   async "env list"(ctx) {
     const service = await resolveService(ctx);
+    if (flag(ctx, "values")) {
+      const values = await ctx
+        .api()
+        .services.envValues.query({ id: service.id });
+      return {
+        json: { service, values },
+        text: Object.entries(values)
+          .map(([name, value]) => `${name}=${value}`)
+          .join("\n"),
+      };
+    }
     const view = await ctx.api().services.describe.query({ id: service.id });
     return {
       json: { service, env: view.env },
@@ -656,6 +662,14 @@ const handlers: Record<string, Handler> = {
         ? view.env.join("\n")
         : `${label(service)} has no env vars.`,
     };
+  },
+
+  async "env get"(ctx) {
+    const service = await resolveService(ctx);
+    const result = await ctx
+      .api()
+      .services.getEnvVar.query({ id: service.id, name: arg(ctx, "VAR") });
+    return { json: { service, ...result }, text: result.value };
   },
 
   async "env set"(ctx) {

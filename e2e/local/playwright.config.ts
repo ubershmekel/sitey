@@ -55,6 +55,7 @@ fs.writeFileSync(STATE_FILE, JSON.stringify({ dbPath: DB_PATH }));
 // Run synchronously here (before webServers start) — not in globalSetup, because
 // in Playwright 1.x webServers can start in parallel with / before globalSetup.
 console.log(`[e2e] Applying schema to test DB: ${DB_PATH}`);
+fs.writeFileSync(DB_PATH, ""); // Prisma's Windows engine needs an existing file.
 execSync("npm run db:push", {
   cwd: SERVER_DIR,
   env: { ...process.env, DATABASE_URL: `file:${DB_PATH}` },

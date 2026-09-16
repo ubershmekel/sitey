@@ -72,29 +72,14 @@ export async function buildImage(opts: {
 }
 
 // ── Host port allocation ──────────────────────────────────────────────────────
-// Used for services with no domain — assigns a stable host port so the app is
-// reachable at http://<server-ip>:<hostPort>.
-
-export async function allocateHostPort(): Promise<number> {
-  const highest = await db.service.findFirst({
-    where: { hostPort: { not: null } },
-    orderBy: { hostPort: "desc" },
-    select: { hostPort: true },
-  });
-  return (highest?.hostPort ?? 19999) + 1;
-}
-
-// ── Run / replace container ───────────────────────────────────────────────────
-
 export async function runOrReplaceContainer(opts: {
   service: Service;
   imageTag: string;
   containerName: string;
   envVars: Record<string, string>;
-  hostPort: number | null;
   onLog: (line: string) => void;
 }): Promise<string> {
-  const { service, imageTag, containerName, envVars, hostPort, onLog } = opts;
+  const { service, imageTag, containerName, envVars, onLog } = opts;
 
   await stopAndRemoveContainer(containerName, onLog);
 
@@ -106,14 +91,6 @@ export async function runOrReplaceContainer(opts: {
 
   onLog(`[docker] Creating container ${containerName}`);
 
-  const portBindings = hostPort
-    ? {
-        [`${service.containerPort}/tcp`]: [
-          { HostIp: "0.0.0.0", HostPort: String(hostPort) },
-        ],
-      }
-    : {};
-
   const container = await docker.createContainer({
     Image: imageTag,
     name: containerName,
@@ -123,7 +100,9 @@ export async function runOrReplaceContainer(opts: {
     HostConfig: {
       NetworkMode: SITEY_NETWORK,
       RestartPolicy: { Name: "unless-stopped" },
-      PortBindings: portBindings,
+      // Only Caddy publishes host ports; applications stay on the Docker network.
+      PortBindings: {},
+      PublishAllPorts: false,
       Binds: [`sitey-data-${service.id}:/data`],
     },
   });

@@ -34,7 +34,9 @@ VPS whose panel is `sitey.andluck.com`.
   [Why not YAML apply](#why-not-yaml-apply-yet).
 - **DNS automation.** DNS is set once per domain by a human (apex + wildcard A
   records). Sitey only needs to use those domains.
-- **Secrets in files.** Env var names can be listed; values are write-only.
+- **Secrets in exported files.** Exports contain env var names only.
+  Administrators can explicitly read values through the CLI, with the same
+  authority as the UI.
 - **Moving services or data between VPSes**, team GitOps, managing the VPS OS,
   buying domains.
 
@@ -199,9 +201,12 @@ The rules, in order:
 3. Otherwise, fail with a hint:
    `No domain covers shop.example.com. Add one with siteyctl domain add`.
 
-Route strings never create domains implicitly. `route remove` resolves the
-string the same way to find the route to delete, and `siteyctl service get` and
-the export print routes back in this form.
+Route strings never create domains implicitly. Ownership checks and
+`route remove` match the effective hostname and path across exact and wildcard
+Domain rows, so adding an exact Domain does not hide an existing wildcard-backed
+route. New routes prefer the exact Domain row. `siteyctl service get` and the
+export print routes in this same string form. The management hostname's root is
+reserved for Sitey.
 
 Add an optional `host` input to `addRoute` (mutually exclusive with
 `domainId`/`subdomain`) so the UI and CLI share the resolver. Adding a route
@@ -213,8 +218,9 @@ it. Adding one that another service already has is a conflict (exit 3).
 `envVars` is stored as one `.env`-format string, and today the only write is a
 whole-string `services.update`. Add `services.setEnvVar({ id, name, value })`
 and `services.unsetEnvVar({ id, name })`, which edit one entry using the same
-parser as deployment. Reads for the CLI return names only. Saving a value does
-not redeploy, matching the UI.
+parser as deployment. Routine CLI reads return names only. `env get` and
+`env list --values` explicitly return values to authenticated administrators.
+Saving a value does not redeploy, matching the UI.
 
 ### Detecting the pending page
 
@@ -247,7 +253,8 @@ siteyctl service delete <service> --confirm <name>   # deletes files and history
 siteyctl route add <service> <route>
 siteyctl route remove <service> <route>
 
-siteyctl env list <service>                    # names only
+siteyctl env list <service> [--values]         # names by default; --values reveals secrets
+siteyctl env get <service> <VAR>               # explicitly read one secret
 siteyctl env set <service> <VAR>               # value from stdin
 siteyctl env unset <service> <VAR>
 
@@ -273,11 +280,14 @@ Conventions:
   timeout.
 - `service create` defaults to the GitHub App integration and fails early if the
   App can't see the repo. `--github-mode webhook` is available for repos without
-  the App. It queues the first deploy, as the UI does, then adds any `--route`s.
+  the App. It saves the service and all `--route`s atomically, then queues the
+  first deploy.
 - `service delete` is deliberately awkward. Prefer `deactivate`, which stops the
   container and removes routes from Caddy while keeping data.
 - Env values come from stdin, never argv, so they don't land in shell history.
-  They are never printed.
+  Ordinary command output omits them. `env get` and `env list --values`
+  explicitly print secrets; use their output accordingly. Mutation responses
+  contain acknowledgments.
 - Profiles live in `~/.config/sitey/servers.json` (`%APPDATA%\sitey` on Windows)
   with owner-only permissions. The CLI requires HTTPS, except for `localhost` /
   `127.0.0.1` URLs (an SSH tunnel).
@@ -438,7 +448,8 @@ Each step is usable on its own.
    `service create|set|rename|activate|deactivate|delete`, `route add|remove`,
    `env set|unset|list`, `domain add`. Tests: resolver picks the exact row, then
    the most specific wildcard; rerunning `route add` is a no-op; env values
-   never appear in output.
+   appear only in explicit value reads, not mutation responses or routine
+   output.
 5. **Deploy and verify.** `X-Sitey-Pending` header, `deploy --wait`,
    `status --wait`. Tests: the pending page is not live; TLS failure and timeout
    report which check failed.
@@ -487,9 +498,10 @@ Where the build differs from, or adds to, the proposal above:
   lags new installations.
 - **CLI views.** `services.resolve({ ref })`, `services.summaries`, and
   `services.describe({ id })` return route strings and env var names only, so
-  env values never reach the client. `services.create` also returns the queued
-  `deploymentId`, and `services.delete` accepts `confirmName`, so a rename
-  between resolving and deleting can't delete the wrong service.
+  values stay out of routine output; explicit env reads use separate procedures.
+  `services.create` also returns the queued `deploymentId`, and
+  `services.delete` accepts `confirmName`, so a rename between resolving and
+  deleting can't delete the wrong service.
 - **Tokens.** API keys are prefixed `sitey_` so leaked ones are easy to spot.
   Bearer auth accepts only `apikey` tokens and the cookie accepts only `session`
   tokens. An invalid bearer header never falls back to the cookie.
@@ -509,3 +521,16 @@ Where the build differs from, or adds to, the proposal above:
   reactivated static site serves again without waiting for another change.
 - **Not done here:** the `myswe/AGENTS.md` lines (that repo isn't this one), and
   the "fresh agent with only `--help`" trial.
+
+## Review fixes and port policy
+
+See [Ports and management access](ports.md) for the public-port policy,
+admin-socket isolation, and upgrade handling for existing containers. There are
+no automatic public fallback ports. The CLI requires the updated server's
+service response header for live verification.
+
+Route mutations return delivery warnings when Caddy cannot apply saved state.
+Repeating route add/remove or activate/deactivate retries delivery, including
+when the requested database state already exists. Concurrent env edits use
+compare-and-retry writes. The unique-name migration reserves original and
+generated names before renaming to avoid collisions during upgrades.

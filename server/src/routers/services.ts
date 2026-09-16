@@ -12,7 +12,7 @@ import {
   probeRouteTls,
   scheduleRouteTlsProbe,
 } from "../services/caddy.ts";
-import { enqueueDeployment } from "../services/deployment.ts";
+import { enqueueDeployment, parseEnvString } from "../services/deployment.ts";
 import {
   stopAndRemoveContainer,
   pruneServiceImages,
@@ -28,18 +28,61 @@ import {
   parseServiceRef,
   serviceNameSchema,
 } from "../lib/serviceRef.ts";
-import {
-  formatRouteString,
-  parseRouteString,
-  resolveRouteHost,
-  RouteStringError,
-} from "../lib/routeString.ts";
+import { formatRouteString } from "../lib/routeString.ts";
 import {
   EnvFileError,
   envVarNames,
   setEnvVar,
   unsetEnvVar,
 } from "../lib/envFile.ts";
+
+import type { Prisma } from "../generated/prisma/client.ts";
+import {
+  resolveRouteInput,
+  routesForHost,
+  assertRouteAllowed,
+  assertCompatibleHost,
+  insertResolvedRoute,
+  parseRoute,
+} from "../services/routes.ts";
+
+async function routingWarning(): Promise<string | null> {
+  return reloadCaddy().then(
+    () => null,
+    (err) => {
+      console.error("[services] Caddy configuration delivery failed:", err);
+      return `Configuration saved, but Caddy reload failed: ${String(err)}. Retry the command to apply routing.`;
+    },
+  );
+}
+
+async function editEnv(
+  id: number,
+  edit: (raw: string) => { envVars: string; removed?: boolean },
+) {
+  // Compare-and-swap protects different variables from lost updates, including
+  // races with the UI's whole-file editor. Re-read after every conflict.
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const service = await findServiceOrThrow(id);
+    let result;
+    try {
+      result = edit(service.envVars);
+    } catch (err) {
+      if (err instanceof EnvFileError)
+        throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
+      throw err;
+    }
+    const updated = await db.service.updateMany({
+      where: { id, envVars: service.envVars },
+      data: { envVars: result.envVars },
+    });
+    if (updated.count) return result;
+  }
+  throw new TRPCError({
+    code: "CONFLICT",
+    message: "Environment changed repeatedly; retry this edit.",
+  });
+}
 
 const SUBDOMAIN_LABEL_REGEX = /^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$/;
 const randomSubdomainSuffix = customAlphabet(
@@ -120,15 +163,16 @@ async function findOrCreateRepo(
   repoOwner: string,
   repoName: string,
   githubMode: string,
+  store: Prisma.TransactionClient = db,
 ): Promise<{ id: number }> {
   // SQLite LIKE is case-insensitive by default for ASCII
-  const allRepos = await db.repo.findMany({
+  const allRepos = await store.repo.findMany({
     where: { repoOwner, repoName },
     select: { id: true },
   });
   // Fallback: try case-insensitive match manually
   if (allRepos.length === 0) {
-    const all = await db.repo.findMany({
+    const all = await store.repo.findMany({
       select: { id: true, repoOwner: true, repoName: true },
     });
     const match = all.find(
@@ -140,7 +184,7 @@ async function findOrCreateRepo(
   } else {
     return allRepos[0];
   }
-  return db.repo.create({
+  return store.repo.create({
     data: { name: repoName, repoOwner, repoName, githubMode },
   });
 }
@@ -161,43 +205,6 @@ async function findServiceOrThrow(id: number) {
   if (!service)
     throw new TRPCError({ code: "NOT_FOUND", message: "Service not found" });
   return service;
-}
-
-/** Resolves a route string (`[http://]host[/path]`) to its Domain row. */
-async function resolveRouteInput(route: string) {
-  let parsed;
-  try {
-    parsed = parseRouteString(route);
-  } catch (err) {
-    if (err instanceof RouteStringError)
-      throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
-    throw err;
-  }
-  const domains = await db.domain.findMany({
-    select: { id: true, hostname: true },
-  });
-  const match = resolveRouteHost(parsed.host, domains);
-  if (!match) {
-    const dot = parsed.host.indexOf(".");
-    const wildcardHint =
-      dot === -1 ? "" : ` or '*.${parsed.host.slice(dot + 1)}'`;
-    throw new TRPCError({
-      code: "NOT_FOUND",
-      message: `No domain covers ${parsed.host}. Add one with siteyctl domain add ${parsed.host}${wildcardHint} (and point its DNS at this server).`,
-    });
-  }
-  return {
-    domain: match.domain,
-    subdomain: match.subdomain,
-    pathPrefix: parsed.pathPrefix,
-    httpOnly: parsed.httpOnly,
-    route: formatRouteString({
-      domain: match.domain,
-      subdomain: match.subdomain,
-      pathPrefix: parsed.pathPrefix,
-      httpOnly: parsed.httpOnly,
-    })!,
-  };
 }
 
 type RouteForView = {
@@ -391,14 +398,16 @@ export const servicesRouter = router({
     )
     .query(async ({ input }) => {
       const resolved = await resolveRouteInput(input.route);
-      const existing = await db.serviceRoute.findFirst({
-        where: {
-          domainId: resolved.domain.id,
-          subdomain: resolved.subdomain,
-          pathPrefix: resolved.pathPrefix,
-        },
-        include: { service: { select: { id: true, name: true } } },
-      });
+      await assertRouteAllowed(
+        resolved.host,
+        resolved.pathPrefix,
+        resolved.httpOnly,
+      );
+      const hostRoutes = await routesForHost(resolved.host);
+      assertCompatibleHost(hostRoutes, resolved.httpOnly);
+      const existing = hostRoutes.find(
+        (r) => r.pathPrefix === resolved.pathPrefix,
+      );
       return {
         route: resolved.route,
         domain: resolved.domain.hostname,
@@ -420,6 +429,7 @@ export const servicesRouter = router({
     .input(
       z.object({
         name: serviceNameSchema,
+        routes: z.array(z.string().min(1)).default([]),
         repoOwner: z.string().min(1),
         repoName: z.string().min(1),
         branch: z.string().default("main"),
@@ -436,66 +446,97 @@ export const servicesRouter = router({
       }),
     )
     .mutation(async ({ input }) => {
-      const { repoOwner, repoName, githubMode, ...serviceData } = input;
-
-      // Checked up front (the unique index is the real guard) so a retried
-      // create doesn't touch the repo's integration settings first.
-      const nameInUse = await db.service.findUnique({
-        where: { name: input.name },
-        select: { id: true },
-      });
-      if (nameInUse) throw nameTaken(input.name);
-
-      // Find or create the Repo
-      const repo = await findOrCreateRepo(repoOwner, repoName, githubMode);
-
-      // Update repo's githubMode if it changed
-      await db.repo.update({
-        where: { id: repo.id },
-        data: { githubMode },
-      });
-
-      let service;
-      try {
-        service = await db.service.create({
-          data: {
-            ...serviceData,
-            repoId: repo.id,
-          },
+      const {
+        repoOwner,
+        repoName,
+        githubMode,
+        routes: routeInputs,
+        ...serviceData
+      } = input;
+      const initialRoutes = await Promise.all(
+        routeInputs.map((route) => resolveRouteInput(route)),
+      );
+      for (const route of initialRoutes)
+        await assertRouteAllowed(route.host, route.pathPrefix, route.httpOnly);
+      const result = await db.$transaction(async (tx) => {
+        // Checked up front (the unique index is the real guard) so a retried
+        // create doesn't touch the repo's integration settings first.
+        const nameInUse = await tx.service.findUnique({
+          where: { name: input.name },
+          select: { id: true },
         });
-      } catch (err) {
-        if (isUniqueViolation(err)) throw nameTaken(input.name);
-        throw err;
-      }
+        if (nameInUse) throw nameTaken(input.name);
 
-      // Create a HookEndpoint for webhook-mode repos (if one doesn't already exist)
-      if (githubMode === "webhook") {
-        const existingEndpoint = await db.hookEndpoint.findFirst({
-          where: { repoId: repo.id, sourceType: "github_webhook" },
+        // Find or create the Repo
+        const repo = await findOrCreateRepo(
+          repoOwner,
+          repoName,
+          githubMode,
+          tx,
+        );
+
+        // Update repo's githubMode if it changed
+        await tx.repo.update({
+          where: { id: repo.id },
+          data: { githubMode },
         });
-        if (!existingEndpoint) {
-          const secret = generateWebhookSecret();
-          await db.hookEndpoint.create({
+
+        let service;
+        try {
+          service = await tx.service.create({
             data: {
-              publicId: nanoid(24),
-              secret,
-              sourceType: "github_webhook",
+              ...serviceData,
               repoId: repo.id,
             },
           });
+        } catch (err) {
+          if (isUniqueViolation(err)) throw nameTaken(input.name);
+          throw err;
         }
-      }
 
-      const deployment = await db.deployment.create({
-        data: {
-          serviceId: service.id,
-          status: "queued",
-          triggeredBy: "manual",
-        },
+        // Create a HookEndpoint for webhook-mode repos (if one doesn't already exist)
+        if (githubMode === "webhook") {
+          const existingEndpoint = await tx.hookEndpoint.findFirst({
+            where: { repoId: repo.id, sourceType: "github_webhook" },
+          });
+          if (!existingEndpoint) {
+            const secret = generateWebhookSecret();
+            await tx.hookEndpoint.create({
+              data: {
+                publicId: nanoid(24),
+                secret,
+                sourceType: "github_webhook",
+                repoId: repo.id,
+              },
+            });
+          }
+        }
+
+        const routes = [];
+        for (const resolved of initialRoutes)
+          routes.push(await insertResolvedRoute(tx, service.id, resolved));
+        const deployment = await tx.deployment.create({
+          data: {
+            serviceId: service.id,
+            status: "queued",
+            triggeredBy: "manual",
+          },
+        });
+        return { service, deployment, routes };
       });
-      enqueueDeployment(service, deployment);
-
-      return { ...service, deploymentId: deployment.id };
+      enqueueDeployment(result.service, result.deployment);
+      const warning = result.routes.length ? await routingWarning() : null;
+      return {
+        id: result.service.id,
+        name: result.service.name,
+        deploymentId: result.deployment.id,
+        routes: result.routes.map((r) => ({
+          route: formatRouteString(r)!,
+          tlsStatus: r.tlsStatus,
+          alreadyExisted: r.alreadyExisted,
+        })),
+        warning,
+      };
     }),
 
   update: settledProcedure
@@ -521,10 +562,9 @@ export const servicesRouter = router({
       const { id, ...rest } = input;
       await findServiceOrThrow(id);
       try {
-        return await db.service.update({
-          where: { id },
-          data: rest,
-        });
+        const updated = await db.service.update({ where: { id }, data: rest });
+        // Mutations acknowledge edits. Secret disclosure requires an explicit read.
+        return { id: updated.id, name: updated.name };
       } catch (err) {
         if (rest.name && isUniqueViolation(err)) throw nameTaken(rest.name);
         throw err;
@@ -532,8 +572,8 @@ export const servicesRouter = router({
     }),
 
   // ── Env vars by name ──────────────────────────────────────────────────────
-  // Edit one entry of the .env string. Values are write-only: responses carry
-  // names, never values. Saving doesn't redeploy (matches the UI).
+  // Edit one entry atomically. Values are readable by administrators through
+  // explicit env reads; routine mutation responses omit them.
 
   setEnvVar: settledProcedure
     .input(
@@ -544,43 +584,49 @@ export const servicesRouter = router({
       }),
     )
     .mutation(async ({ input }) => {
-      const service = await findServiceOrThrow(input.id);
-      let envVars;
-      try {
-        envVars = setEnvVar(service.envVars, input.name, input.value);
-      } catch (err) {
-        if (err instanceof EnvFileError)
-          throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
-        throw err;
-      }
-      await db.service.update({ where: { id: input.id }, data: { envVars } });
+      const { envVars } = await editEnv(input.id, (raw) => ({
+        envVars: setEnvVar(raw, input.name, input.value),
+      }));
       return { ok: true, name: input.name, env: envVarNames(envVars) };
     }),
 
   unsetEnvVar: settledProcedure
     .input(z.object({ id: z.number().int(), name: z.string().min(1) }))
     .mutation(async ({ input }) => {
-      const service = await findServiceOrThrow(input.id);
-      let result;
-      try {
-        result = unsetEnvVar(service.envVars, input.name);
-      } catch (err) {
-        if (err instanceof EnvFileError)
-          throw new TRPCError({ code: "BAD_REQUEST", message: err.message });
-        throw err;
-      }
-      if (result.removed) {
-        await db.service.update({
-          where: { id: input.id },
-          data: { envVars: result.envVars },
-        });
-      }
+      const result = await editEnv(input.id, (raw) =>
+        unsetEnvVar(raw, input.name),
+      );
       return {
         ok: true,
         name: input.name,
-        removed: result.removed,
+        removed: result.removed ?? false,
         env: envVarNames(result.envVars),
       };
+    }),
+
+  envValues: settledProcedure
+    .input(z.object({ id: z.number().int() }))
+    .query(async ({ input }) =>
+      parseEnvString((await findServiceOrThrow(input.id)).envVars),
+    ),
+
+  getEnvVar: settledProcedure
+    .input(
+      z.object({
+        id: z.number().int(),
+        name: z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/),
+      }),
+    )
+    .query(async ({ input }) => {
+      const values = parseEnvString(
+        (await findServiceOrThrow(input.id)).envVars,
+      );
+      if (!Object.hasOwn(values, input.name))
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: `No environment variable named ${input.name}.`,
+        });
+      return { name: input.name, value: values[input.name] };
     }),
 
   delete: settledProcedure
@@ -621,11 +667,7 @@ export const servicesRouter = router({
       fs.rm(rootPath, { recursive: true, force: true }, () => {});
 
       // Reload Caddy so the route is removed
-      reloadCaddy().catch((err) =>
-        console.error("[services] Caddy reload failed after delete:", err),
-      );
-
-      return { ok: true };
+      return { ok: true, warning: await routingWarning() };
     }),
 
   // ── Activate / Deactivate ─────────────────────────────────────────────────
@@ -639,7 +681,7 @@ export const servicesRouter = router({
           code: "NOT_FOUND",
           message: "Service not found",
         });
-      if (!service.active) return { ok: true };
+      if (!service.active) return { ok: true, warning: await routingWarning() };
 
       // Stop & remove Docker container (best-effort, server services only)
       if (service.deployMode === "server") {
@@ -660,11 +702,7 @@ export const servicesRouter = router({
       });
 
       // Reload Caddy so routes stop serving traffic
-      reloadCaddy().catch((err) =>
-        console.error("[services] Caddy reload failed after deactivate:", err),
-      );
-
-      return { ok: true };
+      return { ok: true, warning: await routingWarning() };
     }),
 
   activate: settledProcedure
@@ -676,7 +714,7 @@ export const servicesRouter = router({
           code: "NOT_FOUND",
           message: "Service not found",
         });
-      if (service.active) return { ok: true };
+      if (service.active) return { ok: true, warning: await routingWarning() };
 
       await db.service.update({
         where: { id: input.id },
@@ -685,11 +723,7 @@ export const servicesRouter = router({
 
       // Put the routes back in Caddy. Static sites serve again right away;
       // server apps show the pending page until their next deploy.
-      reloadCaddy().catch((err) =>
-        console.error("[services] Caddy reload failed after activate:", err),
-      );
-
-      return { ok: true };
+      return { ok: true, warning: await routingWarning() };
     }),
 
   // ── Routes ─────────────────────────────────────────────────────────────────
@@ -777,99 +811,39 @@ export const servicesRouter = router({
         }
       }
 
-      if (domain && isLoopbackHost(domain.hostname) && !httpOnly) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message:
-            input.host !== undefined
-              ? `localhost routes are HTTP-only. Use http://${domain.hostname}${pathPrefix}`
-              : "localhost routes must be created as HTTP-only.",
-        });
-      }
-
-      if (domain) {
-        // Adding a route this service already has is a no-op, so reruns are safe.
-        const existing = await db.serviceRoute.findFirst({
-          where: { domainId: domain.id, subdomain, pathPrefix },
-          include: {
-            domain: true,
-            service: { select: { id: true, name: true } },
-          },
-        });
-        if (existing) {
-          const { service: owner, ...existingRoute } = existing;
-          const label = formatRouteString(existingRoute);
-          if (owner.id !== service.id) {
-            throw new TRPCError({
-              code: "CONFLICT",
-              message: `${label} is already routed to service "${owner.name}" (${formatServiceRef(owner.id)}). Remove it there first.`,
-            });
-          }
-          if (existing.httpOnly === httpOnly) {
-            return {
-              ...existingRoute,
-              routeString: label,
-              alreadyExisted: true,
-            };
-          }
-        }
-
-        const sameHostRoutes = await db.serviceRoute.findMany({
-          where: { domainId: domain.id, subdomain },
-          select: { id: true, httpOnly: true },
-        });
-        if (sameHostRoutes.some((other) => other.httpOnly !== httpOnly)) {
-          throw new TRPCError({
-            code: "BAD_REQUEST",
-            message:
-              "All routes on the same host must use the same HTTP-only setting.",
-          });
-        }
-      }
-
       let route;
-      try {
-        route = await db.serviceRoute.create({
-          data: {
-            serviceId: input.serviceId,
-            domainId: domain?.id,
-            pathPrefix,
+      if (domain) {
+        const parsed = parseRoute(
+          formatRouteString({ domain, subdomain, pathPrefix, httpOnly })!,
+        );
+        await assertRouteAllowed(parsed.host, parsed.pathPrefix, httpOnly);
+        const resolved = {
+          ...parsed,
+          domain,
+          subdomain,
+          route: formatRouteString({
+            domain,
             subdomain,
+            pathPrefix: parsed.pathPrefix,
             httpOnly,
-          },
+          })!,
+        };
+        route = await db.$transaction((tx) =>
+          insertResolvedRoute(tx, service.id, resolved),
+        );
+      } else {
+        pathPrefix = parseRoute(`http://localhost${pathPrefix}`).pathPrefix;
+        const created = await db.serviceRoute.create({
+          data: { serviceId: service.id, pathPrefix, subdomain, httpOnly },
           include: { domain: true },
         });
-      } catch (err) {
-        if (isUniqueViolation(err)) {
-          throw new TRPCError({
-            code: "CONFLICT",
-            message: "Route already exists for this host/path.",
-          });
-        }
-        throw err;
+        route = { ...created, alreadyExisted: false };
       }
-
-      // Await Caddy reload so the new hostname is served before we probe TLS.
-      try {
-        await reloadCaddy();
-      } catch (err) {
-        console.error("[services] Caddy reload failed after addRoute:", err);
-      }
-
-      // Probe TLS for the new route's hostname and persist the result.
-      if (route.domain && !route.httpOnly) {
-        try {
-          route.tlsStatus = await probeRouteTls(route);
-        } catch (err) {
-          console.error("[services] TLS probe failed after addRoute:", err);
-        }
-      }
-
-      return {
-        ...route,
-        routeString: formatRouteString(route),
-        alreadyExisted: false,
-      };
+      // An idempotent retry must still deliver the saved configuration.
+      const warning = await routingWarning();
+      if (route.domain && !route.httpOnly && !warning)
+        scheduleRouteTlsProbe(route);
+      return { ...route, routeString: formatRouteString(route), warning };
     }),
 
   removeRoute: settledProcedure
@@ -887,20 +861,21 @@ export const servicesRouter = router({
           where: { id: input.routeId },
         });
       } else {
-        const resolved = await resolveRouteInput(input.host);
-        route = await db.serviceRoute.findFirst({
-          where: {
-            serviceId: input.serviceId,
-            domainId: resolved.domain.id,
-            subdomain: resolved.subdomain,
-            pathPrefix: resolved.pathPrefix,
-          },
-        });
+        const parsed = parseRoute(input.host);
+        await findServiceOrThrow(input.serviceId);
+        // All routes on a host share one HTTP-only setting, so the scheme is not
+        // part of the route's identity: `localhost/app` removes `http://localhost/app`.
+        route = (await routesForHost(parsed.host)).find(
+          (r) =>
+            r.serviceId === input.serviceId &&
+            r.pathPrefix === parsed.pathPrefix,
+        );
         if (!route)
-          throw new TRPCError({
-            code: "NOT_FOUND",
-            message: `This service has no route ${resolved.route}. See its routes with siteyctl service get.`,
-          });
+          return {
+            ok: true,
+            alreadyAbsent: true,
+            warning: await routingWarning(),
+          };
       }
       if (!route)
         throw new TRPCError({ code: "NOT_FOUND", message: "Route not found" });
@@ -910,10 +885,7 @@ export const servicesRouter = router({
           message: "This route cannot be removed",
         });
       await db.serviceRoute.delete({ where: { id: route.id } });
-      reloadCaddy().catch((err) =>
-        console.error("[services] Caddy reload failed after removeRoute:", err),
-      );
-      return { ok: true };
+      return { ok: true, warning: await routingWarning() };
     }),
 
   retryRouteTls: settledProcedure

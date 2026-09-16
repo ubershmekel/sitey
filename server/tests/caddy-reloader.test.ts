@@ -47,6 +47,7 @@ test("concurrent reloads: coalesced into one follow-up build+push", async () => 
   });
 
   const r1 = reloader.reload(); // starts, pauses at first build
+  await Promise.resolve(); // allow the first build to reach its gate
   void reloader.reload(); // sets reloadQueued = true, returns
   void reloader.reload(); // reloadQueued already true, no-op
 

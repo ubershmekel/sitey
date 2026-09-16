@@ -271,9 +271,25 @@ export const COMMANDS: CommandSpec[] = [
   {
     name: "env list",
     args: ["service"],
-    summary: "List env var names (values are never shown)",
-    options: {},
+    summary: "List env var names; --values explicitly reveals secrets",
+    description:
+      "Administrators can read values through the CLI and web UI. Values are omitted by default to keep secrets out of transcripts and exports.",
+    options: {
+      values: {
+        type: "boolean",
+        description: "Print secret values as well as names.",
+      },
+    },
     examples: ["siteyctl env list idea-b-api"],
+  },
+  {
+    name: "env get",
+    args: ["service", "VAR"],
+    summary: "Explicitly read one env var's secret value",
+    description:
+      "Prints the value to stdout. Treat the output as a secret; avoid recording it in logs or agent transcripts.",
+    options: {},
+    examples: ["siteyctl env get idea-b-api DATABASE_URL"],
   },
   {
     name: "env set",

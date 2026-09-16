@@ -48,7 +48,10 @@ test("path-prefix routes redirect the bare prefix with an explicit matcher", () 
     { deployMode: "server", containerName: "c", containerRunning: true },
   ]) {
     const out = render(overrides, "/app");
-    assert.match(out, /handle \/app \{\n.*\n {8}redir \* \/app\/ 308\n/);
+    assert.match(
+      out,
+      /handle \/app \{\n(?:[^}\n]*\n)*? {8}redir \* \/app\/ 308\n/,
+    );
     assert.doesNotMatch(out, /redir \/app\//);
   }
 });

@@ -251,3 +251,25 @@ test("waitForLive stops at once on a failed deploy, but retries a route failure"
   assert.equal(gaveUp.state, "fail");
   assert.equal(loads, 3);
 });
+
+test("a deployment without routes is not publicly verified", async () => {
+  const p = probes();
+  const report = await runChecks({ ...live, routes: [] }, p);
+  assert.equal(report.live, false);
+  assert.equal(report.state, "fail");
+  assert.match(report.checks.at(-1)!.detail, /no public route/);
+  assert.deepEqual(p.calls, []);
+});
+
+test("successful HTTP must identify the intended service", async () => {
+  for (const header of [null, "1", "42"]) {
+    const check = await probeHttp("https://example.com", "static", {
+      serviceId: 42,
+      fetchImpl: async () =>
+        new Response("ok", {
+          headers: header ? { "X-Sitey-Service": header } : {},
+        }),
+    });
+    assert.equal(check.state, header === "42" ? "pass" : "fail");
+  }
+});

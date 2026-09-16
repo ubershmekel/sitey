@@ -17,6 +17,7 @@ import { resolvePublicSiteUrl, isLoopbackHost } from "./siteUrl.ts";
 import { docker } from "./docker.ts";
 import { UNKNOWN_SERVICE_ID } from "../lib/constants.ts";
 import tls from "node:tls";
+import { caddyAdminAddress, pushCaddyViaSocket } from "./caddyAdmin.ts";
 
 const CADDY_ADMIN_URL = process.env.CADDY_ADMIN_URL ?? "http://caddy:2019";
 const CADDY_ADMIN_ORIGIN =
@@ -44,6 +45,7 @@ export type LetsEncryptStatus = "pending" | "active" | "error";
 
 /** Response header set wherever a route serves the pending.html placeholder. */
 export const PENDING_HEADER = "X-Sitey-Pending";
+export const SERVICE_HEADER = "X-Sitey-Service";
 
 function getHostFromUrl(rawUrl: string): string {
   try {
@@ -238,6 +240,7 @@ function appendRequestsLogSnippet(lines: string[]): void {
 /** Tag the current request with its analytics service id (per-route field). */
 function appendLogServiceId(lines: string[], serviceId: number): void {
   lines.push(`        log_append service_id ${serviceId}`);
+  lines.push(`        header >${SERVICE_HEADER} ${serviceId}`);
 }
 
 function appendAdminHandlers(lines: string[]): void {
@@ -326,6 +329,20 @@ export function appendRouteHandler(
   lines: string[],
   route: CaddyServiceRoute,
 ): void {
+  const rendered: string[] = [];
+  appendRouteBody(rendered, route);
+  // Keep root handlers and their headers scoped, so a pending root does not
+  // rewrite or label requests handled by another service's path-prefix route.
+  if (route.pathPrefix) lines.push(...rendered);
+  else
+    lines.push(
+      "    handle {",
+      ...rendered.map((line) => `    ${line}`),
+      "    }",
+    );
+}
+
+function appendRouteBody(lines: string[], route: CaddyServiceRoute): void {
   const svc = route.service!;
   const staticReady =
     svc.deployMode === "static" &&
@@ -340,8 +357,8 @@ export function appendRouteHandler(
   // Every route tags its requests with the analytics service id (see Mapping in
   // docs/design/analytics.md). For path-prefix routes the tag goes inside each
   // handle/handle_path block; for a bare catch-all it's a block-level directive.
-  const tagInner = `        log_append service_id ${svc.id}`;
-  const tagOuter = `    log_append service_id ${svc.id}`;
+  const tagInner = `        log_append service_id ${svc.id}\n        header >${SERVICE_HEADER} ${svc.id}`;
+  const tagOuter = `    log_append service_id ${svc.id}\n    header >${SERVICE_HEADER} ${svc.id}`;
 
   if (!staticReady && !serverReady) {
     // The placeholder page answers 200, so mark it: `siteyctl status` must not
@@ -669,7 +686,7 @@ async function buildCaddyConfig(): Promise<BuiltCaddyConfig> {
 
   // Global options — enable admin API so we can push configs
   lines.push("{");
-  lines.push("    admin 0.0.0.0:2019");
+  lines.push(`    admin ${caddyAdminAddress()}`);
   lines.push("}");
   lines.push("");
 
@@ -695,19 +712,57 @@ async function buildCaddyConfig(): Promise<BuiltCaddyConfig> {
     ? `https://${siteyNamedDomain}`
     : null;
 
-  // Collect path-prefix routes on wildcard domains that resolve to the mgmt hostname.
-  // These are embedded in the management block so the sitey app still handles everything else.
-  const mgmtRoutes: CaddyServiceRoute[] = [];
-  if (siteyNamedDomain) {
-    for (const domain of domains) {
-      if (!domain.hostname.startsWith("*.")) continue;
-      const serviceRoutes = toServiceRoutes(domain.routes, runningContainers);
-      for (const route of serviceRoutes) {
-        const rh = resolveRouteHostname(domain.hostname, route.subdomain);
-        if (rh === siteyNamedDomain && route.pathPrefix) mgmtRoutes.push(route);
+  // Group by effective hostname, regardless of which Domain row stores a route.
+  // Exact-domain settings take precedence without discarding wildcard routes.
+  const hosts = new Map<
+    string,
+    {
+      routes: CaddyServiceRoute[];
+      email: string;
+      fallback: boolean;
+      exact: boolean;
+      probe: boolean;
+    }
+  >();
+  for (const domain of domains) {
+    const wildcard = domain.hostname.startsWith("*.");
+    const add = (host: string, routes: CaddyServiceRoute[], probe = false) => {
+      const current = hosts.get(host);
+      if (current) {
+        current.routes.push(...routes);
+        if (!wildcard) {
+          current.email = domain.letsEncryptEmail;
+          current.fallback = domain.status !== "active";
+          current.exact = true;
+          current.probe = false;
+        }
+        if (routes.length) current.probe = false;
+      } else
+        hosts.set(host, {
+          routes,
+          email: domain.letsEncryptEmail,
+          fallback: domain.status !== "active",
+          exact: !wildcard,
+          probe,
+        });
+    };
+    const routes = toServiceRoutes(domain.routes, runningContainers);
+    if (!wildcard) add(domain.hostname, routes);
+    else {
+      for (const route of routes) {
+        const host = resolveRouteHostname(domain.hostname, route.subdomain);
+        if (host) add(host, [route]);
       }
+      const probeHost = getWildcardStatusProbeHostname(domain.hostname);
+      if (probeHost && !hosts.has(probeHost)) add(probeHost, [], true);
+      const panelHost = `sitey.${domain.hostname.slice(2)}`;
+      if (domain.siteySubdomainsEnabled && !hosts.has(panelHost))
+        add(panelHost, []);
     }
   }
+  const mgmtRoutes = siteyNamedDomain
+    ? (hosts.get(siteyNamedDomain)?.routes ?? []).filter((r) => r.pathPrefix)
+    : [];
 
   // Always emit a plain :80 block — works on fresh installs before DNS/TLS is set up.
   lines.push(":80 {");
@@ -728,80 +783,15 @@ async function buildCaddyConfig(): Promise<BuiltCaddyConfig> {
     lines.push("");
   }
 
-  // User domains.
-  // For wildcard domains, we emit concrete host blocks per route subdomain
-  // (for example: app.example.com) instead of a raw '*.example.com' block.
-  for (const domain of domains) {
-    const serviceRoutes = toServiceRoutes(domain.routes, runningContainers);
-
-    const httpFallback = domain.status !== "active";
-
-    if (!domain.hostname.startsWith("*.")) {
-      const hostHttpOnly = serviceRoutes.some((route) => route.httpOnly);
-      appendSiteBlock(
-        siteBlocks,
-        domain.hostname,
-        domain.letsEncryptEmail,
-        serviceRoutes,
-        { httpFallback, httpOnly: hostHttpOnly },
-      );
-      continue;
-    }
-
-    const routesByHostname = new Map<string, CaddyServiceRoute[]>();
-    for (const route of serviceRoutes) {
-      const routeHostname = resolveRouteHostname(
-        domain.hostname,
-        route.subdomain,
-      );
-      if (!routeHostname) continue;
-      const existing = routesByHostname.get(routeHostname);
-      if (existing) existing.push(route);
-      else routesByHostname.set(routeHostname, [route]);
-    }
-
-    const probeHostname = getWildcardStatusProbeHostname(domain.hostname);
-    if (
-      probeHostname &&
-      !routesByHostname.has(probeHostname) &&
-      probeHostname !== siteyNamedDomain
-    ) {
-      appendProbeSiteBlock(siteBlocks, probeHostname, domain.letsEncryptEmail);
-    }
-
-    if ((domain as any).siteySubdomainsEnabled) {
-      const siteySubdomain = `sitey.${domain.hostname.slice(2)}`;
-      // Skip if the management site already owns this hostname (avoids duplicate block)
-      const mgmtOwnsIt =
-        siteyDomain &&
-        sanitizeDnsName(siteyDomain) === sanitizeDnsName(siteySubdomain);
-      if (!mgmtOwnsIt && !routesByHostname.has(siteySubdomain)) {
-        appendSiteBlock(
-          siteBlocks,
-          siteySubdomain,
-          domain.letsEncryptEmail,
-          [],
-          {
-            httpFallback,
-          },
-        );
-      }
-    }
-
-    for (const [hostname, hostRoutes] of routesByHostname.entries()) {
-      if (hostname === siteyNamedDomain) continue; // management block already owns this hostname
-      const hostHttpOnly = hostRoutes.some((route) => route.httpOnly);
-      appendSiteBlock(
-        siteBlocks,
-        hostname,
-        domain.letsEncryptEmail,
-        hostRoutes,
-        {
-          httpFallback,
-          httpOnly: hostHttpOnly,
-        },
-      );
-    }
+  for (const [hostname, host] of hosts) {
+    if (hostname === siteyNamedDomain) continue;
+    if (host.probe && !host.routes.length && !host.exact)
+      appendProbeSiteBlock(siteBlocks, hostname, host.email);
+    else
+      appendSiteBlock(siteBlocks, hostname, host.email, host.routes, {
+        httpFallback: host.fallback,
+        httpOnly: host.routes.some((r) => r.httpOnly),
+      });
   }
 
   for (const block of mergeRenderedSiteBlocks(siteBlocks)) {
@@ -890,6 +880,11 @@ export function scheduleDomainStatusRefresh(domain: {
 // ---------------------------------------------------------------------------
 
 async function doPush(caddyfile: string): Promise<void> {
+  // Validate the production policy even if the caller supplied raw config.
+  caddyAdminAddress();
+  if (process.env.CADDY_ADMIN_SOCKET) {
+    return pushCaddyViaSocket(process.env.CADDY_ADMIN_SOCKET, caddyfile);
+  }
   const adminUrl = new URL(CADDY_ADMIN_URL);
   const adminPort = adminUrl.port || "2019";
 
@@ -912,6 +907,7 @@ async function doPush(caddyfile: string): Promise<void> {
         Origin: origin,
       },
       body: caddyfile,
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (resp.ok) return;
@@ -934,7 +930,7 @@ async function doPush(caddyfile: string): Promise<void> {
 export class CaddyReloader {
   lastPushedCaddyfile: string | null = null;
   lastPushedAt: Date | null = null;
-  private reloadInProgress = false;
+  private inFlight: Promise<void> | null = null;
   private reloadQueued = false;
   private readonly buildFn: () => Promise<string>;
   private readonly pushFn: (caddyfile: string) => Promise<void>;
@@ -954,25 +950,26 @@ export class CaddyReloader {
     this.afterPushFn = afterPush;
   }
 
-  async reload(): Promise<void> {
-    if (this.reloadInProgress) {
+  reload(): Promise<void> {
+    if (this.inFlight) {
       this.reloadQueued = true;
-      return;
+      return this.inFlight;
     }
-
-    this.reloadInProgress = true;
-    try {
-      do {
-        this.reloadQueued = false;
-        const caddyfile = await this.buildFn();
-        await this.pushFn(caddyfile);
-        this.afterPushFn?.();
-        this.lastPushedCaddyfile = caddyfile;
-        this.lastPushedAt = new Date();
-      } while (this.reloadQueued);
-    } finally {
-      this.reloadInProgress = false;
-    }
+    this.inFlight = Promise.resolve().then(async () => {
+      try {
+        do {
+          this.reloadQueued = false;
+          const caddyfile = await this.buildFn();
+          await this.pushFn(caddyfile);
+          this.afterPushFn?.();
+          this.lastPushedCaddyfile = caddyfile;
+          this.lastPushedAt = new Date();
+        } while (this.reloadQueued);
+      } finally {
+        this.inFlight = null;
+      }
+    });
+    return this.inFlight;
   }
 }
 

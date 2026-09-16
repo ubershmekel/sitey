@@ -69,10 +69,12 @@ const CADDY_PREAMBLE = `{
 const ADMIN_BLOCK_BODY = `    import requests_log
     handle /api/* {
         log_append service_id ${ADMIN_SERVICE_ID}
+        header >X-Sitey-Service ${ADMIN_SERVICE_ID}
         reverse_proxy sitey-api:3001
     }
     handle {
         log_append service_id ${ADMIN_SERVICE_ID}
+        header >X-Sitey-Service ${ADMIN_SERVICE_ID}
         root * /srv/web
         try_files {path} /index.html
         file_server
