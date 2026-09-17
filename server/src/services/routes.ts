@@ -95,31 +95,106 @@ export function assertCompatibleHost(
     });
 }
 
+export function isUniqueViolation(err: unknown): boolean {
+  return (err as { code?: string }).code === "P2002";
+}
+
+type ExistingRoute = {
+  serviceId: number;
+  service: { name: string };
+};
+
+/** Idempotent for the owner, a CONFLICT for anyone else. */
+function claimRoute<R extends ExistingRoute>(
+  existing: R | undefined,
+  serviceId: number,
+  label: string,
+) {
+  if (existing && existing.serviceId !== serviceId)
+    throw new TRPCError({
+      code: "CONFLICT",
+      message: `${label} is already routed to service "${existing.service.name}" (service-${existing.serviceId}). Remove it there first.`,
+    });
+  if (!existing) return null;
+  const { service: _owner, ...route } = existing;
+  return { ...route, alreadyExisted: true };
+}
+
+function routeTaken(label: string): TRPCError {
+  return new TRPCError({
+    code: "CONFLICT",
+    message: `${label} was just routed by a concurrent request. Retry to see which service owns it.`,
+  });
+}
+
+// Route inserts are check-then-insert, and the check matches the *effective*
+// hostname across Domain rows (exact `app.example.com` and wildcard
+// `*.example.com` + `app`). No database index can express that identity, so
+// correctness relies on running the check and insert in one interactive
+// transaction. The better-sqlite3 adapter serializes interactive transactions
+// with an in-process mutex, and Sitey is a single API process, so concurrent
+// adds for one host/path run one after another: the second sees the first's
+// row and gets a clean CONFLICT (or `alreadyExisted` for the same service).
+// Callers MUST pass a transaction client. Running several API processes against
+// one database would break this guarantee.
+// The `@@unique([domainId, subdomain, pathPrefix])` index is only a backstop for
+// same-row races; it can't cover domainless routes (SQLite treats NULLs as
+// distinct) or exact-vs-wildcard rows.
+
 export async function insertResolvedRoute(
   store: Store,
   serviceId: number,
   resolved: Awaited<ReturnType<typeof resolveRouteInput>>,
 ) {
   const routes = await routesForHost(resolved.host, store);
-  const existing = routes.find((r) => r.pathPrefix === resolved.pathPrefix);
-  if (existing && existing.serviceId !== serviceId)
-    throw new TRPCError({
-      code: "CONFLICT",
-      message: `${resolved.route} is already routed to service "${existing.service.name}" (service-${existing.serviceId}). Remove it there first.`,
-    });
+  const existing = claimRoute(
+    routes.find((r) => r.pathPrefix === resolved.pathPrefix),
+    serviceId,
+    resolved.route,
+  );
   assertCompatibleHost(routes, resolved.httpOnly);
-  if (existing) {
-    const { service: _owner, ...route } = existing;
-    return { ...route, alreadyExisted: true };
+  if (existing) return existing;
+  try {
+    const route = await store.serviceRoute.create({
+      data: {
+        serviceId,
+        domainId: resolved.domain.id,
+        subdomain: resolved.subdomain,
+        pathPrefix: resolved.pathPrefix,
+        httpOnly: resolved.httpOnly,
+      },
+      include: { domain: true },
+    });
+    return { ...route, alreadyExisted: false };
+  } catch (err) {
+    if (isUniqueViolation(err)) throw routeTaken(resolved.route);
+    throw err;
   }
+}
+
+/** Path-only route with no Domain row. Same transaction rule as above. */
+export async function insertDomainlessRoute(
+  store: Store,
+  serviceId: number,
+  pathPrefix: string,
+  httpOnly: boolean,
+) {
+  const existing = claimRoute(
+    (
+      await store.serviceRoute.findMany({
+        where: { domainId: null, pathPrefix },
+        include: {
+          domain: true,
+          service: { select: { id: true, name: true } },
+        },
+      })
+    )[0],
+    serviceId,
+    pathPrefix || "/",
+  );
+  if (existing) return existing;
   const route = await store.serviceRoute.create({
-    data: {
-      serviceId,
-      domainId: resolved.domain.id,
-      subdomain: resolved.subdomain,
-      pathPrefix: resolved.pathPrefix,
-      httpOnly: resolved.httpOnly,
-    },
+    data: { serviceId, pathPrefix, subdomain: "", httpOnly },
     include: { domain: true },
   });
   return { ...route, alreadyExisted: false };

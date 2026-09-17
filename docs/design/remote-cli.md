@@ -531,6 +531,13 @@ service response header for live verification.
 
 Route mutations return delivery warnings when Caddy cannot apply saved state.
 Repeating route add/remove or activate/deactivate retries delivery, including
-when the requested database state already exists. Concurrent env edits use
-compare-and-retry writes. The unique-name migration reserves original and
-generated names before renaming to avoid collisions during upgrades.
+when the requested database state already exists. Route ownership is the
+effective hostname and path, which spans Domain rows (exact and wildcard) and
+domainless path-only routes; no unique index can express that. Route inserts
+therefore check and insert inside one interactive transaction, which the
+better-sqlite3 adapter serializes in-process. Concurrent adds of the same route
+produce one row and a clean `CONFLICT` (or `alreadyExisted` for the owner). This
+relies on Sitey running a single API process against its database. Concurrent
+env edits use compare-and-retry writes. The unique-name migration reserves
+original and generated names before renaming to avoid collisions during
+upgrades.

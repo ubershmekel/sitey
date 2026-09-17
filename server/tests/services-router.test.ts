@@ -242,3 +242,42 @@ test("route retries repair delivery and surface Caddy errors", async () => {
   assert.equal("alreadyAbsent" in again && again.alreadyAbsent, true);
   assert.equal(calls, 4);
 });
+
+test("concurrent adds for one effective host/path yield one route and a clean conflict", async () => {
+  const a = await service("race-a"),
+    b = await service("race-b");
+  const wildcard = await db.domain.create({
+    data: {
+      hostname: "*.example.com",
+      letsEncryptEmail: "",
+      siteySubdomainsEnabled: false,
+    },
+  });
+  const exact = await db.domain.create({
+    data: { hostname: "app.example.com", letsEncryptEmail: "" },
+  });
+  // Same effective hostname through two different Domain rows, so the unique
+  // index can't catch it; only the serialized transaction check can.
+  const results = await Promise.allSettled([
+    caller.addRoute({
+      serviceId: a.id,
+      domainId: wildcard.id,
+      subdomain: "app",
+      httpOnly: true,
+    }),
+    caller.addRoute({ serviceId: b.id, domainId: exact.id, httpOnly: true }),
+  ]);
+  assert.equal(results.filter((r) => r.status === "fulfilled").length, 1);
+  const rejected = results.find((r) => r.status === "rejected");
+  assert.match(String(rejected?.reason), /already routed/);
+  assert.equal(await db.serviceRoute.count(), 1);
+
+  // Domainless routes have a NULL domainId, which the unique index ignores.
+  const pathOnly = await Promise.allSettled([
+    caller.addRoute({ serviceId: a.id, pathPrefix: "/shared" }),
+    caller.addRoute({ serviceId: b.id, pathPrefix: "/shared" }),
+    caller.addRoute({ serviceId: a.id, pathPrefix: "/shared" }),
+  ]);
+  assert.equal(await db.serviceRoute.count({ where: { domainId: null } }), 1);
+  assert.equal(pathOnly.filter((r) => r.status === "rejected").length, 1);
+});

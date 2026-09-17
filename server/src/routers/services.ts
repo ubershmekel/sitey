@@ -43,6 +43,8 @@ import {
   assertRouteAllowed,
   assertCompatibleHost,
   insertResolvedRoute,
+  insertDomainlessRoute,
+  isUniqueViolation,
   parseRoute,
 } from "../services/routes.ts";
 
@@ -187,10 +189,6 @@ async function findOrCreateRepo(
   return store.repo.create({
     data: { name: repoName, repoOwner, repoName, githubMode },
   });
-}
-
-function isUniqueViolation(err: unknown): boolean {
-  return (err as { code?: string }).code === "P2002";
 }
 
 function nameTaken(name: string): TRPCError {
@@ -833,11 +831,10 @@ export const servicesRouter = router({
         );
       } else {
         pathPrefix = parseRoute(`http://localhost${pathPrefix}`).pathPrefix;
-        const created = await db.serviceRoute.create({
-          data: { serviceId: service.id, pathPrefix, subdomain, httpOnly },
-          include: { domain: true },
-        });
-        route = { ...created, alreadyExisted: false };
+        const prefix = pathPrefix;
+        route = await db.$transaction((tx) =>
+          insertDomainlessRoute(tx, service.id, prefix, httpOnly),
+        );
       }
       // An idempotent retry must still deliver the saved configuration.
       const warning = await routingWarning();
