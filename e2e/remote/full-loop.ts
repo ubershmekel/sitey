@@ -351,6 +351,7 @@ function uploadWorktree(ip: string): Promise<void> {
         "deploy",
         "server",
         "web",
+        "siteyctl",
         "package.json",
         "package-lock.json",
       ],
