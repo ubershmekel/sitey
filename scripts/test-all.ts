@@ -29,7 +29,7 @@ const steps = [
       "Fix the failing updater tests, then re-run `npm run test:updater`.",
   },
   {
-    name: "test:e2e-cloud",
+    name: "test:e2e-cloud:worktree",
     cmd: "npm run test:e2e-cloud:worktree",
     advice:
       "Fix the failing cloud e2e tests, then re-run `npm run test:e2e-cloud:worktree`.",
