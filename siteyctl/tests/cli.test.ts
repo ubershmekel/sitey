@@ -32,6 +32,8 @@ const record = (path: string, input: unknown) => calls.push({ path, input });
 let envVars: Record<string, string> = { API_KEY: "old-value" };
 let routes = ["idea-a.andluck.com"];
 let deploymentStatus = "success";
+let staticRoutingMode = "spa";
+let staticCaddyConfig = "";
 
 const view = () => ({
   id: 42,
@@ -45,6 +47,8 @@ const view = () => ({
   buildImage: "",
   buildCommand: "npm run build",
   outputDir: "dist",
+  staticRoutingMode,
+  staticCaddyConfig,
   dockerfilePath: "",
   serverRunCommand: "",
   containerPort: 3000,
@@ -110,12 +114,16 @@ const appRouter = t.router({
       )
       .mutation(({ input }) => {
         record("services.update", input);
+        if (typeof input.staticRoutingMode === "string")
+          staticRoutingMode = input.staticRoutingMode;
+        if (typeof input.staticCaddyConfig === "string")
+          staticCaddyConfig = input.staticCaddyConfig;
         if (input.name === "taken")
           throw new TRPCError({
             code: "CONFLICT",
             message: 'A service named "taken" already exists.',
           });
-        return { ...view(), name: input.name ?? "idea-a" };
+        return { id: 42, name: input.name ?? "idea-a", warning: null };
       }),
     create: authed
       .input(z.object({ name: z.string() }).passthrough())
@@ -578,4 +586,132 @@ test("env values are disclosed only by explicit env commands", async () => {
   assert.deepEqual(JSON.parse(all.stdout).values, envVars);
   const missing = await cli(["env", "get", "idea-a", "MISSING"]);
   assert.equal(missing.code, 3);
+});
+
+test("static routing flags: create, set from a file, and get", async () => {
+  writeProfiles();
+  calls.length = 0;
+  const created = await cli([
+    "service",
+    "create",
+    "examplesite",
+    "--repo",
+    "me/site",
+    "--mode",
+    "static",
+    "--output-dir",
+    "dist",
+    "--static-routing",
+    "multi-page",
+  ]);
+  assert.equal(created.code, 0, created.stderr);
+  assert.equal(
+    (calls[0].input as { staticRoutingMode: string }).staticRoutingMode,
+    "multi-page",
+  );
+
+  const server = await cli([
+    "service",
+    "create",
+    "api",
+    "--repo",
+    "me/site",
+    "--mode",
+    "server",
+    "--static-routing",
+    "spa",
+  ]);
+  assert.equal(server.code, 2);
+  assert.match(server.stderr, /--static-routing only applies to --mode static/);
+
+  const invalid = await cli([
+    "service",
+    "set",
+    "idea-a",
+    "--static-routing",
+    "pages",
+  ]);
+  assert.equal(invalid.code, 2);
+  assert.match(invalid.stderr, /one of: spa, multi-page, caddy/);
+
+  // Routing alone is applied by a reload: no deploy hint.
+  calls.length = 0;
+  const set = await cli([
+    "service",
+    "set",
+    "idea-a",
+    "--static-routing",
+    "spa",
+  ]);
+  assert.equal(set.code, 0, set.stderr);
+  assert.match(set.stdout, /Routing applied \(Caddy reloaded\)/);
+  assert.doesNotMatch(set.stdout, /Not deployed yet/);
+  const mixed = await cli([
+    "service",
+    "set",
+    "idea-a",
+    "--static-routing",
+    "multi-page",
+    "--output-dir",
+    "build",
+  ]);
+  assert.match(mixed.stdout, /Routing applied[\s\S]*Not deployed yet/);
+
+  // A fragment is read from a file (relative to the working directory), and
+  // implies caddy mode.
+  const fragment =
+    'redir /old /new 308\nheader X-Frame-Options "DENY"\nfile_server\n';
+  fs.writeFileSync(path.join(dir, "routing.caddy"), fragment);
+  calls.length = 0;
+  const custom = await cli([
+    "service",
+    "set",
+    "idea-a",
+    "--static-caddy-file",
+    "routing.caddy",
+    "--json",
+  ]);
+  assert.equal(custom.code, 0, custom.stderr);
+  assert.deepEqual(calls[0].input, {
+    id: 42,
+    staticRoutingMode: "caddy",
+    staticCaddyConfig: fragment,
+  });
+  assert.deepEqual(JSON.parse(custom.stdout).changed, [
+    "staticRoutingMode",
+    "staticCaddyConfig",
+  ]);
+  const conflicting = await cli([
+    "service",
+    "set",
+    "idea-a",
+    "--static-routing",
+    "spa",
+    "--static-caddy-file",
+    "routing.caddy",
+  ]);
+  assert.equal(conflicting.code, 2);
+  const missing = await cli([
+    "service",
+    "set",
+    "idea-a",
+    "--static-caddy-file",
+    "nope.caddy",
+  ]);
+  assert.equal(missing.code, 1);
+  assert.match(missing.stderr, /Can't read --static-caddy-file/);
+
+  const get = await cli(["service", "get", "idea-a"]);
+  assert.match(get.stdout, /routing:\s+caddy/);
+  assert.match(
+    get.stdout,
+    /static caddy config:\n  redir \/old \/new 308\n  header X-Frame-Options "DENY"\n  file_server\n/,
+  );
+  const json = JSON.parse(
+    (await cli(["service", "get", "idea-a", "--json"])).stdout,
+  );
+  assert.equal(json.staticRoutingMode, "caddy");
+  assert.equal(json.staticCaddyConfig, fragment);
+  staticRoutingMode = "spa";
+  staticCaddyConfig = "";
 });

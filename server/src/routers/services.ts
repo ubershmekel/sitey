@@ -11,7 +11,9 @@ import {
   scheduleDomainStatusRefresh,
   probeRouteTls,
   scheduleRouteTlsProbe,
+  validateStaticCaddyConfig,
 } from "../services/caddy.ts";
+import { STATIC_ROUTING_MODES } from "../services/staticRouting.ts";
 import { enqueueDeployment, parseEnvString } from "../services/deployment.ts";
 import {
   stopAndRemoveContainer,
@@ -191,6 +193,36 @@ async function findOrCreateRepo(
   });
 }
 
+/**
+ * Checks routing settings as they will be after a write. A custom fragment is
+ * validated (scope check, then Caddy's adapter) whenever it would be saved or
+ * switched on, so nothing that can't load is ever stored as the active config.
+ */
+async function assertStaticRouting(
+  next: {
+    id: number;
+    outputDir: string;
+    staticRoutingMode: string;
+    staticCaddyConfig: string;
+  },
+  changed: { mode: boolean; config: boolean },
+) {
+  const custom = next.staticRoutingMode === "caddy";
+  if (changed.config && next.staticCaddyConfig.trim() && !custom)
+    throw new TRPCError({
+      code: "BAD_REQUEST",
+      message:
+        'staticCaddyConfig only applies with staticRoutingMode "caddy". Set both together.',
+    });
+  if (!custom || !(changed.mode || changed.config)) return;
+  const result = await validateStaticCaddyConfig(next.staticCaddyConfig, next);
+  if (!result.ok)
+    throw new TRPCError({
+      code: result.unreachable ? "PRECONDITION_FAILED" : "BAD_REQUEST",
+      message: `${result.message.replace(/\.?$/, ".")} Nothing was saved${result.unreachable ? "; retry when Caddy is running." : "."}`,
+    });
+}
+
 function nameTaken(name: string): TRPCError {
   return new TRPCError({
     code: "CONFLICT",
@@ -355,6 +387,8 @@ export const servicesRouter = router({
         buildImage: s.buildImage,
         buildCommand: s.buildCommand,
         outputDir: s.outputDir,
+        staticRoutingMode: s.staticRoutingMode,
+        staticCaddyConfig: s.staticCaddyConfig,
         dockerfilePath: s.dockerfilePath,
         serverRunCommand: s.serverRunCommand,
         containerPort: s.containerPort,
@@ -434,6 +468,8 @@ export const servicesRouter = router({
         deployMode: z.enum(["server", "static"]).default("server"),
         buildCommand: z.string().default(""),
         outputDir: z.string().default("dist"),
+        staticRoutingMode: z.enum(STATIC_ROUTING_MODES).default("spa"),
+        staticCaddyConfig: z.string().max(65536).default(""),
         buildImage: z.string().max(200).default(""),
         serverRunCommand: z.string().default(""),
         buildMode: z.enum(["auto", "dockerfile"]).default("auto"),
@@ -451,6 +487,11 @@ export const servicesRouter = router({
         routes: routeInputs,
         ...serviceData
       } = input;
+      // The id only names the synthetic validation site; any number works.
+      await assertStaticRouting(
+        { id: 0, ...serviceData },
+        { mode: true, config: true },
+      );
       const initialRoutes = await Promise.all(
         routeInputs.map((route) => resolveRouteInput(route)),
       );
@@ -548,6 +589,9 @@ export const servicesRouter = router({
         deployMode: z.enum(["server", "static"]).optional(),
         buildCommand: z.string().optional(),
         outputDir: z.string().optional(),
+        // Routing settings apply with a Caddy reload; no redeploy.
+        staticRoutingMode: z.enum(STATIC_ROUTING_MODES).optional(),
+        staticCaddyConfig: z.string().max(65536).optional(),
         buildImage: z.string().max(200).optional(),
         serverRunCommand: z.string().optional(),
         buildMode: z.enum(["auto", "dockerfile"]).optional(),
@@ -558,12 +602,40 @@ export const servicesRouter = router({
     )
     .mutation(async ({ input }) => {
       const { id, ...rest } = input;
-      await findServiceOrThrow(id);
+      const current = await findServiceOrThrow(id);
+      const next = { ...current, ...rest };
+      const routingChanged = {
+        mode: next.staticRoutingMode !== current.staticRoutingMode,
+        config: next.staticCaddyConfig !== current.staticCaddyConfig,
+      };
+      await assertStaticRouting(next, routingChanged);
       try {
-        const updated = await db.service.update({ where: { id }, data: rest });
+        const updated = await db.service.update({
+          // Compare-and-swap on the validated routing settings, so a
+          // concurrent edit can't swap in a config that wasn't checked.
+          where: {
+            id,
+            staticRoutingMode: current.staticRoutingMode,
+            staticCaddyConfig: current.staticCaddyConfig,
+          },
+          data: rest,
+        });
+        const warning =
+          routingChanged.mode || routingChanged.config
+            ? await routingWarning()
+            : null;
         // Mutations acknowledge edits. Secret disclosure requires an explicit read.
-        return { id: updated.id, name: updated.name };
+        return { id: updated.id, name: updated.name, warning };
       } catch (err) {
+        if (
+          err instanceof Error &&
+          "code" in err &&
+          (err as { code?: string }).code === "P2025"
+        )
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: "Routing settings changed while saving; retry.",
+          });
         if (rest.name && isUniqueViolation(err)) throw nameTaken(rest.name);
         throw err;
       }

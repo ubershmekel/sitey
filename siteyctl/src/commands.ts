@@ -150,6 +150,37 @@ function buildSettings(ctx: Context) {
   };
 }
 
+// ── Static routing, shared by create and set ────────────────────────────────
+
+const ROUTING_FLAGS = ["static-routing", "static-caddy-file"] as const;
+
+function routingSettings(ctx: Context) {
+  let mode = oneOf(ctx, "static-routing", [
+    "spa",
+    "multi-page",
+    "caddy",
+  ] as const);
+  const file = str(ctx, "static-caddy-file");
+  let staticCaddyConfig: string | undefined;
+  if (file !== undefined) {
+    if (mode && mode !== "caddy")
+      throw new UsageError(
+        `--static-caddy-file needs --static-routing caddy (got ${mode}).`,
+        ctx.inv.command,
+      );
+    mode = "caddy";
+    const resolved = path.resolve(ctx.cwd, file);
+    try {
+      staticCaddyConfig = fs.readFileSync(resolved, "utf8");
+    } catch (err) {
+      throw new CliError(
+        `Can't read --static-caddy-file ${resolved}: ${(err as Error).message}`,
+      );
+    }
+  }
+  return { staticRoutingMode: mode, staticCaddyConfig };
+}
+
 function withoutUndefined<T extends Record<string, unknown>>(
   obj: T,
 ): Partial<T> {
@@ -355,6 +386,7 @@ const handlers: Record<string, Handler> = {
         ["buildImage", s.buildImage],
         ["buildCommand", s.buildCommand],
         ["outputDir", isServer ? undefined : s.outputDir || "(repo root)"],
+        ["routing", isServer ? undefined : s.staticRoutingMode],
         [
           "dockerfile",
           isServer && s.buildMode === "dockerfile"
@@ -364,6 +396,16 @@ const handlers: Record<string, Handler> = {
         ["runCommand", isServer ? s.serverRunCommand : undefined],
         ["port", isServer ? s.containerPort : undefined],
       ]),
+      ...(!isServer && s.staticRoutingMode === "caddy"
+        ? [
+            "",
+            "static caddy config:",
+            ...s.staticCaddyConfig
+              .replace(/\s+$/, "")
+              .split("\n")
+              .map((line) => `  ${line}`),
+          ]
+        : []),
       "",
       "routes:",
       ...(s.routes.length
@@ -403,6 +445,7 @@ const handlers: Record<string, Handler> = {
     const githubMode =
       oneOf(ctx, "github-mode", ["app", "webhook"] as const) ?? "app";
     const settings = buildSettings(ctx);
+    const routing = routingSettings(ctx);
     if (deployMode === "static") {
       for (const [option, value] of [
         ["run-command", settings.serverRunCommand],
@@ -415,11 +458,14 @@ const handlers: Record<string, Handler> = {
             ctx.inv.command,
           );
       }
-    } else if (settings.outputDir !== undefined) {
-      throw new UsageError(
-        "--output-dir only applies to --mode static.",
-        ctx.inv.command,
-      );
+    } else {
+      for (const option of ["output-dir", ...ROUTING_FLAGS]) {
+        if (str(ctx, option) !== undefined)
+          throw new UsageError(
+            `--${option} only applies to --mode static.`,
+            ctx.inv.command,
+          );
+      }
     }
     const routes = (ctx.inv.options.route as string[] | undefined) ?? [];
 
@@ -460,6 +506,7 @@ const handlers: Record<string, Handler> = {
       githubMode,
       routes,
       ...withoutUndefined(settings),
+      ...withoutUndefined(routing),
     });
     const ref = `service-${created.id}`;
     ctx.log(
@@ -491,25 +538,43 @@ const handlers: Record<string, Handler> = {
 
   async "service set"(ctx) {
     const service = await resolveService(ctx);
-    const changes = withoutUndefined({
+    const build = withoutUndefined({
       deployMode: oneOf(ctx, "mode", ["static", "server"] as const),
       ...buildSettings(ctx),
     });
+    const routing = withoutUndefined(routingSettings(ctx));
+    const changes = { ...build, ...routing };
     if (!Object.keys(changes).length) {
       throw new UsageError(
         "Nothing to change. Pass at least one setting flag.",
         ctx.inv.command,
       );
     }
-    await ctx.api().services.update.mutate({ id: service.id, ...changes });
+    const result = await ctx
+      .api()
+      .services.update.mutate({ id: service.id, ...changes });
+    if (result.warning) ctx.log(`Warning: ${result.warning}`);
+    const text = [
+      `Updated ${label(service)}: ${Object.keys(changes).join(", ")}.`,
+    ];
+    // Routing is live once Caddy reloads; build/run settings wait for a deploy.
+    if (Object.keys(routing).length)
+      text.push(
+        result.warning
+          ? "Routing saved but not applied yet: retry this command."
+          : "Routing applied (Caddy reloaded).",
+      );
+    if (Object.keys(build).length)
+      text.push(`Not deployed yet: siteyctl deploy ${service.name} --wait`);
     return {
       json: {
         id: service.id,
         ref: service.ref,
         name: service.name,
         changed: Object.keys(changes),
+        warning: result.warning,
       },
-      text: `Updated ${label(service)}: ${Object.keys(changes).join(", ")}.\nNot deployed yet: siteyctl deploy ${service.name} --wait`,
+      text: text.join("\n"),
     };
   },
 

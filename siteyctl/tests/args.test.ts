@@ -67,6 +67,26 @@ test("repeatable and optional-value options", () => {
   );
 });
 
+test("static routing options parse on create and set", () => {
+  const inv = run([
+    "service",
+    "set",
+    "examplesite",
+    "--static-routing",
+    "caddy",
+    "--static-caddy-file",
+    "sitey/examplesite.caddy",
+  ]);
+  assert.equal(inv.options["static-routing"], "caddy");
+  assert.equal(inv.options["static-caddy-file"], "sitey/examplesite.caddy");
+  assert.equal(
+    run(["service", "create", "x", "--static-routing", "multi-page"]).options[
+      "static-routing"
+    ],
+    "multi-page",
+  );
+});
+
 test("usage errors", () => {
   const cases: [string[], RegExp][] = [
     [["service", "get"], /Missing <service>/],

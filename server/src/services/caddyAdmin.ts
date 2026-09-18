@@ -15,15 +15,19 @@ export function caddyAdminAddress(): string {
   return `unix/${socket}`;
 }
 
-export async function pushCaddyViaSocket(
+/** Caddy answered, and refused the config (as opposed to being unreachable). */
+export class CaddyRejectedError extends Error {}
+
+function postViaSocket(
   socketPath: string,
+  urlPath: "/load" | "/adapt",
   caddyfile: string,
-): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
+): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
     const req = request(
       {
         socketPath,
-        path: "/load",
+        path: urlPath,
         method: "POST",
         headers: { Host: "localhost", "Content-Type": "text/caddyfile" },
         signal: AbortSignal.timeout(30_000),
@@ -37,10 +41,12 @@ export async function pushCaddyViaSocket(
         res.on("error", reject);
         res.on("end", () => {
           if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300)
-            resolve();
+            resolve(body);
           else
             reject(
-              new Error(`Caddy reload failed (${res.statusCode}): ${body}`),
+              new CaddyRejectedError(
+                `Caddy ${urlPath === "/load" ? "reload" : "adapt"} failed (${res.statusCode}): ${body}`,
+              ),
             );
         });
       },
@@ -48,4 +54,19 @@ export async function pushCaddyViaSocket(
     req.on("error", reject);
     req.end(caddyfile);
   });
+}
+
+export async function pushCaddyViaSocket(
+  socketPath: string,
+  caddyfile: string,
+): Promise<void> {
+  await postViaSocket(socketPath, "/load", caddyfile);
+}
+
+/** Runs a Caddyfile through Caddy's adapter without loading it. Returns JSON. */
+export function adaptCaddyfileViaSocket(
+  socketPath: string,
+  caddyfile: string,
+): Promise<string> {
+  return postViaSocket(socketPath, "/adapt", caddyfile);
 }

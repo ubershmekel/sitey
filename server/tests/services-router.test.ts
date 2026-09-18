@@ -20,8 +20,9 @@ execSync("npm run db:push", {
 });
 const { db } = await import("../src/lib/db.ts");
 const { servicesRouter } = await import("../src/routers/services.ts");
-const { caddyReloader, buildCaddyfile } =
+const { caddyReloader, buildCaddyfile, caddyAdapter } =
   await import("../src/services/caddy.ts");
+const { CaddyRejectedError } = await import("../src/services/caddyAdmin.ts");
 const { deployQueue } = await import("../src/lib/queue.ts");
 const { docker } = await import("../src/services/docker.ts");
 const ctx = {
@@ -196,7 +197,7 @@ test("concurrent env edits preserve both changes and explicit reads disclose val
     /No environment/,
   );
   const renamed = await caller.update({ id: app.id, name: "renamed" });
-  assert.deepEqual(renamed, { id: app.id, name: "renamed" });
+  assert.deepEqual(renamed, { id: app.id, name: "renamed", warning: null });
   const anonymous = servicesRouter.createCaller({ ...ctx, user: null });
   await assert.rejects(
     anonymous.envValues({ id: app.id }),
@@ -280,4 +281,175 @@ test("concurrent adds for one effective host/path yield one route and a clean co
   ]);
   assert.equal(await db.serviceRoute.count({ where: { domainId: null } }), 1);
   assert.equal(pathOnly.filter((r) => r.status === "rejected").length, 1);
+});
+
+test("static routing defaults to spa and is visible through describe", async () => {
+  const created = await caller.create({
+    name: "examplesite",
+    repoOwner: "owner",
+    repoName: "repo",
+    deployMode: "static",
+  });
+  const view = await caller.describe({ id: created.id });
+  assert.equal(view.staticRoutingMode, "spa");
+  assert.equal(view.staticCaddyConfig, "");
+  const multi = await caller.create({
+    name: "docs",
+    repoOwner: "owner",
+    repoName: "repo",
+    deployMode: "static",
+    staticRoutingMode: "multi-page",
+  });
+  assert.equal(
+    (await caller.describe({ id: multi.id })).staticRoutingMode,
+    "multi-page",
+  );
+});
+
+test("routing changes reload Caddy immediately without a deploy", async () => {
+  const app = await service("site");
+  let reloads = 0;
+  let enqueued = 0;
+  mock.method(caddyReloader, "reload", async () => {
+    reloads++;
+  });
+  mock.method(deployQueue, "enqueue", () => {
+    enqueued++;
+  });
+  const result = await caller.update({
+    id: app.id,
+    staticRoutingMode: "multi-page",
+  });
+  assert.equal(result.warning, null);
+  assert.equal(reloads, 1);
+  assert.equal(enqueued, 0);
+  // Build settings alone don't touch Caddy.
+  await caller.update({ id: app.id, buildCommand: "npm run build" });
+  assert.equal(reloads, 1);
+  // A failed reload is reported, and the setting is still saved.
+  mock.method(caddyReloader, "reload", async () => {
+    throw new Error("caddy down");
+  });
+  const failed = await caller.update({ id: app.id, staticRoutingMode: "spa" });
+  assert.match(failed.warning!, /caddy down/);
+  assert.equal(
+    (await caller.describe({ id: app.id })).staticRoutingMode,
+    "spa",
+  );
+});
+
+test("custom Caddy is validated before it is saved or applied", async () => {
+  await db.domain.create({
+    data: { hostname: "site.example.com", letsEncryptEmail: "" },
+  });
+  await db.domain.create({
+    data: { hostname: "other.example.com", letsEncryptEmail: "" },
+  });
+  const app = await service("custom");
+  const other = await service("other");
+  await caller.addRoute({ serviceId: app.id, host: "http://site.example.com" });
+  await caller.addRoute({
+    serviceId: other.id,
+    host: "http://other.example.com",
+  });
+  const before = await buildCaddyfile();
+
+  let reloads = 0;
+  let adapts = 0;
+  mock.method(caddyReloader, "reload", async () => {
+    reloads++;
+  });
+  mock.method(caddyAdapter, "adapt", async () => {
+    adapts++;
+    throw new CaddyRejectedError(
+      'Caddy adapt failed (400): {"error":"wrong argument count, at Caddyfile:6"}',
+    );
+  });
+
+  // Rejected by Caddy: nothing stored, nothing reloaded.
+  await assert.rejects(
+    caller.update({
+      id: app.id,
+      staticRoutingMode: "caddy",
+      staticCaddyConfig: "redir",
+    }),
+    /Caddy rejected the custom config: wrong argument count, at line 1\. Nothing was saved\./,
+  );
+  // Escaping the service's block never even reaches Caddy.
+  await assert.rejects(
+    caller.update({
+      id: app.id,
+      staticRoutingMode: "caddy",
+      staticCaddyConfig:
+        "file_server\n}\nother.example.com {\n    respond hijacked\n",
+    }),
+    /unmatched closing brace/,
+  );
+  // A config needs caddy mode, and caddy mode needs a config.
+  await assert.rejects(
+    caller.update({ id: app.id, staticCaddyConfig: "file_server" }),
+    /only applies with staticRoutingMode "caddy"/,
+  );
+  await assert.rejects(
+    caller.update({ id: app.id, staticRoutingMode: "caddy" }),
+    /empty/,
+  );
+  // An unreachable Caddy can't vouch for the config either.
+  mock.method(caddyAdapter, "adapt", async () => {
+    adapts++;
+    throw new TypeError("fetch failed");
+  });
+  await assert.rejects(
+    caller.update({
+      id: app.id,
+      staticRoutingMode: "caddy",
+      staticCaddyConfig: "file_server",
+    }),
+    (err: { code?: string }) => err.code === "PRECONDITION_FAILED",
+  );
+  assert.equal(adapts, 2);
+  assert.equal(reloads, 0);
+  const stored = await db.service.findUniqueOrThrow({ where: { id: app.id } });
+  assert.equal(stored.staticRoutingMode, "spa");
+  assert.equal(stored.staticCaddyConfig, "");
+  assert.equal(await buildCaddyfile(), before);
+
+  // A valid fragment is saved, applied, and stays inside its own site.
+  mock.method(caddyAdapter, "adapt", async () =>
+    JSON.stringify({ host: ["sitey-validate.invalid"] }).replace(
+      /^\{|\}$/g,
+      "",
+    ),
+  );
+  const saved = await caller.update({
+    id: app.id,
+    staticRoutingMode: "caddy",
+    staticCaddyConfig: 'header X-Custom "yes"\nfile_server',
+  });
+  assert.equal(saved.warning, null);
+  assert.equal(reloads, 1);
+  const config = await buildCaddyfile();
+  const block = (caddyfile: string, host: string) => {
+    const start = caddyfile.indexOf(`\n${host} {`);
+    assert.ok(start >= 0, host);
+    return caddyfile.slice(start, caddyfile.indexOf("\n}\n", start));
+  };
+  assert.match(
+    block(config, "http://site.example.com"),
+    /root \* \/srv\/services\/\d+\/repo\n\s+header X-Custom "yes"\n\s+file_server\n {4}\}$/,
+  );
+  // The other service's site is byte-for-byte what it was.
+  assert.equal(
+    block(config, "http://other.example.com"),
+    block(before, "http://other.example.com"),
+  );
+
+  // Switching modes keeps the stored fragment without revalidating it.
+  mock.method(caddyAdapter, "adapt", async () => {
+    throw new Error("should not validate");
+  });
+  await caller.update({ id: app.id, staticRoutingMode: "multi-page" });
+  const view = await caller.describe({ id: app.id });
+  assert.equal(view.staticRoutingMode, "multi-page");
+  assert.equal(view.staticCaddyConfig, 'header X-Custom "yes"\nfile_server');
 });

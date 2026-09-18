@@ -31,6 +31,7 @@ import {
   runBuildContainer,
 } from "./docker.ts";
 import { reloadCaddy } from "./caddy.ts";
+import { detectMultiPageOutput } from "./staticRouting.ts";
 import { getInstallationToken } from "./github.ts";
 import { nanoid } from "nanoid";
 
@@ -311,6 +312,21 @@ async function deployStatic(
   onLog(
     `[deploy] Static deployment successful! Serving from ${repoPath}/${service.outputDir}`,
   );
+  if (service.staticRoutingMode === "spa") {
+    const signals = detectMultiPageOutput(
+      path.join(repoPath, service.outputDir),
+    );
+    // Only a hint: the routing mode never changes on its own.
+    if (signals.length)
+      for (const line of [
+        "Warning: this output looks like a multi-page static site, but the service uses SPA routing.",
+        "Found:",
+        ...signals.map((s) => `  ${s}`),
+        "SPA routing returns /index.html for every path that isn't an exact file.",
+        `To change it: siteyctl service set ${service.name} --static-routing multi-page`,
+      ])
+        onLog(`[deploy] ${line}`);
+  }
 }
 
 type ServerDeployResult = {

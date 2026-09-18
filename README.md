@@ -83,6 +83,9 @@ service** from the dashboard or a domain page:
 - Enter repo owner/name (e.g. `acme/my-node-app`) and branch.
 - Choose **Deploy mode**: `server` runs a container; `static` serves built files
   directly from Caddy.
+- For static sites, choose **Static routing**: single-page app (default),
+  multi-page site, or custom Caddy. See
+  [docs/static-sites.md](docs/static-sites.md).
 - Choose **Build mode**: `auto` generates a Dockerfile for Node.js apps;
   `dockerfile` uses your repo's own `Dockerfile`.
 - Set **Container port** if using server mode (default 3000).

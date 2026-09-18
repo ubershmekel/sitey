@@ -453,7 +453,8 @@
       <div class="section">
         <h2>Service Settings</h2>
         <p class="section-hint">
-          Change deploy/build mode and related runtime/build fields.
+          Change deploy/build mode and related runtime/build fields. Build
+          changes apply on the next deploy; static routing applies on save.
         </p>
         <form class="settings-form" @submit.prevent="saveServiceSettings">
           <ServiceSettingsFields v-model="editSettings" />
@@ -466,6 +467,9 @@
             {{ settingsSaving ? "Saving..." : "Save changes" }}
           </button>
           <div v-if="settingsSaved" class="settings-saved">Saved</div>
+          <div v-if="settingsWarning" class="settings-error">
+            {{ settingsWarning }}
+          </div>
           <div v-if="settingsError" class="settings-error">
             {{ settingsError }}
           </div>
@@ -628,6 +632,8 @@ const editSettings = ref<ServiceSettings>({
   deployType: "server",
   buildCommand: "",
   outputDir: "",
+  staticRoutingMode: "spa",
+  staticCaddyConfig: "",
   buildImage: "",
   serverRunCommand: "",
   containerPort: 3000,
@@ -636,6 +642,7 @@ const editSettings = ref<ServiceSettings>({
 const settingsSaving = ref(false);
 const settingsSaved = ref(false);
 const settingsError = ref("");
+const settingsWarning = ref("");
 const tlsRetrying = ref(false);
 const tlsModal = ref(false);
 const tlsModalHostname = ref("");
@@ -698,6 +705,9 @@ const settingsDirty = computed(() => {
     modeDirty ||
     s.buildCommand.trim() !== (svc.buildCommand ?? "") ||
     s.outputDir.trim() !== (svc.outputDir ?? "") ||
+    s.staticRoutingMode !== svc.staticRoutingMode ||
+    (s.staticRoutingMode === "caddy" &&
+      s.staticCaddyConfig !== svc.staticCaddyConfig) ||
     s.buildImage.trim() !== (svc.buildImage ?? "") ||
     s.serverRunCommand.trim() !== (svc.serverRunCommand ?? "") ||
     s.dockerfilePath.trim() !== (svc.dockerfilePath ?? "") ||
@@ -748,6 +758,9 @@ function applyServiceToEditors(svc: Service) {
           : "server",
     buildCommand: svc.buildCommand ?? "",
     outputDir: svc.outputDir ?? "",
+    staticRoutingMode:
+      svc.staticRoutingMode as ServiceSettings["staticRoutingMode"],
+    staticCaddyConfig: svc.staticCaddyConfig ?? "",
     buildImage: svc.buildImage ?? "",
     serverRunCommand: svc.serverRunCommand ?? "",
     containerPort: svc.containerPort,
@@ -799,17 +812,24 @@ async function saveServiceSettings() {
   if (!service.value) return;
   settingsSaving.value = true;
   settingsError.value = "";
+  settingsWarning.value = "";
   settingsSaved.value = false;
   try {
     const s = editSettings.value;
     const deployMode = s.deployType === "static" ? "static" : "server";
     const buildMode = s.deployType === "dockerfile" ? "dockerfile" : "auto";
-    await trpc.services.update.mutate({
+    const result = await trpc.services.update.mutate({
       id: serviceId,
       deployMode,
       buildMode,
       buildCommand: s.buildCommand.trim(),
       outputDir: s.outputDir.trim(),
+      staticRoutingMode: s.staticRoutingMode,
+      // Other modes keep the stored directives; the server only checks and
+      // stores them when custom Caddy is selected.
+      ...(s.staticRoutingMode === "caddy"
+        ? { staticCaddyConfig: s.staticCaddyConfig }
+        : {}),
       buildImage: s.buildImage.trim(),
       serverRunCommand: s.serverRunCommand.trim(),
       dockerfilePath: s.dockerfilePath.trim(),
@@ -817,6 +837,7 @@ async function saveServiceSettings() {
     });
     service.value = await trpc.services.get.query({ id: serviceId });
     applyServiceToEditors(service.value);
+    settingsWarning.value = result.warning ?? "";
     settingsSaved.value = true;
     setTimeout(() => (settingsSaved.value = false), 2000);
   } catch (e: unknown) {

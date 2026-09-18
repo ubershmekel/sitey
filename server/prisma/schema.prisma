@@ -77,6 +77,10 @@ model Service {
   buildCommand  String @default("")       // e.g. "npm run build"
   outputDir     String @default("")       // static: output directory (empty = repo root)
   buildImage    String @default("")       // static: Docker image for build (e.g. oven/bun:1)
+  // static: how files are served (docs/static-sites.md). Changing these
+  // reloads Caddy; no redeploy needed.
+  staticRoutingMode String @default("spa") // spa | multi-page | caddy
+  staticCaddyConfig String @default("")    // caddy mode: service-scoped directives
 
   // Build / run
   buildMode        String @default("auto") // auto | dockerfile

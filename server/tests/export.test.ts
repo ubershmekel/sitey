@@ -20,6 +20,8 @@ const service = {
   deployMode: "server",
   buildCommand: "",
   outputDir: "",
+  staticRoutingMode: "spa",
+  staticCaddyConfig: "",
   buildImage: "",
   buildMode: "auto",
   dockerfilePath: "",
@@ -31,6 +33,8 @@ const service = {
 };
 
 const domain = { letsEncryptEmail: "", siteySubdomainsEnabled: true };
+
+const CUSTOM_CADDY = "try_files {path} {path}.html =404\nfile_server\n";
 
 const input: ExportInput = {
   siteyUrl: "https://sitey.andluck.com",
@@ -93,6 +97,8 @@ const input: ExportInput = {
       buildImage: "node:24-bookworm-slim",
       buildCommand: "cd landings/idea-a && npm ci && npm run build",
       outputDir: "landings/idea-a/dist",
+      staticRoutingMode: "caddy",
+      staticCaddyConfig: CUSTOM_CADDY,
       routes: [
         { ...route, domainId: 1, subdomain: "idea-a" },
         { ...route, domainId: 4, pathPrefix: "/red", httpOnly: true },
@@ -105,6 +111,8 @@ const input: ExportInput = {
       name: "old",
       repoId: 3,
       active: false,
+      // Routing settings of a server service aren't exported.
+      staticRoutingMode: "multi-page",
       containerPort: 8080,
       routes: [],
     },
@@ -155,6 +163,8 @@ test("buildExportDoc keys services by id, writes route strings, omits defaults",
         buildImage: "node:24-bookworm-slim",
         buildCommand: "cd landings/idea-a && npm ci && npm run build",
         outputDir: "landings/idea-a/dist",
+        staticRoutingMode: "caddy",
+        staticCaddyConfig: CUSTOM_CADDY,
         routes: ["andluck.com", "http://localhost/red", "idea-a.andluck.com"],
       },
       "service-43": {

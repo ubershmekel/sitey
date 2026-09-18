@@ -17,7 +17,13 @@ import { resolvePublicSiteUrl, isLoopbackHost } from "./siteUrl.ts";
 import { docker } from "./docker.ts";
 import { UNKNOWN_SERVICE_ID } from "../lib/constants.ts";
 import tls from "node:tls";
-import { caddyAdminAddress, pushCaddyViaSocket } from "./caddyAdmin.ts";
+import {
+  adaptCaddyfileViaSocket,
+  caddyAdminAddress,
+  CaddyRejectedError,
+  pushCaddyViaSocket,
+} from "./caddyAdmin.ts";
+import { checkCaddyFragment, staticServingLines } from "./staticRouting.ts";
 
 const CADDY_ADMIN_URL = process.env.CADDY_ADMIN_URL ?? "http://caddy:2019";
 const CADDY_ADMIN_ORIGIN =
@@ -273,6 +279,9 @@ export type CaddyServiceRoute = {
     containerName: string | null;
     containerRunning?: boolean;
     containerPort: number;
+    /** Static only: spa (default) | multi-page | caddy. */
+    staticRoutingMode?: string;
+    staticCaddyConfig?: string;
   } | null;
 };
 
@@ -398,14 +407,12 @@ function appendRouteBody(lines: string[], route: CaddyServiceRoute): void {
       lines.push(`    handle_path ${route.pathPrefix}/* {`);
       lines.push(tagInner);
       lines.push(`        root * ${dir}`);
-      lines.push("        try_files {path} /index.html");
-      lines.push("        file_server");
+      lines.push(...staticServingLines(svc, "        "));
       lines.push("    }");
     } else {
       lines.push(tagOuter);
       lines.push(`    root * ${dir}`);
-      lines.push("    try_files {path} /index.html");
-      lines.push("    file_server");
+      lines.push(...staticServingLines(svc, "    "));
     }
   } else {
     const cname = svc.containerName!;
@@ -581,6 +588,8 @@ function toServiceRoutes(
       outputDir: string;
       containerName: string | null;
       containerPort: number;
+      staticRoutingMode: string;
+      staticCaddyConfig: string;
       active: boolean;
       deployments: Array<{ id: string }>;
     } | null;
@@ -879,12 +888,12 @@ export function scheduleDomainStatusRefresh(domain: {
 // Serialised reload — prevents a slow reload from overwriting a newer one
 // ---------------------------------------------------------------------------
 
-async function doPush(caddyfile: string): Promise<void> {
-  // Validate the production policy even if the caller supplied raw config.
-  caddyAdminAddress();
-  if (process.env.CADDY_ADMIN_SOCKET) {
-    return pushCaddyViaSocket(process.env.CADDY_ADMIN_SOCKET, caddyfile);
-  }
+/** POSTs a Caddyfile to the admin API over TCP; returns the response body. */
+async function postCaddyfileOverTcp(
+  urlPath: "/load" | "/adapt",
+  caddyfile: string,
+): Promise<string> {
+  const action = urlPath === "/load" ? "reload" : "adapt";
   const adminUrl = new URL(CADDY_ADMIN_URL);
   const adminPort = adminUrl.port || "2019";
 
@@ -900,7 +909,7 @@ async function doPush(caddyfile: string): Promise<void> {
 
   let lastError: string | null = null;
   for (const origin of uniqueOrigins) {
-    const resp = await fetch(`${CADDY_ADMIN_URL}/load`, {
+    const resp = await fetch(`${CADDY_ADMIN_URL}${urlPath}`, {
       method: "POST",
       headers: {
         "Content-Type": "text/caddyfile",
@@ -910,17 +919,121 @@ async function doPush(caddyfile: string): Promise<void> {
       signal: AbortSignal.timeout(30_000),
     });
 
-    if (resp.ok) return;
-
     const body = await resp.text();
-    lastError = `Caddy reload failed (${resp.status}) [Origin: ${origin}]: ${body}`;
+    if (resp.ok) return body;
+
+    lastError = `Caddy ${action} failed (${resp.status}) [Origin: ${origin}]: ${body}`;
 
     // Some Caddy builds enforce origin more strictly — try alternate valid origins.
     if (resp.status === 403) continue;
     break;
   }
 
-  throw new Error(lastError ?? "Caddy reload failed (unknown error)");
+  throw new CaddyRejectedError(
+    lastError ?? `Caddy ${action} failed (unknown error)`,
+  );
+}
+
+async function doPush(caddyfile: string): Promise<void> {
+  // Validate the production policy even if the caller supplied raw config.
+  caddyAdminAddress();
+  if (process.env.CADDY_ADMIN_SOCKET) {
+    return pushCaddyViaSocket(process.env.CADDY_ADMIN_SOCKET, caddyfile);
+  }
+  await postCaddyfileOverTcp("/load", caddyfile);
+}
+
+// ---------------------------------------------------------------------------
+// Custom static Caddy validation
+// ---------------------------------------------------------------------------
+
+async function doAdapt(caddyfile: string): Promise<string> {
+  if (process.env.CADDY_ADMIN_SOCKET) {
+    return adaptCaddyfileViaSocket(process.env.CADDY_ADMIN_SOCKET, caddyfile);
+  }
+  return postCaddyfileOverTcp("/adapt", caddyfile);
+}
+
+/** Injectable for tests: runs a Caddyfile through Caddy's adapter. */
+export const caddyAdapter = { adapt: doAdapt };
+
+export type StaticCaddyValidation =
+  | { ok: true }
+  | { ok: false; unreachable: boolean; message: string };
+
+const VALIDATION_HOST = "sitey-validate.invalid";
+// Lines before the fragment in the synthetic file: site, handle, the two
+// analytics tag lines, and root.
+const FRAGMENT_LINE_OFFSET = 5;
+
+/**
+ * Validates a service's custom Caddy fragment before it is saved: first the
+ * scope check (checkCaddyFragment), then Caddy's own adapter on a synthetic
+ * site shaped like the real one. Nothing is loaded, so live config is untouched.
+ */
+export async function validateStaticCaddyConfig(
+  fragment: string,
+  service: { id: number; outputDir: string },
+): Promise<StaticCaddyValidation> {
+  try {
+    checkCaddyFragment(fragment);
+  } catch (err) {
+    return { ok: false, unreachable: false, message: (err as Error).message };
+  }
+  const route: CaddyServiceRoute = {
+    subdomain: "",
+    pathPrefix: "",
+    httpOnly: true,
+    service: {
+      id: service.id,
+      deployMode: "static",
+      status: "running",
+      hasSuccessfulDeployment: true,
+      outputDir: service.outputDir,
+      containerName: null,
+      containerPort: 0,
+      staticRoutingMode: "caddy",
+      staticCaddyConfig: fragment,
+    },
+  };
+  const lines = [`http://${VALIDATION_HOST} {`];
+  appendRouteHandler(lines, route);
+  lines.push("}", "");
+  let adapted: string;
+  try {
+    adapted = await caddyAdapter.adapt(lines.join("\n"));
+  } catch (err) {
+    if (!(err instanceof CaddyRejectedError))
+      return {
+        ok: false,
+        unreachable: true,
+        message: `Couldn't reach Caddy to validate the custom config: ${String(err)}`,
+      };
+    // Caddy reports line numbers in the synthetic file; the fragment starts
+    // after the site line, the handle line and the four generated lines.
+    const detail = err.message.replace(
+      /^Caddy adapt failed \(\d+\)(?: \[Origin: [^\]]*\])?: /,
+      "",
+    );
+    let message = detail;
+    try {
+      message = (JSON.parse(detail) as { error?: string }).error ?? detail;
+    } catch {}
+    return {
+      ok: false,
+      unreachable: false,
+      message: `Caddy rejected the custom config: ${message.replace(/Caddyfile:(\d+)/g, (_, n) => `line ${Number(n) - FRAGMENT_LINE_OFFSET}`)}`,
+    };
+  }
+  // Defense in depth: the adapted config must route only the synthetic host.
+  const hosts = [...adapted.matchAll(/"host":\[([^\]]*)\]/g)].map((m) => m[1]);
+  if (hosts.some((h) => h !== `"${VALIDATION_HOST}"`))
+    return {
+      ok: false,
+      unreachable: false,
+      message: "Custom Caddy config may not match or define other hosts.",
+    };
+  return { ok: true };
 }
 
 /**

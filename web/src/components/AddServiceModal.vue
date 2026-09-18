@@ -142,6 +142,8 @@ function defaultSettings(): ServiceSettings {
     deployType: "server",
     buildCommand: "",
     outputDir: "dist",
+    staticRoutingMode: "spa",
+    staticCaddyConfig: "",
     buildImage: "",
     serverRunCommand: "",
     containerPort: 3000,
@@ -289,6 +291,14 @@ async function addService() {
       deployMode,
       buildCommand: s.buildCommand.trim(),
       outputDir,
+      ...(isStatic
+        ? {
+            staticRoutingMode: s.staticRoutingMode,
+            ...(s.staticRoutingMode === "caddy"
+              ? { staticCaddyConfig: s.staticCaddyConfig }
+              : {}),
+          }
+        : {}),
       buildImage,
       serverRunCommand,
       buildMode,

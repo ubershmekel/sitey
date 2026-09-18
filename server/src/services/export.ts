@@ -48,6 +48,8 @@ type ServiceRow = {
   deployMode: string;
   buildCommand: string;
   outputDir: string;
+  staticRoutingMode: string;
+  staticCaddyConfig: string;
   buildImage: string;
   buildMode: string;
   dockerfilePath: string;
@@ -104,6 +106,8 @@ const SERVICE_DEFAULTS = {
   buildImage: "",
   buildCommand: "",
   outputDir: "",
+  staticRoutingMode: "spa",
+  staticCaddyConfig: "",
   serverRunCommand: "",
   containerPort: 3000,
 };
@@ -164,6 +168,13 @@ export function buildExportDoc(input: ExportInput) {
         buildImage: s.buildImage,
         buildCommand: s.buildCommand,
         outputDir: s.outputDir,
+        // Routing only affects static services.
+        staticRoutingMode:
+          s.deployMode === "static" ? s.staticRoutingMode : undefined,
+        staticCaddyConfig:
+          s.deployMode === "static" && s.staticRoutingMode === "caddy"
+            ? s.staticCaddyConfig
+            : undefined,
         serverRunCommand: s.serverRunCommand,
         containerPort: s.deployMode === "static" ? undefined : s.containerPort,
         env: env.length ? env : undefined,

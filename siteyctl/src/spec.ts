@@ -97,6 +97,21 @@ const BUILD_OPTIONS: Record<string, OptionSpec> = {
   },
 };
 
+const ROUTING_OPTIONS: Record<string, OptionSpec> = {
+  "static-routing": {
+    type: "string",
+    placeholder: "spa|multi-page|caddy",
+    description:
+      "Static: how URLs map to files. spa (default): paths that aren't a file serve index.html with 200, for client-side routers. multi-page: /about serves about.html or about/index.html, missing pages are a real 404 using 404.html if present. caddy: your own Caddy directives from --static-caddy-file.",
+  },
+  "static-caddy-file": {
+    type: "string",
+    placeholder: "path",
+    description:
+      "Static: file of Caddy directives for this service (implies --static-routing caddy). Directives only, as inside a site block: no hostname, no root, no reverse_proxy. Sitey keeps the host, TLS, analytics and file root. Validated by Caddy before saving.",
+  },
+};
+
 export const COMMANDS: CommandSpec[] = [
   // ── Profiles ──────────────────────────────────────────────────────────────
   {
@@ -145,7 +160,8 @@ export const COMMANDS: CommandSpec[] = [
     description:
       "Names are unique: lowercase letters, digits and '-', at most 40 characters, not purely numeric and not starting with service-<digits>.\n" +
       "Sitey clones from GitHub, so push the code first. With the default --github-mode app, create fails early if the GitHub App can't see the repo.\n" +
-      "--route values are checked before anything is created. The command prints the new id; hold on to it if a script must survive renames.",
+      "--route values are checked before anything is created. The command prints the new id; hold on to it if a script must survive renames.\n" +
+      "Static sites default to --static-routing spa. For a landing page with more than one page (/privacy, /terms), use --static-routing multi-page.",
     options: {
       repo: {
         type: "string",
@@ -159,6 +175,7 @@ export const COMMANDS: CommandSpec[] = [
           "static: build, then serve files. server: run a container behind the proxy. Required.",
       },
       ...BUILD_OPTIONS,
+      ...ROUTING_OPTIONS,
       route: {
         type: "string",
         multiple: true,
@@ -174,15 +191,18 @@ export const COMMANDS: CommandSpec[] = [
     },
     examples: [
       'siteyctl service create idea-c --repo ubershmekel/myswe --mode static --build-image node:24-bookworm-slim --build-command "cd landings/idea-c && npm ci && npm run build" --output-dir landings/idea-c/dist --route idea-c.andluck.com',
+      "siteyctl service create examplesite --repo me/site --mode static --output-dir dist --static-routing multi-page",
       'siteyctl service create idea-b-api --repo ubershmekel/myswe --mode server --build-command "cd services/idea-b-api && npm ci" --run-command "cd services/idea-b-api && npm start" --port 8080 --route idea-b.andluck.com/api',
     ],
   },
   {
     name: "service set",
     args: ["service"],
-    summary: "Change build or run settings (doesn't redeploy)",
+    summary: "Change build, run or routing settings",
     description:
-      "Only the flags you pass change. Run siteyctl deploy afterwards to apply them.",
+      "Only the flags you pass change.\n" +
+      "Routing flags (--static-routing, --static-caddy-file) apply immediately through a Caddy reload; no deploy needed.\n" +
+      "Build and run changes apply on the next deploy: siteyctl deploy <service> --wait.",
     options: {
       mode: {
         type: "string",
@@ -190,6 +210,7 @@ export const COMMANDS: CommandSpec[] = [
         description: "Switch the deploy mode.",
       },
       ...BUILD_OPTIONS,
+      ...ROUTING_OPTIONS,
       "no-dockerfile": {
         type: "boolean",
         description: "Server: stop using a Dockerfile; build automatically.",
@@ -198,6 +219,8 @@ export const COMMANDS: CommandSpec[] = [
     examples: [
       'siteyctl service set idea-a --build-command "cd landings/idea-a && npm ci && npm run build:prod"',
       "siteyctl service set idea-b-api --dockerfile services/idea-b-api/Dockerfile",
+      "siteyctl service set examplesite --static-routing spa",
+      "siteyctl service set examplesite --static-caddy-file routing.caddy",
     ],
   },
   {
@@ -433,6 +456,22 @@ export const WORKFLOW_EXAMPLES: { title: string; commands: string[] }[] = [
     commands: [
       'printf %s "$STRIPE_KEY" | siteyctl env set idea-b-api STRIPE_KEY',
       "siteyctl deploy idea-b-api --wait",
+    ],
+  },
+  {
+    title:
+      "Subpages like /privacy show the home page (applies at once, no deploy)",
+    commands: [
+      "siteyctl service set idea-c --static-routing multi-page",
+      "siteyctl status idea-c",
+    ],
+  },
+  {
+    title:
+      "Custom routing: write Caddy directives to a file (e.g. redirects, headers), then apply",
+    commands: [
+      "siteyctl service set idea-c --static-caddy-file sitey/idea-c.caddy",
+      "siteyctl service get idea-c",
     ],
   },
   {
