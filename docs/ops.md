@@ -136,7 +136,8 @@ never need to rebuild the updater image just to change the update logic.
 | `token create <name> [--user <email>]` | Create an API token for `siteyctl` (printed once, on stdout)                  |
 | `token list`                           | List API tokens and when they were last used                                  |
 | `token revoke <name>`                  | Delete an API token                                                           |
-| `install-cli`                          | (host only) Install or reinstall `/usr/local/bin/sitey`                       |
+| `token local`                          | (Re)create the `local-cli` token that `siteyctl` on the VPS uses              |
+| `install-cli`                          | (host only) Install or reinstall `/usr/local/bin/sitey` and `siteyctl`        |
 | `help`                                 | List commands                                                                 |
 
 API tokens are **root-equivalent on the VPS**: Sitey controls the Docker socket.
@@ -155,6 +156,16 @@ npm run siteyctl -- --help
 ```
 
 `-o` paths are resolved against the directory you ran `npm run` from.
+
+On the VPS itself, `install-cli` also installs `siteyctl`
+([`deploy/siteyctl`](../deploy/siteyctl)). It runs inside the `sitey-api`
+container and needs no `login`: on first use it runs `sitey token local`, which
+creates an API token named `local-cli` and saves it to
+`/run/sitey/local-cli.json` inside the container (not on the host). Reading it
+takes Docker access, which is already root on the VPS. If it leaks,
+`sitey token revoke local-cli` kills it and the next `siteyctl` run makes a new
+one. File paths (`-o`, `--static-caddy-file`) resolve inside the container, so
+use redirection there: `siteyctl export > sitey.yaml`.
 
 Installs from before the CLI existed: update Sitey, then run once on the host:
 

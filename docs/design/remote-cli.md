@@ -127,6 +127,10 @@ So the remote client is **`siteyctl`** — "control a Sitey server", in the styl
 of `kubectl` and `systemctl`. The VPS-local `sitey` stays for install, recovery,
 and token management, and works when the API is down.
 
+The VPS also gets a `siteyctl` (`deploy/siteyctl`) that runs inside the
+`sitey-api` container and creates its own `local-cli` API token on first use
+(`sitey token local`), so no `login` is needed there.
+
 ## Server changes
 
 ### API tokens

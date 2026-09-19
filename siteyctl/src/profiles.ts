@@ -53,6 +53,29 @@ export function saveProfiles(data: ProfileFile, file = configPath()): void {
   fs.chmodSync(file, 0o600);
 }
 
+/**
+ * Written inside the sitey-api container by `sitey token local` (the host's
+ * deploy/siteyctl runs it on first use). There, with no profiles configured,
+ * siteyctl uses it instead of `siteyctl login`.
+ */
+export const LOCAL_SERVER_FILE = "/run/sitey/local-cli.json";
+// Not a valid profile name, so it can't collide with one.
+export const LOCAL_SERVER_NAME = "(local)";
+
+export function loadLocalServer(file = LOCAL_SERVER_FILE): Profile | null {
+  try {
+    const parsed = JSON.parse(
+      fs.readFileSync(file, "utf8"),
+    ) as Partial<Profile>;
+    if (typeof parsed.url === "string" && typeof parsed.token === "string") {
+      return { url: parsed.url, token: parsed.token };
+    }
+  } catch {
+    // Not on the VPS (or the API hasn't started yet).
+  }
+  return null;
+}
+
 export function validateProfileName(name: string): void {
   if (!PROFILE_NAME_REGEX.test(name)) {
     throw new ProfileError(
@@ -93,6 +116,7 @@ export function selectProfile(
   data: ProfileFile,
   flag: string | undefined,
   envServer: string | undefined,
+  local: Profile | null = null,
 ): { name: string; profile: Profile } {
   const names = Object.keys(data.servers);
   const chosen = flag || envServer;
@@ -111,6 +135,7 @@ export function selectProfile(
   if (names.length === 1)
     return { name: names[0], profile: data.servers[names[0]] };
   if (!names.length) {
+    if (local) return { name: LOCAL_SERVER_NAME, profile: local };
     throw new ProfileError(
       "No servers configured. Run siteyctl login <server-name> <url> (needs a token from ssh <vps> sitey token create <name>).",
     );

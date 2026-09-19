@@ -13,8 +13,10 @@ import { loadExportInput, renderExportYaml } from "./services/export.ts";
 import {
   ApiTokenError,
   createApiToken,
+  LOCAL_CLI_TOKEN_NAME,
   listApiTokens,
   revokeApiToken,
+  writeLocalCliToken,
 } from "./services/apiTokens.ts";
 
 const USAGE = `Usage: sitey <command>
@@ -26,7 +28,9 @@ Commands:
                              Create an API token for siteyctl (printed once)
   token list                 List API tokens
   token revoke <name>        Delete an API token
-  install-cli                (host only) Install the \`sitey\` command to /usr/local/bin
+  token local                (Re)create the "local-cli" token that siteyctl on
+                             this VPS uses. siteyctl runs this when it has none.
+  install-cli                (host only) Install the \`sitey\` and \`siteyctl\` commands to /usr/local/bin
   help                       Show this message
 
 API tokens are root-equivalent on this VPS: Sitey controls the Docker socket.`;
@@ -63,6 +67,16 @@ async function tokenCommand(args: string[]): Promise<number> {
         "\nOn your machine: siteyctl login <server-name> <https://sitey-url>\n" +
           "This token is root-equivalent on this VPS. Revoke with: sitey token revoke " +
           created.name,
+      );
+      return 0;
+    }
+    case "local": {
+      if (name) break;
+      runMigrations();
+      await writeLocalCliToken(Number(process.env.PORT ?? 3001));
+      console.error(
+        `Created API token "${LOCAL_CLI_TOKEN_NAME}" for siteyctl on this VPS. ` +
+          `Revoke with: sitey token revoke ${LOCAL_CLI_TOKEN_NAME}`,
       );
       return 0;
     }

@@ -12,6 +12,7 @@ import {
 } from "./api.ts";
 import { ago, keyValues, table } from "./format.ts";
 import {
+  loadLocalServer,
   loadProfiles,
   normalizeServerUrl,
   saveProfiles,
@@ -978,6 +979,7 @@ export function contextFor(
         loadProfiles(),
         inv.server,
         process.env.SITEY_SERVER,
+        loadLocalServer(),
       );
       selected = {
         name,

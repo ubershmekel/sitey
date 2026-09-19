@@ -1,7 +1,7 @@
 import { createTRPCClient, httpLink, TRPCClientError } from "@trpc/client";
 import type { AppRouter } from "../../server/src/routers/index.ts";
 import { UsageError } from "./args.ts";
-import { ProfileError } from "./profiles.ts";
+import { LOCAL_SERVER_NAME, ProfileError } from "./profiles.ts";
 
 export type { AppRouter };
 
@@ -96,6 +96,14 @@ export function describeError(
           : `Couldn't reach ${where}: ${cause}`,
         exitCode: EXIT.ERROR,
         code: "NETWORK",
+      };
+    }
+    if (code === "UNAUTHORIZED" && server?.name === LOCAL_SERVER_NAME) {
+      return {
+        message:
+          "The local-cli token was rejected. Reset it with: sitey token revoke local-cli (the next siteyctl run makes a new one).",
+        exitCode: EXIT.ERROR,
+        code,
       };
     }
     if (code === "UNAUTHORIZED") {

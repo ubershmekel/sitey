@@ -1,0 +1,52 @@
+#!/bin/sh
+# Host-side `siteyctl` command. Runs siteyctl inside the sitey-api container:
+#   siteyctl <command>  →  docker compose exec sitey-api node /app/siteyctl/src/main.ts <command>
+#
+# No `siteyctl login` needed here: on first use this runs `sitey token local`,
+# which creates the "local-cli" API token and saves it in the container (not on
+# the host's /data mount). Reading it takes Docker access, which is already root
+# on this VPS. `sitey token revoke local-cli` deletes it; the next run makes a
+# new one.
+#
+# File paths (`export -o`, `--static-caddy-file`) resolve inside the container; use
+# stdin/stdout redirection instead, e.g. `siteyctl export > sitey.yaml`.
+#
+# Installed to /usr/local/bin/siteyctl by `sitey install-cli`.
+set -e
+
+SELF="$(readlink -f "$0")"
+DEPLOY_DIR="$(dirname "$SELF")"
+
+DOCKER="docker"
+if ! docker info >/dev/null 2>&1; then DOCKER="sudo docker"; fi
+
+# Without a TTY (piped input/output, `ssh host siteyctl ...`), `exec` must not allocate one.
+TTY_FLAG=""
+if [ ! -t 0 ] || [ ! -t 1 ]; then TTY_FLAG="-T"; fi
+
+RUN='exec node /app/siteyctl/src/main.ts "$@"'
+
+# Creates the token on first use. flock serializes concurrent first runs, and
+# the file is checked again once the lock is held. The path must match
+# LOCAL_CLI_FILE in server/src/services/apiTokens.ts.
+INIT='if [ ! -s /run/sitey/local-cli.json ]; then
+  mkdir -p -m 700 /run/sitey
+  exec 9>/run/sitey/local-cli.lock
+  flock 9
+  [ -s /run/sitey/local-cli.json ] || node /app/server/src/cli.ts token local || exit 1
+  exec 9>&-
+fi
+'
+
+# Help needs no token, so it works before setup. Mirrors parseInvocation in
+# siteyctl/src/args.ts.
+NEEDS_TOKEN=1
+if [ $# -eq 0 ] || [ "$1" = "help" ]; then NEEDS_TOKEN=0; fi
+for arg in "$@"; do
+  case "$arg" in --help | -h) NEEDS_TOKEN=0 ;; esac
+done
+
+IN_CONTAINER="$RUN"
+if [ "$NEEDS_TOKEN" -eq 1 ]; then IN_CONTAINER="$INIT$RUN"; fi
+
+exec $DOCKER compose -f "$DEPLOY_DIR/docker-compose.yml" exec $TTY_FLAG sitey-api sh -c "$IN_CONTAINER" siteyctl "$@"

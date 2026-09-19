@@ -17,7 +17,7 @@ COPY siteyctl/package.json ./siteyctl/
 # registry metadata. The BuildKit cache mount keeps npm's tarball cache across builds (does NOT cache node_modules).
 RUN --mount=type=cache,id=sitey-server-npm,target=/root/.npm,sharing=locked \
   npm pkg delete scripts.prepare && \
-  npm ci -w server --prefer-offline --no-audit --progress=false
+  npm ci -w server -w siteyctl --prefer-offline --no-audit --progress=false
 # Dependencies are hoisted to /app/node_modules; Node resolves them from /app/server by walking up.
 WORKDIR /app/server
 
@@ -37,6 +37,8 @@ FROM deps AS runner
 COPY server/prisma ./prisma/
 COPY server/prisma.config.ts ./
 COPY server/src ./src/
+# siteyctl runs in this container for the host's `siteyctl` command (deploy/siteyctl).
+COPY siteyctl/src /app/siteyctl/src/
 RUN npm run db:generate
 
 ENV NODE_ENV=production

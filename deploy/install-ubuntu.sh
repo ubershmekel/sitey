@@ -53,7 +53,7 @@ fi
 ${SUDO} mkdir -p "${INSTALL_DIR}/deploy/data"
 ${SUDO} chown -R "${RUN_AS_USER}:${RUN_AS_USER}" "${INSTALL_DIR}"
 
-echo "==> Installing the sitey CLI"
+echo "==> Installing the sitey and siteyctl CLIs"
 sh "${INSTALL_DIR}/deploy/sitey" install-cli
 
 cd "${INSTALL_DIR}/deploy"
@@ -147,4 +147,4 @@ echo "1) Open ${SITEY_URL} in your browser, sign in with the admin password, and
 echo "2) ..."
 echo "3) Profit!"
 echo
-echo "Run 'sitey help' on this server for CLI commands."
+echo "On this server: 'sitey help' for admin commands, 'siteyctl --help' to manage services (no token needed here)."

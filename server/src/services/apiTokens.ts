@@ -10,6 +10,8 @@
  * An API key is root-equivalent on the VPS: Sitey controls the Docker socket.
  */
 
+import fs from "node:fs";
+import path from "node:path";
 import { db } from "../lib/db.ts";
 import { generateToken, hashToken } from "./crypto.ts";
 
@@ -92,15 +94,18 @@ export class ApiTokenError extends Error {}
 
 const TOKEN_NAME_REGEX = /^[A-Za-z0-9._-]{1,64}$/;
 
-export async function createApiToken(
-  name: string,
-  userEmail?: string,
-): Promise<{ token: string; name: string; email: string }> {
-  if (!TOKEN_NAME_REGEX.test(name)) {
-    throw new ApiTokenError(
-      "Token names are 1-64 characters: letters, digits, '.', '_' or '-'.",
-    );
-  }
+/**
+ * The token the VPS's own `siteyctl` uses (deploy/siteyctl). It lives in a file
+ * on the sitey-api container's filesystem, never the host's /data mount, so
+ * reading it takes `docker exec` (already root on the VPS). It's a normal API
+ * token: listed, revocable, and recreated on the next siteyctl run after
+ * `sitey token revoke local-cli`.
+ */
+export const LOCAL_CLI_TOKEN_NAME = "local-cli";
+/** Keep in sync with LOCAL_SERVER_FILE in siteyctl/src/profiles.ts. */
+export const LOCAL_CLI_FILE = "/run/sitey/local-cli.json";
+
+async function findTokenUser(userEmail?: string) {
   const user = userEmail
     ? await db.user.findUnique({ where: { email: userEmail } })
     : await db.user.findFirst({ orderBy: { createdAt: "asc" } });
@@ -111,6 +116,42 @@ export async function createApiToken(
         : "No users yet. Finish setup in the web UI first.",
     );
   }
+  return user;
+}
+
+async function insertApiToken(
+  userId: string,
+  name: string,
+  client: Pick<typeof db, "token"> = db,
+): Promise<string> {
+  const token = API_TOKEN_PREFIX + generateToken();
+  await client.token.create({
+    data: {
+      userId,
+      tokenHash: hashToken(token),
+      type: "apikey",
+      name,
+      expiresAt: null,
+    },
+  });
+  return token;
+}
+
+export async function createApiToken(
+  name: string,
+  userEmail?: string,
+): Promise<{ token: string; name: string; email: string }> {
+  if (!TOKEN_NAME_REGEX.test(name)) {
+    throw new ApiTokenError(
+      "Token names are 1-64 characters: letters, digits, '.', '_' or '-'.",
+    );
+  }
+  if (name === LOCAL_CLI_TOKEN_NAME) {
+    throw new ApiTokenError(
+      `"${LOCAL_CLI_TOKEN_NAME}" is reserved for siteyctl on this VPS. Pick another name.`,
+    );
+  }
+  const user = await findTokenUser(userEmail);
   const existing = await db.token.findFirst({
     where: { type: "apikey", name },
     select: { id: true },
@@ -120,18 +161,33 @@ export async function createApiToken(
       `A token named "${name}" already exists. Revoke it first or pick another name.`,
     );
   }
-
-  const token = API_TOKEN_PREFIX + generateToken();
-  await db.token.create({
-    data: {
-      userId: user.id,
-      tokenHash: hashToken(token),
-      type: "apikey",
-      name,
-      expiresAt: null,
-    },
-  });
+  const token = await insertApiToken(user.id, name);
   return { token, name, email: user.email };
+}
+
+/**
+ * Replaces the local-cli token (for the first user) and writes its file.
+ * The swap is one transaction, so there's never more than one local-cli token.
+ * Concurrent callers are serialized by deploy/siteyctl's flock; without it, a
+ * racing caller could still overwrite the file with a token that was just
+ * revoked (the next siteyctl error says how to reset it).
+ */
+export async function writeLocalCliToken(
+  port: number,
+  file = LOCAL_CLI_FILE,
+): Promise<void> {
+  const user = await findTokenUser();
+  const token = await db.$transaction(async (tx) => {
+    await tx.token.deleteMany({
+      where: { type: "apikey", name: LOCAL_CLI_TOKEN_NAME },
+    });
+    return insertApiToken(user.id, LOCAL_CLI_TOKEN_NAME, tx);
+  });
+  fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
+  const tmp = `${file}.${process.pid}.tmp`;
+  const body = { url: `http://127.0.0.1:${port}`, token };
+  fs.writeFileSync(tmp, `${JSON.stringify(body)}\n`, { mode: 0o600 });
+  fs.renameSync(tmp, file);
 }
 
 export async function listApiTokens() {
@@ -148,9 +204,14 @@ export async function listApiTokens() {
   });
 }
 
-export async function revokeApiToken(name: string): Promise<number> {
+export async function revokeApiToken(
+  name: string,
+  file = LOCAL_CLI_FILE,
+): Promise<number> {
   const { count } = await db.token.deleteMany({
     where: { type: "apikey", name },
   });
+  // The next siteyctl run on the VPS mints a fresh one.
+  if (name === LOCAL_CLI_TOKEN_NAME) fs.rmSync(file, { force: true });
   return count;
 }

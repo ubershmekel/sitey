@@ -6,20 +6,24 @@
 # to the host's /usr/local/bin. First time on an existing install:
 #   sh /opt/sitey/deploy/sitey install-cli
 #
-# The installed /usr/local/bin/sitey is a two-line wrapper that calls this file,
-# so updates to this script arrive with `git pull` (and need no exec bit).
+# Installs /usr/local/bin/sitey and /usr/local/bin/siteyctl: two-line wrappers
+# that call this file and ./siteyctl, so updates to those scripts arrive with
+# `git pull` (and need no exec bit).
 set -e
 
 SELF="$(readlink -f "$0")"
 DEPLOY_DIR="$(dirname "$SELF")"
-BIN="/usr/local/bin/sitey"
+BIN_DIR="/usr/local/bin"
 
 if [ "$1" = "install-cli" ]; then
   SUDO=""
   if [ "$(id -u)" -ne 0 ]; then SUDO="sudo"; fi
-  printf '#!/bin/sh\nexec sh "%s" "$@"\n' "$SELF" | $SUDO tee "$BIN" >/dev/null
-  $SUDO chmod 755 "$BIN"
-  echo "Installed $BIN -> $SELF"
+  for name in sitey siteyctl; do
+    target="$DEPLOY_DIR/$name"
+    printf '#!/bin/sh\nexec sh "%s" "$@"\n' "$target" | $SUDO tee "$BIN_DIR/$name" >/dev/null
+    $SUDO chmod 755 "$BIN_DIR/$name"
+    echo "Installed $BIN_DIR/$name -> $target"
+  done
   exit 0
 fi
 
