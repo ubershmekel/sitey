@@ -201,7 +201,7 @@ export const COMMANDS: CommandSpec[] = [
     summary: "Change build, run or routing settings",
     description:
       "Only the flags you pass change.\n" +
-      "Routing flags (--static-routing, --static-caddy-file) apply immediately through a Caddy reload; no deploy needed.\n" +
+      "Static routing flags (--static-routing, --static-caddy-file) and --output-dir apply immediately through a Caddy reload; no deploy needed. A missing output directory produces a warning.\n" +
       "Build and run changes apply on the next deploy: siteyctl deploy <service> --wait.",
     options: {
       mode: {

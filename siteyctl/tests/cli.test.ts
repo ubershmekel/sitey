@@ -123,7 +123,15 @@ const appRouter = t.router({
             code: "CONFLICT",
             message: 'A service named "taken" already exists.',
           });
-        return { id: 42, name: input.name ?? "idea-a", warning: null };
+        return {
+          id: 42,
+          name: input.name ?? "idea-a",
+          warning: null,
+          outputDirectoryWarning:
+            input.outputDir === "missing"
+              ? 'Output directory "missing" does not exist yet.'
+              : undefined,
+        };
       }),
     create: authed
       .input(z.object({ name: z.string() }).passthrough())
@@ -655,7 +663,44 @@ test("static routing flags: create, set from a file, and get", async () => {
     "--output-dir",
     "build",
   ]);
-  assert.match(mixed.stdout, /Routing applied[\s\S]*Not deployed yet/);
+  assert.match(mixed.stdout, /Routing applied/);
+  assert.doesNotMatch(mixed.stdout, /Not deployed yet/);
+  const folder = await cli([
+    "service",
+    "set",
+    "idea-a",
+    "--output-dir",
+    "missing",
+  ]);
+  assert.equal(folder.code, 0);
+  assert.match(
+    folder.stderr,
+    /Warning: Output directory "missing" does not exist/,
+  );
+  assert.match(folder.stdout, /Routing applied/);
+  assert.doesNotMatch(folder.stdout, /Not deployed yet/);
+  const folderJson = await cli([
+    "service",
+    "set",
+    "idea-a",
+    "--output-dir",
+    "missing",
+    "--json",
+  ]);
+  assert.match(
+    JSON.parse(folderJson.stdout).outputDirectoryWarning,
+    /does not exist/,
+  );
+  const buildChange = await cli([
+    "service",
+    "set",
+    "idea-a",
+    "--output-dir",
+    "build",
+    "--build-command",
+    "npm run build",
+  ]);
+  assert.match(buildChange.stdout, /Routing applied[\s\S]*Not deployed yet/);
 
   // A fragment is read from a file (relative to the working directory), and
   // implies caddy mode.

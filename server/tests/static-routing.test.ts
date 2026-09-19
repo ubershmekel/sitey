@@ -53,7 +53,7 @@ test("a service without a routing mode keeps the SPA fallback", () => {
     const out = render({}, prefix);
     assert.match(
       out,
-      /root \* \/srv\/services\/7\/repo\/dist\n\s+try_files \{path\} \/index\.html\n\s+file_server/,
+      /root \* "\/srv\/services\/7\/repo\/dist"\n\s+try_files \{path\} \/index\.html\n\s+file_server/,
     );
     assert.deepEqual(render({ staticRoutingMode: "spa" }, prefix), out);
   }
@@ -80,7 +80,7 @@ test("path-prefix routes keep the prefix redirect and their own root", () => {
     );
     assert.match(out, /handle \/docs \{\n(?:.*\n)*?\s+redir \* \/docs\/ 308/);
     const inner = out.slice(out.indexOf("handle_path /docs/* {"));
-    assert.match(inner, /root \* \/srv\/services\/7\/repo\/dist/);
+    assert.match(inner, /root \* "\/srv\/services\/7\/repo\/dist"/);
     assert.match(inner, /\n {4}\}$/);
   }
 });
@@ -95,7 +95,7 @@ test("custom mode places the fragment after Sitey's tags and root", () => {
     "handle {",
     "log_append service_id 7",
     "header >X-Sitey-Service 7",
-    "root * /srv/services/7/repo/dist",
+    'root * "/srv/services/7/repo/dist"',
     "@legacy path /old/*",
   ]);
   assert.ok(
@@ -188,7 +188,7 @@ test("validateStaticCaddyConfig runs Caddy's adapter on a synthetic site only", 
   assert.match(adapted, /^http:\/\/sitey-validate\.invalid \{\n/);
   assert.match(
     adapted,
-    /root \* \/srv\/services\/3\/repo\/out\n\s+file_server\n/,
+    /root \* "\/srv\/services\/3\/repo\/out"\n\s+file_server\n/,
   );
 
   // Scope failures never reach Caddy.

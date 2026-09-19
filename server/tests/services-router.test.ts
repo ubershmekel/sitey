@@ -10,6 +10,7 @@ import type { Context } from "../src/context.ts";
 
 // Use the real Prisma store and real router; only external delivery is mocked.
 const dir = fs.mkdtempSync(path.join(os.tmpdir(), "sitey-router-"));
+process.env.DATA_ROOT = dir;
 const file = path.join(dir, "test.db");
 fs.writeFileSync(file, ""); // Prisma's Windows engine needs an existing file.
 process.env.DATABASE_URL = `file:${file.replace(/\\/g, "/")}`;
@@ -336,6 +337,130 @@ test("routing changes reload Caddy immediately without a deploy", async () => {
     (await caller.describe({ id: app.id })).staticRoutingMode,
     "spa",
   );
+  // Repeating the same saved values must retry the failed delivery.
+  mock.method(caddyReloader, "reload", async () => {
+    reloads++;
+  });
+  const retried = await caller.update({ id: app.id, staticRoutingMode: "spa" });
+  assert.equal(retried.warning, null);
+  assert.equal(reloads, 2);
+});
+
+test("output folder edits apply immediately and warn without blocking saves", async () => {
+  const app = await service("folder");
+  await db.domain.create({
+    data: { hostname: "folder.example.com", letsEncryptEmail: "" },
+  });
+  const repoPath = path.join(dir, "services", String(app.id), "repo");
+  fs.mkdirSync(path.join(repoPath, "dist"), { recursive: true });
+  await caller.addRoute({
+    serviceId: app.id,
+    host: "http://folder.example.com",
+  });
+  let reloads = 0;
+  let config = "";
+  mock.method(caddyReloader, "reload", async () => {
+    reloads++;
+    config = await buildCaddyfile();
+  });
+  const missing = await caller.update({ id: app.id, outputDir: "dsit" });
+  assert.match(missing.outputDirectoryWarning!, /dsit.*does not exist/);
+  assert.equal(missing.warning, null);
+  assert.match(config, /\/repo\/dsit/);
+  const corrected = await caller.update({ id: app.id, outputDir: "dist" });
+  assert.equal(corrected.outputDirectoryWarning, undefined);
+  assert.match(config, /\/repo\/dist/);
+  const mixed = await caller.update({
+    id: app.id,
+    outputDir: "dist",
+    staticRoutingMode: "multi-page",
+  });
+  assert.equal(mixed.outputDirectoryWarning, undefined);
+  assert.match(config, /@sitey_page/);
+  fs.writeFileSync(path.join(repoPath, "file.txt"), "not a directory");
+  const notDirectory = await caller.update({
+    id: app.id,
+    outputDir: "file.txt",
+  });
+  assert.match(notDirectory.outputDirectoryWarning!, /not a directory/);
+  const root = await caller.update({ id: app.id, outputDir: "" });
+  assert.equal(root.outputDirectoryWarning, undefined);
+  assert.equal(reloads, 5);
+  mock.method(caddyReloader, "reload", async () => {
+    throw new Error("offline");
+  });
+  const failed = await caller.update({ id: app.id, outputDir: "dist" });
+  assert.match(failed.warning!, /offline/);
+  mock.method(caddyReloader, "reload", async () => {
+    reloads++;
+  });
+  await caller.update({ id: app.id, outputDir: "dist" });
+  assert.equal(reloads, 6);
+});
+
+test("output folders that would break the Caddyfile or leave the repo are rejected", async () => {
+  const app = await service("badfolder");
+  let reloads = 0;
+  mock.method(caddyReloader, "reload", async () => {
+    reloads++;
+  });
+  for (const outputDir of [
+    "dist}",
+    "{dist",
+    "dist\nimport x",
+    '"dist"',
+    "dist\\build",
+    "..",
+    "../other",
+    "dist/../..",
+    "/etc",
+  ]) {
+    await assert.rejects(
+      caller.update({ id: app.id, outputDir }),
+      /Output directory must be/,
+      JSON.stringify(outputDir),
+    );
+    await assert.rejects(
+      caller.create({
+        name: "badfolder-new",
+        repoOwner: "owner",
+        repoName: "repo",
+        deployMode: "static",
+        outputDir,
+      }),
+      /Output directory must be/,
+      JSON.stringify(outputDir),
+    );
+  }
+  assert.equal(reloads, 0);
+  assert.equal(
+    (await db.service.findUnique({ where: { id: app.id } }))!.outputDir,
+    app.outputDir,
+  );
+  for (const outputDir of [
+    "",
+    "dist",
+    "./dist",
+    "dist/",
+    "build/.output",
+    "a_b-c/d.e",
+    "my site",
+  ]) {
+    await caller.update({ id: app.id, outputDir });
+  }
+  // Spaces are safe because the root path is a quoted Caddyfile token.
+  await db.domain.create({
+    data: { hostname: "badfolder.example.com", letsEncryptEmail: "" },
+  });
+  await caller.addRoute({
+    serviceId: app.id,
+    host: "http://badfolder.example.com",
+  });
+  assert.ok(
+    (await buildCaddyfile()).includes(
+      `root * "/srv/services/${app.id}/repo/my site"`,
+    ),
+  );
 });
 
 test("custom Caddy is validated before it is saved or applied", async () => {
@@ -436,7 +561,7 @@ test("custom Caddy is validated before it is saved or applied", async () => {
   };
   assert.match(
     block(config, "http://site.example.com"),
-    /root \* \/srv\/services\/\d+\/repo\n\s+header X-Custom "yes"\n\s+file_server\n {4}\}$/,
+    /root \* "\/srv\/services\/\d+\/repo"\n\s+header X-Custom "yes"\n\s+file_server\n {4}\}$/,
   );
   // The other service's site is byte-for-byte what it was.
   assert.equal(

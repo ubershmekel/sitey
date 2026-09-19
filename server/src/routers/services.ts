@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { customAlphabet, nanoid } from "nanoid";
@@ -19,7 +20,7 @@ import {
   stopAndRemoveContainer,
   pruneServiceImages,
 } from "../services/docker.ts";
-import { serviceRootPath } from "../services/git.ts";
+import { serviceRootPath, serviceRepoPath } from "../services/git.ts";
 import {
   normalizeSiteUrl,
   resolvePublicSiteUrl,
@@ -30,6 +31,7 @@ import {
   parseServiceRef,
   serviceNameSchema,
 } from "../lib/serviceRef.ts";
+import { outputDirSchema } from "../lib/outputDir.ts";
 import { formatRouteString } from "../lib/routeString.ts";
 import {
   EnvFileError,
@@ -467,7 +469,7 @@ export const servicesRouter = router({
         branch: z.string().default("main"),
         deployMode: z.enum(["server", "static"]).default("server"),
         buildCommand: z.string().default(""),
-        outputDir: z.string().default("dist"),
+        outputDir: outputDirSchema.default("dist"),
         staticRoutingMode: z.enum(STATIC_ROUTING_MODES).default("spa"),
         staticCaddyConfig: z.string().max(65536).default(""),
         buildImage: z.string().max(200).default(""),
@@ -588,7 +590,7 @@ export const servicesRouter = router({
         branch: z.string().optional(),
         deployMode: z.enum(["server", "static"]).optional(),
         buildCommand: z.string().optional(),
-        outputDir: z.string().optional(),
+        outputDir: outputDirSchema.optional(),
         // Routing settings apply with a Caddy reload; no redeploy.
         staticRoutingMode: z.enum(STATIC_ROUTING_MODES).optional(),
         staticCaddyConfig: z.string().max(65536).optional(),
@@ -604,6 +606,11 @@ export const servicesRouter = router({
       const { id, ...rest } = input;
       const current = await findServiceOrThrow(id);
       const next = { ...current, ...rest };
+      // Explicit requests also retry delivery after an earlier reload failed.
+      const routingRequested =
+        rest.staticRoutingMode !== undefined ||
+        rest.staticCaddyConfig !== undefined ||
+        (next.deployMode === "static" && rest.outputDir !== undefined);
       const routingChanged = {
         mode: next.staticRoutingMode !== current.staticRoutingMode,
         config: next.staticCaddyConfig !== current.staticCaddyConfig,
@@ -620,12 +627,28 @@ export const servicesRouter = router({
           },
           data: rest,
         });
-        const warning =
-          routingChanged.mode || routingChanged.config
-            ? await routingWarning()
-            : null;
+        const warning = routingRequested ? await routingWarning() : null;
+        let outputDirectoryWarning: string | undefined;
+        if (routingRequested && updated.deployMode === "static") {
+          const outputPath = path.join(serviceRepoPath(id), updated.outputDir);
+          try {
+            if (!(await fs.promises.stat(outputPath)).isDirectory())
+              outputDirectoryWarning = `Output directory "${updated.outputDir || "."}" is not a directory. Correct the folder or deploy to create it; static files cannot be served from it yet.`;
+          } catch (err) {
+            const code = (err as NodeJS.ErrnoException).code;
+            outputDirectoryWarning =
+              code === "ENOENT" || code === "ENOTDIR"
+                ? `Output directory "${updated.outputDir || "."}" does not exist yet. Correct the folder or deploy to create it; static files cannot be served from it yet.`
+                : `Could not check output directory "${updated.outputDir || "."}": ${String(err)}`;
+          }
+        }
         // Mutations acknowledge edits. Secret disclosure requires an explicit read.
-        return { id: updated.id, name: updated.name, warning };
+        return {
+          id: updated.id,
+          name: updated.name,
+          warning,
+          ...(outputDirectoryWarning ? { outputDirectoryWarning } : {}),
+        };
       } catch (err) {
         if (
           err instanceof Error &&

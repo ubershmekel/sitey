@@ -406,12 +406,12 @@ function appendRouteBody(lines: string[], route: CaddyServiceRoute): void {
       lines.push("    }");
       lines.push(`    handle_path ${route.pathPrefix}/* {`);
       lines.push(tagInner);
-      lines.push(`        root * ${dir}`);
+      lines.push(`        root * "${dir}"`);
       lines.push(...staticServingLines(svc, "        "));
       lines.push("    }");
     } else {
       lines.push(tagOuter);
-      lines.push(`    root * ${dir}`);
+      lines.push(`    root * "${dir}"`);
       lines.push(...staticServingLines(svc, "    "));
     }
   } else {

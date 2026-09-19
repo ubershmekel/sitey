@@ -554,17 +554,24 @@ const handlers: Record<string, Handler> = {
       .api()
       .services.update.mutate({ id: service.id, ...changes });
     if (result.warning) ctx.log(`Warning: ${result.warning}`);
+    if (result.outputDirectoryWarning)
+      ctx.log(`Warning: ${result.outputDirectoryWarning}`);
     const text = [
       `Updated ${label(service)}: ${Object.keys(changes).join(", ")}.`,
     ];
     // Routing is live once Caddy reloads; build/run settings wait for a deploy.
-    if (Object.keys(routing).length)
+    const liveOutputDir =
+      build.outputDir !== undefined &&
+      (build.deployMode ??
+        (await ctx.api().services.describe.query({ id: service.id }))
+          .deployMode) === "static";
+    if (Object.keys(routing).length || liveOutputDir)
       text.push(
         result.warning
           ? "Routing saved but not applied yet: retry this command."
           : "Routing applied (Caddy reloaded).",
       );
-    if (Object.keys(build).length)
+    if (Object.keys(build).some((key) => key !== "outputDir" || !liveOutputDir))
       text.push(`Not deployed yet: siteyctl deploy ${service.name} --wait`);
     return {
       json: {
@@ -573,6 +580,7 @@ const handlers: Record<string, Handler> = {
         name: service.name,
         changed: Object.keys(changes),
         warning: result.warning,
+        outputDirectoryWarning: result.outputDirectoryWarning,
       },
       text: text.join("\n"),
     };

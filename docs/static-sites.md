@@ -13,6 +13,15 @@ There are three modes:
 Changing the mode, or the custom Caddy directives, takes effect immediately
 through a Caddy reload. You don't need to redeploy.
 
+Changing the output directory also applies immediately, so you can correct a
+folder typo without rebuilding. Saving warns in the UI and CLI if the directory
+is missing or is not a directory, but still saves and applies the setting.
+Correct the folder or deploy to create the files. Build commands and images take
+effect on the next deployment.
+
+If a reload fails, retry the same CLI command or use **Retry apply** beside the
+settings warning in the UI. Retrying reapplies the saved routing and directory.
+
 ## Setting it
 
 From the web UI: open the service, then **Service Settings** → **Static

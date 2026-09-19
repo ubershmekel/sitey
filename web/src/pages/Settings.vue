@@ -262,9 +262,32 @@
         The last Caddyfile actually pushed to Caddy. Useful for debugging HTTPS
         / routing issues.
       </p>
-      <button class="btn-ghost" @click="loadCaddyfile">
-        {{ caddyfileLoading ? "Loading…" : "Show config" }}
-      </button>
+      <p class="section-hint">
+        Refresh reapplies saved routing for all sites without rebuilding or
+        redeploying them.
+      </p>
+      <div class="button-row">
+        <button
+          class="btn-ghost"
+          @click="loadCaddyfile"
+          :disabled="caddyfileLoading || caddyRefreshing"
+        >
+          {{ caddyfileLoading ? "Loading…" : "Show config" }}
+        </button>
+        <button
+          class="btn-ghost"
+          @click="refreshCaddy"
+          :disabled="caddyRefreshing || caddyfileLoading"
+        >
+          {{ caddyRefreshing ? "Refreshing…" : "Refresh Caddy" }}
+        </button>
+      </div>
+      <div v-if="caddyError" class="alert error" role="alert">
+        {{ caddyError }}
+      </div>
+      <div v-if="caddyRefreshSuccess" class="alert success" role="status">
+        Caddy refreshed. Saved routing has been applied for all sites.
+      </div>
       <p
         v-if="caddyfilePushedAt"
         class="section-hint compact"
@@ -781,15 +804,44 @@ async function loadDiskUsage() {
 const caddyfile = ref("");
 const caddyfilePushedAt = ref<string | null>(null);
 const caddyfileLoading = ref(false);
+const caddyRefreshing = ref(false);
+const caddyError = ref("");
+const caddyRefreshSuccess = ref(false);
+
+async function refreshCaddy() {
+  if (caddyRefreshing.value || caddyfileLoading.value) return;
+  caddyRefreshing.value = true;
+  caddyError.value = "";
+  caddyRefreshSuccess.value = false;
+  try {
+    const result = await trpc.system.refreshCaddy.mutate();
+    caddyfile.value = result.caddyfile ?? "(none)";
+    caddyfilePushedAt.value = result.pushedAt
+      ? new Date(result.pushedAt).toLocaleString()
+      : null;
+    caddyRefreshSuccess.value = true;
+  } catch (e: unknown) {
+    caddyError.value =
+      (e as { message?: string })?.message ?? "Failed to refresh Caddy.";
+  } finally {
+    caddyRefreshing.value = false;
+  }
+}
 
 async function loadCaddyfile() {
+  if (caddyfileLoading.value || caddyRefreshing.value) return;
   caddyfileLoading.value = true;
+  caddyError.value = "";
+  caddyRefreshSuccess.value = false;
   try {
     const result = await trpc.system.getActiveCaddyfile.query();
     caddyfile.value = result.caddyfile ?? "(none)";
     caddyfilePushedAt.value = result.pushedAt
       ? new Date(result.pushedAt).toLocaleString()
       : null;
+  } catch (e: unknown) {
+    caddyError.value =
+      (e as { message?: string })?.message ?? "Failed to load Caddy config.";
   } finally {
     caddyfileLoading.value = false;
   }

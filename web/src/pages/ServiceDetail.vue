@@ -454,7 +454,8 @@
         <h2>Service Settings</h2>
         <p class="section-hint">
           Change deploy/build mode and related runtime/build fields. Build
-          changes apply on the next deploy; static routing applies on save.
+          commands and images apply on the next deploy; static routing and the
+          output directory apply immediately on save.
         </p>
         <form class="settings-form" @submit.prevent="saveServiceSettings">
           <ServiceSettingsFields v-model="editSettings" />
@@ -462,9 +463,15 @@
           <button
             class="btn-primary"
             type="submit"
-            :disabled="!settingsDirty || settingsSaving"
+            :disabled="(!settingsDirty && !settingsWarning) || settingsSaving"
           >
-            {{ settingsSaving ? "Saving..." : "Save changes" }}
+            {{
+              settingsSaving
+                ? "Saving..."
+                : settingsWarning && !settingsDirty
+                  ? "Retry apply"
+                  : "Save changes"
+            }}
           </button>
           <div v-if="settingsSaved" class="settings-saved">Saved</div>
           <div v-if="settingsWarning" class="settings-error">
@@ -812,6 +819,7 @@ async function saveServiceSettings() {
   if (!service.value) return;
   settingsSaving.value = true;
   settingsError.value = "";
+  const retryApply = !!settingsWarning.value;
   settingsWarning.value = "";
   settingsSaved.value = false;
   try {
@@ -823,11 +831,16 @@ async function saveServiceSettings() {
       deployMode,
       buildMode,
       buildCommand: s.buildCommand.trim(),
-      outputDir: s.outputDir.trim(),
-      staticRoutingMode: s.staticRoutingMode,
+      ...(retryApply || s.outputDir.trim() !== service.value.outputDir
+        ? { outputDir: s.outputDir.trim() }
+        : {}),
+      ...(retryApply || s.staticRoutingMode !== service.value.staticRoutingMode
+        ? { staticRoutingMode: s.staticRoutingMode }
+        : {}),
       // Other modes keep the stored directives; the server only checks and
       // stores them when custom Caddy is selected.
-      ...(s.staticRoutingMode === "caddy"
+      ...(s.staticRoutingMode === "caddy" &&
+      (retryApply || s.staticCaddyConfig !== service.value.staticCaddyConfig)
         ? { staticCaddyConfig: s.staticCaddyConfig }
         : {}),
       buildImage: s.buildImage.trim(),
@@ -837,7 +850,9 @@ async function saveServiceSettings() {
     });
     service.value = await trpc.services.get.query({ id: serviceId });
     applyServiceToEditors(service.value);
-    settingsWarning.value = result.warning ?? "";
+    settingsWarning.value = [result.warning, result.outputDirectoryWarning]
+      .filter(Boolean)
+      .join(" ");
     settingsSaved.value = true;
     setTimeout(() => (settingsSaved.value = false), 2000);
   } catch (e: unknown) {

@@ -343,6 +343,22 @@ export const systemRouter = router({
     pushedAt: caddyReloader.lastPushedAt?.toISOString() ?? null,
   })),
 
+  refreshCaddy: settledProcedure.mutation(async () => {
+    try {
+      await reloadCaddy();
+    } catch (err) {
+      throw new TRPCError({
+        code: "INTERNAL_SERVER_ERROR",
+        message: `Caddy refresh failed: ${err instanceof Error ? err.message : String(err)}`,
+        cause: err,
+      });
+    }
+    return {
+      caddyfile: caddyReloader.lastPushedCaddyfile,
+      pushedAt: caddyReloader.lastPushedAt?.toISOString() ?? null,
+    };
+  }),
+
   getCaddyLogs: settledProcedure
     .input(
       z.object({
