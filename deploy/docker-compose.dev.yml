@@ -1,5 +1,4 @@
 # Dev override — runs server AND web in Docker with source mounts for hot reload.
-# Also supports running only Caddy in Docker while server/web run on host.
 #
 # Usage (from repo root):
 #   npm run dev:docker
@@ -21,11 +20,8 @@ services:
     ports:
       - "80:80"
       - "443:443"
-      # Expose admin API for host-run server mode (npm run dev).
+      # Expose admin API to the host for inspecting the live config (curl localhost:2019/config/).
       - "127.0.0.1:2019:2019"
-    extra_hosts:
-      # Required on Linux so host.docker.internal resolves from containers.
-      - "host.docker.internal:host-gateway"
 
   sitey-api:
     build:

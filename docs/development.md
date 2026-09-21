@@ -5,43 +5,35 @@
 Node.js 24+ is required so we can run typescript directly with `node file.ts`.
 
 ```bash
-# Install dependencies
+# Install dependencies (editor tooling, tests, e2e)
 npm install
 
-# Run just the
-npm run dev:nocaddy
-
-# Optional manual startup of each service:
-#
-# Start the API (terminal 1)
-cd server
-npm run db:push   # apply schema directly to dev DB (skips migration history)
-npm run dev       # starts on :3001
-
-# Start the web (terminal 2)
-cd web
-npm run dev       # starts on :3000 (proxies /api -> :3001)
+# Start Caddy, API and Web in Docker with hot-reload
+npm run dev:docker
 ```
+
+The panel is served on `http://localhost` through Caddy. The API container syncs
+the schema with `db:push` on every start, and the generated admin password is
+printed in its logs on first boot.
 
 ## Root scripts (`package.json`)
 
 Scripts that operate across the whole monorepo.
 
-| Script                      | When to use                                                                                                                            |
-| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `dev:nocaddy`               | Everyday development — starts API (:3001) and Web (:3000) natively with hot-reload. No Docker required.                                |
-| `dev:docker`                | Full stack with Caddy in Docker — equivalent to the production compose file but with the dev Caddyfile. Use when you need TLS routing. |
-| `build`                     | Build both packages for production (`web/dist` + `server/dist`). Run before a Docker image build.                                      |
-| `test:types`                | Check TypeScript across server, web, and e2e. Run before pushing.                                                                      |
-| `format`                    | Auto-format every file with Prettier.                                                                                                  |
-| `format:check`              | Verify formatting without writing (used in CI).                                                                                        |
-| `db:migrate`                | Run `prisma migrate deploy` on the server workspace (production migrations).                                                           |
-| `db:studio`                 | Open Prisma Studio browser UI against the dev DB.                                                                                      |
-| `test:e2e`                  | Run the Playwright E2E suite (spins up mock server + API on :4001 + Web on :4000).                                                     |
-| `test:e2e-cloud:clean-up`   | Delete Hetzner and Namecheap resources recorded by `test:e2e-cloud:worktree-leave-up`.                                                 |
-| `test:e2e:mockserver`       | Start the mock external server standalone on :3334. Useful for debugging E2E failures in isolation.                                    |
-| `test:remote-wipe-and-test` | SSH into a remote server, wipe state, and re-run the install. See [Remote reset helper](#remote-reset-helper-test-runs).               |
-| `test:remote-test-install`  | SSH into a remote server and run the installer without wiping first.                                                                   |
+| Script                      | When to use                                                                                                              |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `dev:docker`                | Everyday development — full stack in Docker (production compose + dev overrides) with source mounts for hot-reload.      |
+| `build`                     | Build both packages for production (`web/dist` + `server/dist`). Run before a Docker image build.                        |
+| `test:types`                | Check TypeScript across server, web, and e2e. Run before pushing.                                                        |
+| `format`                    | Auto-format every file with Prettier.                                                                                    |
+| `format:check`              | Verify formatting without writing (used in CI).                                                                          |
+| `db:migrate`                | Run `prisma migrate deploy` on the server workspace (production migrations).                                             |
+| `db:studio`                 | Open Prisma Studio browser UI against the dev DB.                                                                        |
+| `test:e2e`                  | Run the Playwright E2E suite (spins up mock server + API on :4001 + Web on :4000).                                       |
+| `test:e2e-cloud:clean-up`   | Delete Hetzner and Namecheap resources recorded by `test:e2e-cloud:worktree-leave-up`.                                   |
+| `test:e2e:mockserver`       | Start the mock external server standalone on :3334. Useful for debugging E2E failures in isolation.                      |
+| `test:remote-wipe-and-test` | SSH into a remote server, wipe state, and re-run the install. See [Remote reset helper](#remote-reset-helper-test-runs). |
+| `test:remote-test-install`  | SSH into a remote server and run the installer without wiping first.                                                     |
 
 ## DB scripts (`server/package.json`)
 
@@ -52,6 +44,13 @@ Scripts that operate across the whole monorepo.
 | `db:generate` | `prisma generate`       | Regenerate the Prisma client after schema changes                     |
 | `db:studio`   | `prisma studio`         | Open a browser-based DB editor                                        |
 
+These need `DATABASE_URL`, which only the containers set (Prisma 7 doesn't load
+`.env`), so run them inside the API container:
+
+```bash
+docker exec sitey-sitey-api-1 npm run db:push
+```
+
 ## Keeping migrations in sync with schema.prisma
 
 The file `server/prisma/migrations/0001_init/migration.sql` is what actually
@@ -61,8 +60,9 @@ column-not-found error.
 
 ### Rules
 
-- **In dev**, use `npm run db:push` freely — it syncs the local SQLite file
-  directly without touching migrations.
+- **In dev**, `db:push` runs on every `dev:docker` API start — it syncs the
+  local SQLite file directly without touching migrations. Restart the
+  `sitey-api` container (or run the command above) after a schema change.
 - **Before committing schema changes**, update the migration SQL so production
   stays in sync.
 
@@ -220,24 +220,16 @@ These rules exist to prevent read paths from becoming slow under load.
 
 ## Running with hot-reload (no Docker rebuilds)
 
-```bash
-# From repo root — installs deps if needed, then starts both
-npm install
-npm run dev:nocaddy
-```
+`npm run dev:docker` mounts `server/src` and `web/src` into the containers:
 
-- **API** → `http://localhost:3001` (`tsx watch` auto-restarts on file save)
-- **Web** → `http://localhost:3000` (Vite HMR, proxies `/api` to `:3001`)
+- **API** restarts on file save (`node --watch`)
+- **Web** uses Vite HMR through Caddy on port 80
 
-No Docker needed for everyday UI/API work. On first boot the generated admin
-password is printed to the terminal.
+Rebuild (`npm run dev:docker`, which passes `--build`) after changing
+dependencies or `schema.prisma`, since the Prisma client is generated at image
+build time.
 
-### With Caddy for HTTPS testing
-
-When you need TLS or domain routing, run only Caddy in Docker and keep
-everything else native.
-
-#### Option 1 — SSH tunnel from a VPS (recommended for real DNS + Let's Encrypt)
+### HTTPS testing with real DNS — SSH tunnel from a VPS
 
 If your DNS points to a VPS, you can forward ports 80 and 443 from the VPS to
 your local machine. Caddy runs locally, gets real Let's Encrypt certs, and
@@ -266,8 +258,8 @@ ssh -N -o ExitOnForwardFailure=yes \
 
 Now traffic hitting `<YOUR_VPS_IP>:80/443` is forwarded to Caddy running
 locally. DNS still points to the VPS, Let's Encrypt HTTP-01 challenges work
-normally, and you can iterate on code with `npm run dev` without touching the
-VPS at all.
+normally, and you can iterate on code with `npm run dev:docker` without touching
+the VPS at all.
 
 Add `-v` to the ssh command to debug tunnel issues.
 
@@ -281,34 +273,7 @@ sudo lsof -i :80
 sudo fuser -k 80/tcp
 ```
 
-#### Option 2 — Caddy in Docker, everything else native
-
-**One-time setup:** add to `server/.env`:
-
-```
-CADDY_ADMIN_URL=http://localhost:2019
-```
-
-**Start only Caddy (dev mode):**
-
-```bash
-cd deploy
-
-# Tear down the full stack first (or just stop api/web containers)
-docker compose down
-
-# Start Caddy with the dev Caddyfile (proxies to host machine instead of containers)
-docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d caddy
-```
-
-The dev Caddyfile (`deploy/caddy/Caddyfile.dev`) proxies to
-`host.docker.internal:3001` (API) and `host.docker.internal:3000` (Vite). Port
-2019 is exposed to the host so the native server can push Caddy config updates
-(domains, HTTPS routes) exactly like production.
-
-Then run `npm run dev` from the repo root as usual.
-
-**Switch back to full production stack:**
+### Running the production stack locally
 
 ```bash
 cd deploy

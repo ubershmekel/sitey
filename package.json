@@ -12,7 +12,6 @@
   ],
   "scripts": {
     "dev:docker": "docker compose -f deploy/docker-compose.yml -f deploy/docker-compose.dev.yml up --build",
-    "dev:nocaddy": "concurrently \"npm run dev -w server\" \"npm run dev -w web\"",
     "prepare": "husky",
     "build": "npm run build -w web",
     "siteyctl": "node siteyctl/src/main.ts",

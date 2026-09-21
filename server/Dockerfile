@@ -30,7 +30,8 @@ ENV NODE_ENV=development
 EXPOSE 3001
 # CHOKIDAR_USEPOLLING ensures file watching detects changes on Docker Desktop for Windows/Mac
 ENV CHOKIDAR_USEPOLLING=true
-CMD ["node", "--watch", "src/index.ts"]
+# Dev skips migrations (see runMigrations in src/index.ts), so sync the schema on every start.
+CMD ["sh", "-c", "npm run db:push && exec node --watch src/index.ts"]
 
 # Production image
 FROM deps AS runner
