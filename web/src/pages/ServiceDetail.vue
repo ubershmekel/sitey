@@ -165,10 +165,14 @@
       <div class="info-rows">
         <div class="info-row">
           <span class="info-label">Repo</span>
-          <span class="info-value mono"
+          <a
+            :href="repoUrl"
+            target="_blank"
+            rel="noopener"
+            class="info-value mono"
             >{{ service.repo.repoOwner }}/{{ service.repo.repoName }}:{{
               service.branch
-            }}</span
+            }}</a
           >
         </div>
         <div class="info-row">
@@ -689,6 +693,16 @@ const deployTypeLabel = computed(() => {
     return p === "Dockerfile" ? "Dockerfile" : `Dockerfile (${p})`;
   }
   return "Server app";
+});
+
+const repoUrl = computed(() => {
+  if (!service.value) return "";
+  const { repoOwner, repoName } = service.value.repo;
+  const branch = service.value.branch
+    .split("/")
+    .map(encodeURIComponent)
+    .join("/");
+  return `https://github.com/${repoOwner}/${repoName}/tree/${branch}`;
 });
 
 const titleDirty = computed(() => {
